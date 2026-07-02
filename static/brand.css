@@ -38,12 +38,17 @@ html {
 
 body {
   font-family: var(--vp-font-family-base);
-  background: var(--vp-c-bg);
-  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg) !important;
+  color: var(--vp-c-text-1) !important;
   display: block !important;
   min-height: 100vh !important;
   padding: 0 !important;
   overflow-x: hidden;
+}
+
+body:has(> .view) {
+  padding-top: var(--vp-nav-height) !important;
+  padding-bottom: var(--vp-footer-height) !important;
 }
 
 .vp-nav {
@@ -198,8 +203,8 @@ body {
 }
 
 .view {
-  margin-top: 48px !important;
-  margin-bottom: 48px !important;
+  margin-top: 32px !important;
+  margin-bottom: 32px !important;
 }
 
 body > .view {
@@ -414,6 +419,248 @@ button,
   border-radius: 8px !important;
   border: 1px solid var(--vp-c-border) !important;
   box-shadow: 0 12px 28px rgba(0, 0, 0, .18) !important;
+}
+
+.vp-app-frame #sidebar {
+  width: 360px !important;
+  min-width: 360px !important;
+  color: var(--vp-c-text-1) !important;
+}
+
+#sidebar .head {
+  padding: 22px 24px !important;
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+}
+
+#sidebar .head h1 {
+  color: var(--vp-c-text-1) !important;
+  font-size: 18px !important;
+}
+
+#sidebar .head .sub,
+#sidebar .stats-row .stat .lbl,
+.session-item .left .meta,
+.session-item .right .turns,
+.detail-section h3,
+.debug-box h4,
+.au-legend,
+.chat-entry .ch-meta,
+.info-card .lbl {
+  color: var(--vp-c-text-2) !important;
+}
+
+#sidebar .stats-row {
+  gap: 0 !important;
+  background: var(--vp-c-divider) !important;
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+}
+
+#sidebar .stats-row .stat {
+  background: var(--vp-c-bg-alt) !important;
+}
+
+#sidebar .filters {
+  gap: 10px !important;
+  padding: 16px !important;
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+}
+
+#sidebar .filters input,
+#sidebar .filters select,
+.debug-tools input,
+.debug-tools select,
+.debug-tools button {
+  background: var(--vp-c-bg) !important;
+  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+}
+
+#session-list {
+  background: var(--vp-c-bg-alt) !important;
+}
+
+.session-item {
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+  background: transparent !important;
+  color: var(--vp-c-text-1) !important;
+}
+
+.session-item:hover {
+  background: var(--vp-c-bg-soft) !important;
+}
+
+.session-item.active {
+  background: var(--vp-c-brand-soft) !important;
+  border-left-color: var(--vp-c-brand-1) !important;
+}
+
+.session-item .left .pid,
+.info-card .val,
+#modal-overlay .modal h3 {
+  color: var(--vp-c-text-1) !important;
+}
+
+.badge {
+  border-radius: 6px !important;
+}
+
+.badge.affect,
+.badge.text {
+  background: var(--vp-c-brand-soft) !important;
+  color: var(--vp-c-brand-1) !important;
+  border-color: color-mix(in srgb, var(--vp-c-brand-1) 28%, transparent) !important;
+}
+
+.badge.s {
+  background: rgba(245, 158, 11, .12) !important;
+  color: #d97706 !important;
+  border-color: rgba(245, 158, 11, .28) !important;
+}
+
+#tabs {
+  padding: 0 24px !important;
+  background: var(--vp-c-bg) !important;
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+}
+
+#tabs button {
+  color: var(--vp-c-text-2) !important;
+  border-radius: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#tabs button:hover {
+  color: var(--vp-c-text-1) !important;
+}
+
+#tabs button.active {
+  color: var(--vp-c-brand-1) !important;
+  border-bottom-color: var(--vp-c-brand-1) !important;
+}
+
+#detail {
+  padding: 24px 32px !important;
+  background: var(--vp-c-bg) !important;
+  color: var(--vp-c-text-1) !important;
+}
+
+#main .empty-state,
+.loading {
+  color: var(--vp-c-text-2) !important;
+}
+
+.detail-section {
+  margin-bottom: 24px !important;
+}
+
+.info-card,
+.debug-box,
+#modal-overlay .modal {
+  background: var(--vp-c-bg-soft) !important;
+  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.action-bar button,
+#modal-overlay button {
+  background: var(--vp-c-bg-soft) !important;
+  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+}
+
+.action-bar button:hover,
+#modal-overlay button:hover {
+  border-color: var(--vp-c-brand-1) !important;
+  color: var(--vp-c-brand-1) !important;
+}
+
+button.primary,
+.action-bar button.primary {
+  background: var(--vp-c-brand-1) !important;
+  border-color: var(--vp-c-brand-1) !important;
+  color: #fff !important;
+}
+
+button.danger,
+.action-bar button.danger {
+  background: transparent !important;
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+}
+
+button.danger:hover,
+.action-bar button.danger:hover {
+  background: rgba(239, 68, 68, .12) !important;
+  color: #ef4444 !important;
+}
+
+.debug-box pre,
+.debug-details pre {
+  background: var(--vp-c-bg) !important;
+  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+}
+
+.debug-details summary,
+.debug-face a {
+  color: var(--vp-c-brand-1) !important;
+}
+
+.debug-face img {
+  background: var(--vp-c-bg) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+}
+
+.frame-table {
+  color: var(--vp-c-text-1) !important;
+}
+
+.frame-table th {
+  background: var(--vp-c-bg-alt) !important;
+  color: var(--vp-c-text-2) !important;
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+}
+
+.frame-table td {
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+  color: var(--vp-c-text-1) !important;
+}
+
+.frame-table tr:hover td {
+  background: var(--vp-c-bg-soft) !important;
+}
+
+.chat-entry {
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+}
+
+.chat-entry .ch-content,
+.chat-entry.user .ch-content,
+.chat-entry.ai .ch-content {
+  background: var(--vp-c-bg-soft) !important;
+  color: var(--vp-c-text-1) !important;
+  border-left-color: var(--vp-c-brand-1) !important;
+  border-radius: 8px !important;
+}
+
+.toast.ok {
+  background: rgba(16, 185, 129, .14) !important;
+  color: #059669 !important;
+  border: 1px solid rgba(16, 185, 129, .28) !important;
+}
+
+.toast.err {
+  background: rgba(239, 68, 68, .12) !important;
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, .24) !important;
 }
 
 button,
