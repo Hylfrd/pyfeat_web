@@ -1124,6 +1124,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     strategy: Optional[Strategy] = None
                     escalate_level: int = 0
                     strategy_name: Optional[str] = None
+                    trigger_checks: dict[str, bool] = {}
 
                     if condition == "affect-aware":
                         selector = selectors.get(participant_id)
@@ -1133,6 +1134,23 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             strategy = selector.evaluate(turn, prior_turns)
                             escalate_level = selector.get_escalate_level()
                             strategy_name = strategy.value if strategy else None
+                            trigger_checks = selector.get_trigger_checks()
+
+                    if debug_mode and trigger_checks:
+                        api_response = expression_engine.get_last_api_response()
+                        if isinstance(api_response, dict):
+                            api_response = {**api_response, **trigger_checks}
+                        else:
+                            api_response = {"raw": api_response, **trigger_checks}
+                        _push_debug({
+                            "kind": "strategy",
+                            "participant_id": participant_id,
+                            "session_id": current_session_id,
+                            "face_detected": latest_frames[-1].face_detected if latest_frames else False,
+                            "reliable": latest_frames[-1].reliable if latest_frames else False,
+                            "api_response": api_response,
+                            "message": f"strategy checks turn {turn_counter}: {strategy_name or 'none'}",
+                        })
 
                     # Call AI
                     try:

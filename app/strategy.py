@@ -123,6 +123,7 @@ class StrategyState:
     frame_history: List[AUFrame] = field(default_factory=list)  # all frames, sliding window
     turn_history: List[UserTurn] = field(default_factory=list)   # recent turns
     expression_label: str = "neutral"  # most recent expression label
+    last_trigger_checks: Dict[str, bool] = field(default_factory=dict)
 
 
 # ── Trigger checks ─────────────────────────────────────────────────
@@ -343,7 +344,19 @@ class StrategySelector:
         # ── 1. Check Release first (always, independent of priority) ──
         # Uses AU4 dropping (corrugator relaxation) instead of AU12 (smile).
         # See _au4_dropping() docstring for rationale.
+        probe_text = _input_shrinking(all_turns, 3)
+        probe_au = _au4_present(current_turn.frames)
+        esc_triggered, _ = _au4_slope(self.state.frame_history)
         release_triggered = _au4_dropping(self.state.frame_history)
+        self.state.last_trigger_checks = {
+            "_au4_present": probe_au,
+            "_au4_rising": _au4_rising(self.state.frame_history, 60.0),
+            "_input_shrinking": probe_text,
+            "_sustained_present": _sustained_present(frames_across_turns, 3),
+            "_idle_with_au1": _idle_with_au1(current_turn),
+            "_au4_slope": esc_triggered,
+            "_au4_dropping": release_triggered,
+        }
         if release_triggered:
             self._apply_release()
             return Strategy.RELEASE
@@ -353,25 +366,22 @@ class StrategySelector:
         triggers: List[Tuple[Strategy, bool]] = []
 
         # Reset: sustained AU4 or AU7 across 3 turns
-        if _sustained_present(frames_across_turns, 3):
+        if self.state.last_trigger_checks["_sustained_present"]:
             triggers.append((Strategy.RESET, True))
         else:
             triggers.append((Strategy.RESET, False))
 
         # Escalate: AU4 rising slope over last 1.5s (3 frames) + peak >= C
-        esc_triggered, _ = _au4_slope(self.state.frame_history)
         triggers.append((Strategy.ESCALATE, esc_triggered))
 
         # Check-in: AU4 rising within 60s window
-        triggers.append((Strategy.CHECK_IN, _au4_rising(self.state.frame_history, 60.0)))
+        triggers.append((Strategy.CHECK_IN, self.state.last_trigger_checks["_au4_rising"]))
 
         # Probe: shrinking input + AU4 present
-        probe_text = _input_shrinking(all_turns, 3)
-        probe_au = _au4_present(current_turn.frames)
         triggers.append((Strategy.PROBE, probe_text and probe_au))
 
         # Offer: idle > 15s + AU1 present
-        triggers.append((Strategy.OFFER, _idle_with_au1(current_turn)))
+        triggers.append((Strategy.OFFER, self.state.last_trigger_checks["_idle_with_au1"]))
 
         # ── 3. Select highest-priority triggered strategy ──
 
@@ -421,6 +431,9 @@ class StrategySelector:
     def get_expression_label(self) -> str:
         """Most recent expression label."""
         return self.state.expression_label
+
+    def get_trigger_checks(self) -> Dict[str, bool]:
+        return dict(self.state.last_trigger_checks)
 
     def update_expression_label(self, frames: List[AUFrame]):
         """
