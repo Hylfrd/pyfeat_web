@@ -1,18 +1,21 @@
-# pyfeat web
+# PyFeat Web
 
-Temporary camera demo for Py-Feat web verification.
+FastAPI experiment web app for the PyFeat demo.
 
-## Structure
+## Server
 
-- `frontend/`: static web page deployed to `C:\web`.
-- `backend/`: local API demo server.
-- `uploads/`: local captured images, ignored by git.
+Files are deployed to `C:\web` on the Windows server.
 
-## Local dev
+First-time setup on the server:
 
 ```powershell
-pnpm install
-pnpm dev
+C:\web\install_server_deps.bat
 ```
 
-Open `http://127.0.0.1:8000`.
+Start the app:
+
+```powershell
+C:\web\start_server.bat
+```
+
+The app listens on `127.0.0.1:8020`. Caddy should reverse proxy `demo.hmcl-helper.cn` to this local port.

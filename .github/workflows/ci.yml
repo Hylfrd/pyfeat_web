@@ -16,20 +16,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          node-version: 24
-          cache: pnpm
+          python-version: "3.13"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Check scripts
-        run: pnpm check
+      - name: Check Python
+        run: python -m compileall app
 
       - name: Deploy files to server
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -38,8 +31,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: "frontend/index.html,frontend/app.js,frontend/style.css,frontend/logo.png"
+          source: "app/**,static/**,requirements.txt,install_server_deps.bat,start_server.bat,Caddyfile.example"
           target: "/c/web/"
-          strip_components: 1
           tar_dereference: true
           overwrite: true

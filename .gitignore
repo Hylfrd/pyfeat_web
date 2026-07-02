@@ -1,25 +1,40 @@
-# Dependencies
-node_modules/
+# Python
 .venv/
 venv/
 __pycache__/
+*.py[cod]
 
-# Build outputs
-dist/
-build/
+# Runtime data
+data/
+*.db
+*.sqlite
+*.sqlite3
 
-# Local uploads
-uploads/*
-!uploads/.gitkeep
-/upload-*
-/note-*.txt
+# Uploaded and recorded media
+uploads/
+videos/
+recordings/
+frames/
+captures/
+*.webm
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.jpg
+*.jpeg
+*.png
+*.gif
 
-# Local env
+# Local env and logs
 .env
 .env.*
-
-# Logs
 *.log
+
+# Node leftovers
+node_modules/
+dist/
+build/
 
 # OS and editor files
 .DS_Store
