@@ -96,6 +96,24 @@ def _push_debug(event: dict) -> dict:
     return payload
 
 
+def _api_error_payload(err: Exception) -> dict:
+    payload = {
+        "ok": False,
+        "error_type": type(err).__name__,
+        "error": str(err)[:1000],
+    }
+    if isinstance(err, httpx.HTTPStatusError):
+        response = err.response
+        payload.update({
+            "status_code": response.status_code,
+            "url": str(response.request.url),
+            "body": response.text[:2000],
+        })
+    elif isinstance(err, httpx.RequestError) and err.request:
+        payload["url"] = str(err.request.url)
+    return payload
+
+
 # ── Startup / Shutdown ─────────────────────────────────────────────
 
 @app.on_event("startup")
@@ -1172,6 +1190,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         })
 
                     # Call AI
+                    ai_started = time.perf_counter()
                     try:
                         ai_response_text = await ai_client.chat(
                             prompt=user_text,
@@ -1181,8 +1200,45 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             strategy=strategy,
                             escalate_level=escalate_level,
                         )
+                        ai_elapsed_ms = round((time.perf_counter() - ai_started) * 1000, 1)
+                        if debug_mode:
+                            _push_debug({
+                                "kind": "ai",
+                                "participant_id": participant_id,
+                                "session_id": current_session_id,
+                                "elapsed_ms": ai_elapsed_ms,
+                                "api_response": {
+                                    "ok": True,
+                                    "model": ai_client.model,
+                                    "base_url": ai_client.base_url,
+                                    "condition": condition,
+                                    "strategy": strategy_name,
+                                    "prompt_chars": len(user_text),
+                                    "history_messages": len(chat_history),
+                                    "response_chars": len(ai_response_text),
+                                },
+                                "message": f"AI response turn {turn_counter}: {ai_elapsed_ms} ms",
+                            })
                     except Exception as api_err:
                         import sys
+                        ai_elapsed_ms = round((time.perf_counter() - ai_started) * 1000, 1)
+                        api_response = _api_error_payload(api_err)
+                        api_response.update({
+                            "model": ai_client.model,
+                            "base_url": ai_client.base_url,
+                            "condition": condition,
+                            "strategy": strategy_name,
+                            "prompt_chars": len(user_text),
+                            "history_messages": len(chat_history),
+                        })
+                        _push_debug({
+                            "kind": "ai",
+                            "participant_id": participant_id,
+                            "session_id": current_session_id,
+                            "elapsed_ms": ai_elapsed_ms,
+                            "api_response": api_response,
+                            "message": f"AI error turn {turn_counter}: {type(api_err).__name__}",
+                        })
                         print(f"[ws] AI API error for {participant_id}: {api_err}", file=sys.stderr)
                         ai_response_text = (
                             "抱歉，我暂时无法回应。请稍等片刻再试。"
