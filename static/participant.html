@@ -788,27 +788,23 @@ function startBaseline(){
     if(baselineDone) return;
     if(ws.readyState===WebSocket.OPEN){
       ws.send(JSON.stringify({type:'baseline_frame',frame:captureFrame()}));
-    }
-    baselineSentCount++;
-    if(baselineSentCount>=10){
-      clearInterval(baselineInterval);
-      baselineSendComplete=true;
-      // If server already acked 10, proceed immediately; else wait up to 2s for late acks
-      if(baselineAckedCount>=10 && !baselineDone){
-        baselineDone=true; finishBaseline();
-      } else {
-        setTimeout(()=>{
-          if(!baselineDone){baselineDone=true;finishBaseline();}
-        }, 2000);
+      baselineSentCount++;
+      if(baselineSentCount>=20 && baselineAckedCount===0){
+        toast('未收到有效面部基线，请确认摄像头开启并正对屏幕。',4000);
+        baselineSentCount=0;
       }
+    }else{
+      clearInterval(baselineInterval);
+      toast('连接中断，请刷新页面重试。',4000);
     }
   },500);
-  // Overall safety timeout: 15 seconds max
-  setTimeout(()=>{
-    if(!baselineDone){baselineDone=true;clearInterval(baselineInterval);finishBaseline();}
-  },15000);
 }
 async function finishBaseline(){
+  if(baselineAckedCount<10){
+    baselineDone=false;
+    startBaseline();
+    return;
+  }
   clearInterval(baselineInterval);
   const f=new FormData();f.append('participant_id',participantId);
   const r=await fetch('/api/baseline-calibrate',{method:'POST',body:f});

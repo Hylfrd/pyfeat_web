@@ -1008,7 +1008,8 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     started = time.perf_counter()
                     vector = expression_engine.collect_baseline_frames(frame_b64, participant_id)
                     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-                    baseline_count += 1
+                    if vector is not None:
+                        baseline_count += 1
                     debug_event = None
                     if debug_mode:
                         debug_event = _push_debug({
