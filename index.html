@@ -6,6 +6,12 @@
     <title>PyFeat Demo</title>
   </head>
   <body>
+    <button id="cameraButton" type="button">Start Camera</button>
+    <button id="captureButton" type="button" disabled>Capture</button>
+    <br>
+    <video id="cameraPreview" width="640" height="480" autoplay playsinline></video>
+    <canvas id="captureCanvas" width="640" height="480" hidden></canvas>
+    <br>
     <input id="imageInput" type="file" accept="image/*">
     <br>
     <textarea id="noteInput" rows="6" cols="60"></textarea>
