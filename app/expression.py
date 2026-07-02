@@ -284,7 +284,7 @@ class ExpressionEngine:
     def get_all_recent_frames(self, participant_id: str) -> List[AUFrame]:
         return self._recent_frames.get(participant_id, [])
 
-    def update_expression_label(self, frames: List[AUFrame]):
+    def update_expression_label(self, frames: List[AUFrame], participant_id: str = "__default__"):
         if not frames:
             return
 
@@ -305,7 +305,11 @@ class ExpressionEngine:
         else:
             label = "neutral"
 
-        self._expression_labels["__default__"] = label
+         self._expression_labels[participant_id] = label
 
     def get_expression_label(self, participant_id: str = "__default__") -> str:
-        return self._expression_labels.get(participant_id, "neutral")
+        label = self._expression_labels.get(participant_id)
+        if label is not None:
+            return label
+        # fallback: 试试 __default__
+        return self._expression_labels.get("__default__", "neutral")
