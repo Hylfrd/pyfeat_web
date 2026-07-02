@@ -1044,7 +1044,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     face_ok = au_frame and au_frame.face_detected and au_frame.reliable
                     if face_ok:
                         expression_engine._store_frame(participant_id, au_frame)
-                        expression_engine.update_expression_label([au_frame])
+                        expression_engine.update_expression_label([au_frame], participant_id)
                         no_face_prompt_sent = False
                     else:
                         unreliable_frames += 1
