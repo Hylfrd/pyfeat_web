@@ -111,6 +111,7 @@ class ExpressionEngine:
         self._recent_frames: Dict[str, List[AUFrame]] = {}
         self._expression_labels: Dict[str, str] = {}
         self._baseline_buffer: Dict[str, List[List[float]]] = {}
+        self._last_api_response: Optional[dict] = None
         self._started = False
 
     def start(self):
@@ -177,6 +178,7 @@ class ExpressionEngine:
 
     def _request_detection(self, image_base64: str, participant_id: str) -> Optional[dict]:
         endpoint = _endpoint()
+        self._last_api_response = None
         if not endpoint:
             return None
 
@@ -197,13 +199,23 @@ class ExpressionEngine:
             with urlopen(request, timeout=PYFEAT_API_TIMEOUT) as response:
                 body = response.read().decode("utf-8")
                 data = json.loads(body)
+                if isinstance(data, dict):
+                    self._last_api_response = data
                 if isinstance(data, dict) and isinstance(data.get("data"), dict):
                     return data["data"]
                 if isinstance(data, dict):
                     return data
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, OSError):
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+            self._last_api_response = {
+                "ok": False,
+                "participant_id": participant_id,
+                "error": str(exc),
+            }
             return None
         return None
+
+    def get_last_api_response(self) -> Optional[dict]:
+        return self._last_api_response
 
     def collect_baseline_frames(
         self,

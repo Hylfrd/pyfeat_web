@@ -10,6 +10,7 @@ Orchestrates the entire experiment flow:
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 import time
@@ -27,7 +28,7 @@ from .database import (
     init_db, Participant, Session, ChatLog, ExpressionFrame,
     Questionnaire, Evaluation, PreTaskSurvey, PostTaskSurvey,
 )
-from .expression import AUFrame, ExpressionEngine, BaselineResult
+from .expression import AUFrame, ExpressionEngine, BaselineResult, PYFEAT_API_URL, PYFEAT_API_TIMEOUT
 from .strategy import StrategySelector, UserTurn, Strategy
 from .ai_client import AIClient, ChatMessage
 from .evaluator import (
@@ -70,6 +71,21 @@ def _frame_bytes(image_base64: str) -> int:
     value = image_base64.split(",", 1)[-1]
     padding = value.count("=")
     return max(0, int(len(value) * 3 / 4) - padding)
+
+
+def _debug_image(image_base64: str) -> Optional[str]:
+    if not image_base64:
+        return None
+    if image_base64.startswith("data:image/"):
+        return image_base64
+    return f"data:image/jpeg;base64,{image_base64}"
+
+
+def _pyfeat_base_url() -> str:
+    value = PYFEAT_API_URL.rstrip("/")
+    if value.endswith("/detect"):
+        return value[:-7]
+    return value
 
 
 def _push_debug(event: dict) -> dict:
@@ -893,6 +909,68 @@ async def admin_debug_mode(enabled: bool = Form(...)):
     }
 
 
+@app.get("/api/admin/debug-health")
+async def admin_debug_health():
+    started = time.perf_counter()
+    url = _pyfeat_base_url() + "/health"
+    try:
+        async with httpx.AsyncClient(timeout=PYFEAT_API_TIMEOUT) as client:
+            response = await client.get(url)
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+        return {
+            "ok": response.is_success,
+            "url": url,
+            "status_code": response.status_code,
+            "elapsed_ms": elapsed_ms,
+            "body": response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text,
+        }
+    except Exception as exc:
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+        return {
+            "ok": False,
+            "url": url,
+            "elapsed_ms": elapsed_ms,
+            "error": str(exc),
+        }
+
+
+@app.post("/api/admin/debug-detect")
+async def admin_debug_detect(file: UploadFile = File(...)):
+    started = time.perf_counter()
+    image_bytes = await file.read()
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    content_type = file.content_type or "image/jpeg"
+    url = _pyfeat_base_url() + "/detect"
+    payload = {
+        "image": f"data:{content_type};base64,{image_b64}",
+        "participant_id": "__debug_upload__",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=PYFEAT_API_TIMEOUT) as client:
+            response = await client.post(url, json=payload)
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+        body = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
+        return {
+            "ok": response.is_success,
+            "url": url,
+            "status_code": response.status_code,
+            "filename": file.filename,
+            "bytes": len(image_bytes),
+            "elapsed_ms": elapsed_ms,
+            "body": body,
+        }
+    except Exception as exc:
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+        return {
+            "ok": False,
+            "url": url,
+            "filename": file.filename,
+            "bytes": len(image_bytes),
+            "elapsed_ms": elapsed_ms,
+            "error": str(exc),
+        }
+
+
 # ── WebSocket ──────────────────────────────────────────────────────
 
 @app.websocket("/ws/{participant_id}")
@@ -941,6 +1019,8 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             "elapsed_ms": elapsed_ms,
                             "face_detected": vector is not None,
                             "reliable": vector is not None,
+                            "image": _debug_image(frame_b64),
+                            "api_response": expression_engine.get_last_api_response(),
                             "message": f"baseline frame {baseline_count}: {elapsed_ms} ms",
                         })
                     await websocket.send_text(json.dumps({
@@ -996,6 +1076,8 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             "elapsed_ms": elapsed_ms,
                             "face_detected": au_frame.face_detected if au_frame else False,
                             "reliable": au_frame.reliable if au_frame else False,
+                            "image": _debug_image(frame_b64),
+                            "api_response": expression_engine.get_last_api_response(),
                             "message": f"expression frame {total_frames}: {elapsed_ms} ms",
                         })
                         await websocket.send_text(json.dumps({

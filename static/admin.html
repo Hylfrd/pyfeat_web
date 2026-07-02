@@ -161,6 +161,37 @@ button.danger:hover{background:#dc2626;color:#fff}
 .frame-table tr:hover td{background:rgba(99,102,241,.04)}
 .frame-table .lost{opacity:.4}
 .frame-table .trigger{color:#fbbf24;font-weight:700}
+.debug-tools{display:grid;grid-template-columns:1fr 140px 140px 120px;gap:10px;margin:12px 0 16px}
+.debug-tools input,.debug-tools select,.debug-tools button{
+  background:#0f172a;border:1px solid #334155;border-radius:10px;color:#e2e8f0;
+  padding:9px 12px;font-family:inherit;font-size:.78em;
+}
+.debug-tools input:focus,.debug-tools select:focus{outline:none;border-color:#6366f1}
+.debug-box{
+  border:1px solid #334155;border-radius:10px;background:#0f172a;padding:12px;margin-bottom:14px;
+}
+.debug-box h4{font-size:.72em;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:10px}
+.debug-box pre{
+  margin-top:10px;max-height:220px;overflow:auto;background:#020617;border:1px solid #334155;
+  border-radius:8px;padding:10px;color:#cbd5e1;font-size:.75em;line-height:1.5;white-space:pre-wrap;
+}
+.debug-details summary{cursor:pointer;color:#818cf8;font-weight:700}
+.debug-details pre{
+  margin-top:8px;max-height:260px;overflow:auto;background:#020617;border:1px solid #334155;
+  border-radius:8px;padding:10px;color:#cbd5e1;font-size:.82em;line-height:1.5;white-space:pre-wrap;
+}
+.debug-face{
+  margin-top:10px;display:grid;grid-template-columns:160px 1fr;gap:12px;align-items:start;
+}
+.debug-face img{
+  width:160px;max-height:120px;object-fit:contain;border:1px solid #334155;border-radius:8px;background:#020617;
+}
+.debug-face a{display:inline-block;margin-top:8px;color:#818cf8;text-decoration:none;font-weight:700}
+@media(max-width:900px){
+  .debug-tools{grid-template-columns:1fr}
+  .debug-face{grid-template-columns:1fr}
+  .debug-face img{width:100%;max-height:220px}
+}
 
 /* Loading */
 .loading{text-align:center;padding:40px;color:#64748b}
@@ -216,18 +247,17 @@ button.danger:hover{background:#dc2626;color:#fff}
 
 <!-- ═══ Main Panel ═══ -->
 <div id="main">
-  <div id="tabs" class="hidden">
-    <button data-tab="overview" class="active">概览</button>
+  <div id="tabs">
+    <button data-tab="overview">概览</button>
     <button data-tab="chat">对话记录</button>
     <button data-tab="expression">表情数据</button>
     <button data-tab="baseline">基线数据</button>
-    <button data-tab="debug">Debug Mode</button>
+    <button data-tab="debug" class="active">日志</button>
   </div>
   <div id="detail">
     <div class="empty-state">
-      <div class="icon">←</div>
-      <p>从左侧选择一个 Session 查看详情</p>
-      <p style="font-size:.75em;color:#475569">支持导出 JSON、删除记录、查看面部识别数据</p>
+      <div class="icon">...</div>
+      <p>日志加载中</p>
     </div>
   </div>
 </div>
@@ -240,6 +270,8 @@ button.danger:hover{background:#dc2626;color:#fff}
 <script>
 const $=id=>document.getElementById(id);
 let sessions=[],activeSid=null,sessionCache={};
+let debugEvents=[];
+let activeTab='debug';
 
 // ── Fetch & render ──
 async function refresh(){
@@ -247,8 +279,7 @@ async function refresh(){
   sessions=await r.json();
   renderStats();
   renderList();
-  // Re-fetch active session detail if open
-  if(activeSid){await loadSession(activeSid,true)}
+  if(activeTab!=='debug'&&activeSid)await loadSession(activeSid,true);
 }
 async function renderStats(){
   const done=sessions.filter(s=>s.completed);
@@ -297,6 +328,7 @@ function renderList(){
 // ── Session selection ──
 async function selectSession(sid){
   activeSid=sid;
+  activeTab='overview';
   renderList();
   await loadSession(sid);
 }
@@ -312,33 +344,44 @@ async function loadSession(sid,silent=false){
   const st=await statsR.json();
   sessionCache[sid]={exp,st};
 
-  $('tabs').classList.remove('hidden');
-  $('tabs').querySelectorAll('button').forEach(b=>b.classList.remove('active'));
-  $('tabs').querySelector('[data-tab="overview"]').classList.add('active');
-  renderOverview(exp,st);
+  setActiveTab(activeTab);
+  renderActiveTab();
 }
 
 // ── Tab switching ──
 $('tabs').addEventListener('click',e=>{
   if(e.target.tagName!=='BUTTON')return;
-  $('tabs').querySelectorAll('button').forEach(b=>b.classList.remove('active'));
-  e.target.classList.add('active');
-  const tab=e.target.dataset.tab;
-  const {exp,st}=sessionCache[activeSid]||{};
-  if(!exp)return;
-  if(tab==='overview')renderOverview(exp,st);
-  if(tab==='chat')renderChat(exp);
-  if(tab==='expression')renderExpression(exp,st);
-  if(tab==='baseline')renderBaseline(exp);
-  if(tab==='debug')renderDebug();
+  activeTab=e.target.dataset.tab;
+  setActiveTab(activeTab);
+  renderActiveTab();
 });
+
+function setActiveTab(tab){
+  $('tabs').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+}
+
+function renderActiveTab(){
+  const {exp,st}=sessionCache[activeSid]||{};
+  if(activeTab==='debug'){
+    renderDebug();
+    return;
+  }
+  if(!exp){
+    $('detail').innerHTML='<div class="empty-state"><div class="icon">←</div><p>从左侧选择一个 Session 查看详情</p></div>';
+    return;
+  }
+  if(activeTab==='overview')renderOverview(exp,st);
+  if(activeTab==='chat')renderChat(exp);
+  if(activeTab==='expression')renderExpression(exp,st);
+  if(activeTab==='baseline')renderBaseline(exp);
+}
 
 async function setDebugMode(enabled){
   const body=new URLSearchParams();
   body.set('enabled', enabled ? 'true' : 'false');
   const r=await fetch('/api/admin/debug-mode',{method:'POST',body});
   if(!r.ok){
-    toast('Debug mode update failed','err');
+    toast('日志开关更新失败','err');
     return;
   }
   await renderDebug();
@@ -347,40 +390,130 @@ async function setDebugMode(enabled){
 async function renderDebug(){
   const r=await fetch('/api/admin/debug');
   const data=await r.json();
-  const events=(data.events||[]).slice().reverse();
-  const rows=events.map(e=>`
-    <tr>
-      <td>${escHtml(e.ts||'')}</td>
-      <td>${escHtml(e.kind||'')}</td>
-      <td>${escHtml(e.participant_id||'')}</td>
-      <td>${e.session_id??''}</td>
-      <td>${e.bytes?Math.round(e.bytes/1024*10)/10:''}</td>
-      <td>${e.elapsed_ms??''}</td>
-      <td>${e.face_detected?'yes':'no'}</td>
-      <td>${e.reliable?'yes':'no'}</td>
-      <td>${escHtml(e.message||'')}</td>
-    </tr>
-  `).join('');
+  debugEvents=(data.events||[]).slice().reverse();
+  const participants=[...new Set(debugEvents.map(e=>e.participant_id).filter(Boolean))].sort();
+  const sessions=[...new Set(debugEvents.map(e=>e.session_id).filter(v=>v!==undefined&&v!==null&&v!==''))].sort((a,b)=>Number(a)-Number(b));
   $('detail').innerHTML=`
     <div class="action-bar">
       <button class="${data.enabled?'danger':'primary'}" onclick="setDebugMode(${data.enabled?'false':'true'})">
-        ${data.enabled?'Disable Debug Mode':'Enable Debug Mode'}
+        ${data.enabled?'关闭日志记录':'开启日志记录'}
       </button>
-      <button onclick="renderDebug()">Refresh</button>
+      <button onclick="renderDebug()">刷新</button>
     </div>
     <div class="detail-section">
-      <h3>Debug Mode</h3>
+      <h3>日志</h3>
       <p style="color:#94a3b8;font-size:.82em;line-height:1.7">
-        Shows server-to-PyFeat API timing, image payload size, face detection status, and reliability.
+        查看服务器到 PyFeat API 的耗时、图片大小、面部检测状态和完整返回。
       </p>
+    </div>
+    <div class="debug-box">
+      <h4>手动检测</h4>
+      <div class="action-bar" style="margin-bottom:0">
+        <button onclick="checkDebugHealth()">检测模型状态</button>
+        <input id="debug-upload" type="file" accept="image/*" style="max-width:260px">
+        <button onclick="uploadDebugImage()">上传图片检测</button>
+      </div>
+      <pre id="debug-result">等待操作</pre>
+    </div>
+    <div class="debug-tools">
+      <input id="debug-search" type="text" placeholder="搜索 participant / session / message / API JSON..." oninput="renderDebugRows()">
+      <select id="debug-participant" onchange="renderDebugRows()">
+        <option value="">全部参与者</option>
+        ${participants.map(p=>`<option value="${escAttr(p)}">${escHtml(p)}</option>`).join('')}
+      </select>
+      <select id="debug-session" onchange="renderDebugRows()">
+        <option value="">全部 Session</option>
+        ${sessions.map(s=>`<option value="${escAttr(s)}">Session ${escHtml(s)}</option>`).join('')}
+      </select>
+      <select id="debug-kind" onchange="renderDebugRows()">
+        <option value="">全部类型</option>
+        <option value="baseline">baseline</option>
+        <option value="expression">expression</option>
+        <option value="debug">debug</option>
+      </select>
     </div>
     <div style="max-height:560px;overflow:auto;border:1px solid #334155;border-radius:10px">
       <table class="frame-table">
-        <thead><tr><th>Time</th><th>Kind</th><th>Participant</th><th>Session</th><th>KB</th><th>ms</th><th>Face</th><th>Reliable</th><th>Message</th></tr></thead>
-        <tbody>${rows||'<tr><td colspan="9" style="text-align:center;color:#64748b;padding:24px">No debug events yet</td></tr>'}</tbody>
+        <thead><tr><th>时间</th><th>类型</th><th>参与者</th><th>Session</th><th>KB</th><th>ms</th><th>Face</th><th>Reliable</th><th>信息</th><th>详情</th></tr></thead>
+        <tbody id="debug-rows"></tbody>
       </table>
     </div>
   `;
+  renderDebugRows();
+}
+
+async function checkDebugHealth(){
+  $('debug-result').textContent='检测中...';
+  const r=await fetch('/api/admin/debug-health');
+  $('debug-result').textContent=JSON.stringify(await r.json(),null,2);
+}
+
+async function uploadDebugImage(){
+  const file=$('debug-upload').files[0];
+  if(!file){
+    toast('先选择一张图片','err');
+    return;
+  }
+  $('debug-result').textContent='上传并检测中...';
+  const body=new FormData();
+  body.append('file',file);
+  const r=await fetch('/api/admin/debug-detect',{method:'POST',body});
+  $('debug-result').textContent=JSON.stringify(await r.json(),null,2);
+}
+
+function renderDebugRows(){
+  const q=($('debug-search')?.value||'').toLowerCase();
+  const participant=$('debug-participant')?.value||'';
+  const sid=$('debug-session')?.value||'';
+  const kind=$('debug-kind')?.value||'';
+  const filtered=debugEvents.filter(e=>{
+    if(participant&&e.participant_id!==participant)return false;
+    if(sid&&String(e.session_id)!==sid)return false;
+    if(kind&&e.kind!==kind)return false;
+    if(!q)return true;
+    return JSON.stringify(e).toLowerCase().includes(q);
+  });
+  const rows=filtered.map((e,i)=>{
+    const kb=e.bytes?Math.round(e.bytes/1024*10)/10:'';
+    const api=e.api_response===undefined?null:e.api_response;
+    const apiJson=api===null?'No API response recorded':JSON.stringify(api,null,2);
+    const eventJson=JSON.stringify({...e,image:e.image?'[image omitted from event json]':undefined},null,2);
+    const image=e.image?`
+      <div class="debug-face">
+        <img src="${escAttr(e.image)}" alt="captured frame">
+        <div>
+          <div style="color:#94a3b8;line-height:1.6">
+            Captured frame sent to PyFeat.<br>
+            Payload: ${kb||0} KB · Time: ${e.elapsed_ms??''} ms
+          </div>
+          <a href="${escAttr(e.image)}" download="debug-${escAttr(e.participant_id||'unknown')}-${escAttr(e.session_id??'none')}-${escAttr(e.ts||i)}.jpg">下载图片</a>
+        </div>
+      </div>`:'<div style="color:#64748b;margin-top:8px">这个事件没有图片。</div>';
+    return `
+      <tr>
+        <td>${escHtml(e.ts||'')}</td>
+        <td>${escHtml(e.kind||'')}</td>
+        <td>${escHtml(e.participant_id||'')}</td>
+        <td>${e.session_id??''}</td>
+        <td>${kb}</td>
+        <td>${e.elapsed_ms??''}</td>
+        <td>${e.face_detected?'yes':'no'}</td>
+        <td>${e.reliable?'yes':'no'}</td>
+        <td>${escHtml(e.message||'')}</td>
+        <td>
+          <details class="debug-details">
+            <summary>展开</summary>
+            ${image}
+            <pre>${escHtml(apiJson)}</pre>
+            <details class="debug-details" style="margin-top:8px">
+              <summary>完整日志事件</summary>
+              <pre>${escHtml(eventJson)}</pre>
+            </details>
+          </details>
+        </td>
+      </tr>`;
+  }).join('');
+  $('debug-rows').innerHTML=rows||'<tr><td colspan="10" style="text-align:center;color:#64748b;padding:24px">没有匹配的日志</td></tr>';
 }
 
 // ── Overview ──
@@ -653,8 +786,9 @@ async function doDelete(sid){
   if(r.ok){
     closeModal();
     activeSid=null;
-    $('tabs').classList.add('hidden');
-    $('detail').innerHTML='<div class="empty-state"><div class="icon">🗑</div><p>Session 已删除</p></div>';
+    activeTab='debug';
+    setActiveTab(activeTab);
+    renderDebug();
     toast('已删除','ok');
     refresh();
   }else{
@@ -671,9 +805,10 @@ function toast(msg,type='ok'){
 
 // ── Helpers ──
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function escAttr(s){return escHtml(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
 // ── Init ──
-refresh();
+refresh().then(()=>renderActiveTab());
 setInterval(refresh,10000);
 </script>
 </body>
