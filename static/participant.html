@@ -435,9 +435,9 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
       <span id="task-label" style="font-size:.7em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#64748b">任务 1</span>
       <span id="condition-badge" style="margin-left:8px;font-size:.65em;padding:3px 8px;border-radius:6px;background:#e0e7ff;color:#4f46e5;font-weight:700;text-transform:uppercase;letter-spacing:.05em"></span>
     </div>
-    <div id="face-status" class="found" style="margin:0 12px">
+    <div id="face-status" class="lost" style="margin:0 12px">
       <span class="face-dot"></span>
-      <span id="face-status-text">面部已检测</span>
+      <span id="face-status-text">等待检测</span>
     </div>
     <div class="timer-meta">
       <span>轮次 <strong id="turn-num">0</strong></span>
@@ -645,7 +645,7 @@ let ws, participantId, orderGroup, language;
 let currentSessionId, currentCondition, currentScenario;
 let turnCounter = 0, revisionCounter = 0, taskStartTime = 0;
 let timerInterval, expressionInterval, baselineInterval;
-let mediaRecorder, chunkIndex = 0;
+let mediaRecorder, webcamStream, chunkIndex = 0;
 let isTask1 = true;
 
 // ── Toast ──
@@ -730,6 +730,7 @@ function connectWS(){
 // ── Webcam ──
 async function startWebcam(){
   const stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,frameRate:15},audio:false});
+  webcamStream=stream;
   $('webcam').srcObject=stream;
   $('webcam-wrap').classList.remove('hidden');
   // Wait for video to actually start playing (first frame rendered)
@@ -751,7 +752,22 @@ async function startWebcam(){
   };
   mediaRecorder.start(10000);
 }
+function webcamLive(){
+  const stream=$('webcam').srcObject||webcamStream;
+  const track=stream&&stream.getVideoTracks&&stream.getVideoTracks()[0];
+  const v=$('webcam');
+  return !!(track&&track.readyState==='live'&&track.enabled&&!track.muted&&v.readyState>=2&&v.videoWidth&&v.videoHeight);
+}
+function setFaceLost(){
+  const el=$('face-status');
+  const txt=$('face-status-text');
+  if(el&&txt){el.className='lost';txt.textContent='未检测到面部'}
+}
 function captureFrame(){
+  if(!webcamLive()){
+    setFaceLost();
+    return "";
+  }
   const v=$('webcam');
   const w=v.videoWidth||640;
   const h=v.videoHeight||480;
@@ -795,7 +811,18 @@ function startBaseline(){
 async function finishBaseline(){
   clearInterval(baselineInterval);
   const f=new FormData();f.append('participant_id',participantId);
-  await fetch('/api/baseline-calibrate',{method:'POST',body:f});
+  const r=await fetch('/api/baseline-calibrate',{method:'POST',body:f});
+  if(!r.ok){
+    baselineDone=false;
+    baselineAckedCount=0;
+    baselineSentCount=0;
+    $('baseline-bar').style.width='0%';
+    $('baseline-count').textContent='0';
+    toast('未采集到有效面部基线，请确认摄像头开启并正对屏幕。',5000);
+    setFaceLost();
+    startBaseline();
+    return;
+  }
   startTask();
 }
 

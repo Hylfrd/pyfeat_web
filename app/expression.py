@@ -128,6 +128,24 @@ class ExpressionEngine:
         if not self._started:
             raise RuntimeError("ExpressionEngine not started. Call .start() first.")
 
+        if not image_base64:
+            self._last_api_response = {
+                "ok": False,
+                "participant_id": participant_id,
+                "error": "empty_frame",
+            }
+            frame = AUFrame(
+                timestamp=time.time(),
+                au1=0.0,
+                au4=0.0,
+                au7=0.0,
+                au12=0.0,
+                face_detected=False,
+                reliable=False,
+            )
+            self._store_frame(participant_id, frame)
+            return frame
+
         data = self._request_detection(image_base64, participant_id)
         if data is None:
             frame = AUFrame(
