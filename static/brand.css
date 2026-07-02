@@ -117,6 +117,14 @@ body:has(> .view) {
   fill: currentColor;
 }
 
+.vp-icon-button.theme-toggle svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .vp-footer {
   position: fixed;
   left: 0;
