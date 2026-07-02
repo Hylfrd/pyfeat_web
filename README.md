@@ -10,7 +10,7 @@ First-time setup on the server:
 
 ```powershell
 C:\web\install_server_deps.bat
-C:\web\install_windows_service.ps1
+C:\web\install_windows_task.ps1
 ```
 
 Manual start:
@@ -19,10 +19,10 @@ Manual start:
 C:\web\start_server.bat
 ```
 
-Service restart:
+App restart:
 
 ```powershell
-Restart-Service pyfeat-web
+C:\web\deploy_restart.ps1
 ```
 
 The app listens on `127.0.0.1:8020`. Caddy should reverse proxy `demo.hmcl-helper.cn` to this local port.

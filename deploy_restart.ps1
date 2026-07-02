@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $root = "C:\web"
 $serviceName = "pyfeat-web"
 $pythonExe = Join-Path $root ".venv\Scripts\python.exe"
+$taskName = "pyfeat-web"
 
 cd $root
 
@@ -12,10 +13,23 @@ if (!(Test-Path $pythonExe)) {
     & $pythonExe -m pip install -r (Join-Path $root "requirements.txt") -i https://mirrors.aliyun.com/pypi/simple/
 }
 
-$service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-if (!$service) {
-    & (Join-Path $root "install_windows_service.ps1")
-} else {
-    Restart-Service -Name $serviceName -Force
-    Get-Service -Name $serviceName
+$task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if (!$task) {
+    & (Join-Path $root "install_windows_task.ps1")
 }
+
+$lines = netstat -ano | Select-String ":8020"
+foreach ($line in $lines) {
+    $parts = $line.ToString().Trim() -split "\s+"
+    if ($parts.Length -ge 5 -and $parts[3] -eq "LISTENING") {
+        $pidValue = [int]$parts[4]
+        Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Start-Sleep -Seconds 1
+Start-ScheduledTask -TaskName $taskName
+Start-Sleep -Seconds 3
+
+$response = Invoke-WebRequest -Uri "http://127.0.0.1:8020/" -UseBasicParsing -TimeoutSec 20
+Write-Output "HTTP $($response.StatusCode)"

@@ -31,7 +31,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: "app/**,static/**,requirements.txt,install_server_deps.bat,install_windows_service.ps1,deploy_restart.ps1,run_server.cmd,start_server.bat,Caddyfile.example"
+          source: "app/**,static/**,requirements.txt,install_server_deps.bat,install_windows_task.ps1,deploy_restart.ps1,run_server.cmd,start_server.bat,Caddyfile.example"
           target: "/c/web/"
           tar_dereference: true
           overwrite: true
