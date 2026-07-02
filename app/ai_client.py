@@ -34,12 +34,12 @@ def _load_env_file() -> None:
 
 _load_env_file()
 
-WRITING_MODEL = "kimi-k2.6"
-WRITING_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
-WRITING_BASE_URL = "https://api.moonshot.ai/v1"
-EVALUATOR_MODEL = "deepseek-v4-pro"
-EVALUATOR_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-EVALUATOR_BASE_URL = "https://api.deepseek.com"
+WRITING_MODEL = "deepseek-v4-pro"
+WRITING_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+WRITING_BASE_URL = "https://api.deepseek.com"
+EVALUATOR_MODEL = "kimi-k2.6"
+EVALUATOR_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
+EVALUATOR_BASE_URL = "https://api.moonshot.ai/v1"
 
 
 # ── Base system prompt (shared by both conditions) ─────────────────
@@ -195,8 +195,8 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                 json={
                     "model": self.model,
                     "messages": messages,
+                    "reasoning_effort": "max",
                     "thinking": {"type": "enabled"},
-                    "max_tokens": 16000,
                 },
             )
             response.raise_for_status()
@@ -224,9 +224,8 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                 json={
                     "model": self.model,
                     "messages": messages,
-                    "reasoning_effort": "max",
                     "thinking": {"type": "enabled"},
-                    "response_format": {"type": "json_object"},
+                    "max_tokens": 16000,
                 },
             )
             response.raise_for_status()

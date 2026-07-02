@@ -185,7 +185,7 @@ class Evaluation(Base):
     run_number: Mapped[int] = Column(Integer, nullable=False)  # 1/2/3 for self-consistency
     layer: Mapped[str] = Column(String, nullable=False)  # "deterministic" / "llm_heuristic"
     score: Mapped[float] = Column(Float, nullable=False)
-    evaluator_model: Mapped[str] = Column(String, nullable=False)  # e.g. "deepseek-v4-pro"
+    evaluator_model: Mapped[str] = Column(String, nullable=False)  # e.g. "kimi-k2.6"
     details_json: Mapped[Optional[str]] = Column(Text, nullable=True)
     timestamp: Mapped[str] = Column(String, default=lambda: datetime.utcnow().isoformat())
 
