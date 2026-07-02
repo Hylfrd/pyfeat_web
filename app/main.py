@@ -42,7 +42,6 @@ ROOT_DIR = Path(__file__).resolve().parent.parent  # project root (one level abo
 STATIC_DIR = ROOT_DIR / "static"
 
 app = FastAPI(title="Co-Writing Emotion AI Study")
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Initialize components
 db_session = init_db(str(ROOT_DIR / "data" / "experiment.db"))
@@ -132,16 +131,6 @@ async def admin_page():
         "Pragma": "no-cache",
         "Expires": "0",
     })
-
-
-@app.get("/brand.css")
-async def brand_css():
-    return FileResponse(STATIC_DIR / "brand.css", media_type="text/css")
-
-
-@app.get("/logo.png")
-async def logo_png():
-    return FileResponse(STATIC_DIR / "logo.png", media_type="image/png")
 
 
 # ── Participant API ────────────────────────────────────────────────
