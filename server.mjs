@@ -5,9 +5,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
-const uploadDir = path.join(root, 'uploads')
-const host = '127.0.0.1'
-const port = 8000
+const uploadDir = root
+const host = process.env.HOST || '127.0.0.1'
+const port = Number(process.env.PORT || 8000)
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -97,13 +97,13 @@ async function handleUpload(req, res) {
 
     const id = timestamp()
     const originalName = safeFilename(payload.filename)
-    const savedName = `${id}-${originalName}`
+    const savedName = `upload-${id}-${originalName}`
     const savedPath = path.join(uploadDir, savedName)
     await writeFile(savedPath, imageBytes)
 
     const note = String(payload.note || '')
     if (note) {
-      await writeFile(path.join(uploadDir, `${id}.txt`), note, 'utf-8')
+      await writeFile(path.join(uploadDir, `note-${id}.txt`), note, 'utf-8')
     }
 
     sendJson(res, 200, {

@@ -11,6 +11,8 @@ build/
 # Local uploads
 uploads/*
 !uploads/.gitkeep
+/upload-*
+/note-*.txt
 
 # Local env
 .env

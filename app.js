@@ -1,25 +1,43 @@
 const cameraButton = document.getElementById('cameraButton')
-const captureButton = document.getElementById('captureButton')
+const themeButton = document.getElementById('themeButton')
 const cameraPreview = document.getElementById('cameraPreview')
 const captureCanvas = document.getElementById('captureCanvas')
-const imageInput = document.getElementById('imageInput')
-const noteInput = document.getElementById('noteInput')
-const saveButton = document.getElementById('saveButton')
-const result = document.getElementById('result')
+const previewPlaceholder = document.getElementById('previewPlaceholder')
+const logOutput = document.getElementById('logOutput')
+const statusText = document.getElementById('statusText')
 
 let cameraStream = null
-let capturedImage = null
+let captureTimer = null
+let captureCount = 0
+let isUploading = false
 
-function readFileAsBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const value = String(reader.result || '')
-      resolve(value.split(',')[1] || '')
-    }
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
+function pad(value, length = 2) {
+  return String(value).padStart(length, '0')
+}
+
+function nowLabel() {
+  const now = new Date()
+  return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+}
+
+function addLog(message, data) {
+  const details = data ? ` ${JSON.stringify(data)}` : ''
+  logOutput.textContent = `[${nowLabel()}] ${message}${details}\n${logOutput.textContent}`
+}
+
+function setStatus(value) {
+  statusText.textContent = value
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme
+  localStorage.setItem('theme', theme)
+}
+
+function getInitialTheme() {
+  const savedTheme = localStorage.getItem('theme')
+  if (savedTheme) return savedTheme
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
 function canvasToJpegBase64(canvas) {
@@ -27,7 +45,7 @@ function canvasToJpegBase64(canvas) {
   return dataUrl.split(',')[1] || ''
 }
 
-async function uploadImage({ filename, mimeType, imageBase64 }) {
+async function uploadImage({ filename, imageBase64 }) {
   const response = await fetch('/upload', {
     method: 'POST',
     headers: {
@@ -35,13 +53,53 @@ async function uploadImage({ filename, mimeType, imageBase64 }) {
     },
     body: JSON.stringify({
       filename,
-      mimeType,
-      note: noteInput.value,
+      mimeType: 'image/jpeg',
       imageBase64
     })
   })
 
   return response.json()
+}
+
+async function captureAndSave() {
+  if (!cameraStream || isUploading) return
+
+  const width = cameraPreview.videoWidth
+  const height = cameraPreview.videoHeight
+  if (!width || !height) {
+    addLog('Waiting for camera frame.')
+    return
+  }
+
+  isUploading = true
+  captureCanvas.width = width
+  captureCanvas.height = height
+  captureCanvas.getContext('2d').drawImage(cameraPreview, 0, 0, width, height)
+
+  const filename = `capture-${Date.now()}.jpg`
+  const imageBase64 = canvasToJpegBase64(captureCanvas)
+
+  try {
+    const data = await uploadImage({ filename, imageBase64 })
+    captureCount += 1
+    setStatus(`${captureCount} saved`)
+    addLog('Saved frame.', {
+      filename: data.filename,
+      bytes: data.bytes
+    })
+  } catch (error) {
+    setStatus('Error')
+    addLog('Save failed.', {
+      error: error.message
+    })
+  } finally {
+    isUploading = false
+  }
+}
+
+function startCaptureLoop() {
+  window.clearInterval(captureTimer)
+  captureTimer = window.setInterval(captureAndSave, 1000)
 }
 
 cameraButton.addEventListener('click', async () => {
@@ -51,56 +109,24 @@ cameraButton.addEventListener('click', async () => {
       audio: false
     })
     cameraPreview.srcObject = cameraStream
-    captureButton.disabled = false
-    result.textContent = 'Camera started.'
+    previewPlaceholder.hidden = true
+    cameraButton.disabled = true
+    cameraButton.textContent = 'Running'
+    setStatus('Running')
+    addLog('Camera started.')
+    startCaptureLoop()
   } catch (error) {
-    result.textContent = String(error)
+    setStatus('Blocked')
+    addLog('Camera failed.', {
+      error: error.message
+    })
   }
 })
 
-captureButton.addEventListener('click', () => {
-  const context = captureCanvas.getContext('2d')
-  captureCanvas.width = cameraPreview.videoWidth || 640
-  captureCanvas.height = cameraPreview.videoHeight || 480
-  context.drawImage(cameraPreview, 0, 0, captureCanvas.width, captureCanvas.height)
-
-  capturedImage = {
-    filename: `capture-${Date.now()}.jpg`,
-    mimeType: 'image/jpeg',
-    imageBase64: canvasToJpegBase64(captureCanvas)
-  }
-  imageInput.value = ''
-  result.textContent = 'Captured.'
+themeButton.addEventListener('click', () => {
+  const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+  applyTheme(nextTheme)
 })
 
-imageInput.addEventListener('change', () => {
-  if (imageInput.files?.[0]) {
-    capturedImage = null
-    result.textContent = 'Image selected.'
-  }
-})
-
-saveButton.addEventListener('click', async () => {
-  const file = imageInput.files?.[0]
-  if (!file && !capturedImage) {
-    result.textContent = 'No image selected.'
-    return
-  }
-
-  saveButton.disabled = true
-  result.textContent = 'Saving...'
-
-  try {
-    const payload = capturedImage || {
-        filename: file.name,
-        mimeType: file.type,
-        imageBase64: await readFileAsBase64(file)
-      }
-    const data = await uploadImage(payload)
-    result.textContent = JSON.stringify(data, null, 2)
-  } catch (error) {
-    result.textContent = String(error)
-  } finally {
-    saveButton.disabled = false
-  }
-})
+applyTheme(getInitialTheme())
+addLog('Ready.')
