@@ -198,8 +198,222 @@ body {
 }
 
 .view {
-  margin-top: 40px !important;
-  margin-bottom: 40px !important;
+  margin-top: 48px !important;
+  margin-bottom: 48px !important;
+}
+
+body > .view {
+  max-width: 760px !important;
+}
+
+.steps {
+  margin-bottom: 24px !important;
+}
+
+.step-dot {
+  width: 8px !important;
+  height: 8px !important;
+  background: var(--vp-c-divider) !important;
+}
+
+.step-dot.active {
+  width: 28px !important;
+  background: var(--vp-c-brand-1) !important;
+}
+
+.step-dot.done {
+  background: var(--vp-c-brand-2) !important;
+}
+
+.step-line {
+  background: var(--vp-c-divider) !important;
+}
+
+.card {
+  background: var(--vp-c-bg) !important;
+  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+h1 {
+  color: var(--vp-c-text-1) !important;
+  letter-spacing: -0.02em !important;
+}
+
+h2,
+label,
+.section-label {
+  color: var(--vp-c-text-2) !important;
+  letter-spacing: .08em !important;
+}
+
+.subtitle,
+.timer-meta,
+.msg-wrap .sender,
+.msg-wrap .time,
+.likert-dot .dot-label {
+  color: var(--vp-c-text-2) !important;
+}
+
+input[type=text],
+input[type=password],
+select,
+textarea {
+  background: var(--vp-c-bg-soft) !important;
+  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--vp-c-brand-1) !important;
+  box-shadow: 0 0 0 3px var(--vp-c-brand-soft) !important;
+}
+
+button,
+.btn-secondary {
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.btn-primary,
+.btn-outline,
+.btn-green {
+  border-radius: 8px !important;
+}
+
+.btn-primary {
+  background: var(--vp-c-brand-1) !important;
+  color: #fff !important;
+}
+
+.btn-primary:hover {
+  background: var(--vp-c-brand-2) !important;
+}
+
+.btn-outline {
+  background: transparent !important;
+  color: var(--vp-c-brand-1) !important;
+  border: 1px solid var(--vp-c-brand-1) !important;
+}
+
+.btn-outline:hover {
+  background: var(--vp-c-brand-soft) !important;
+}
+
+.btn-green {
+  background: #10b981 !important;
+}
+
+.timer-bar,
+#chat-area {
+  background: var(--vp-c-bg) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+}
+
+.timer-bar .time,
+#baseline-count {
+  color: var(--vp-c-brand-1) !important;
+}
+
+.timer-meta strong {
+  color: var(--vp-c-text-1) !important;
+}
+
+.scenario-box {
+  background: var(--vp-c-brand-soft) !important;
+  border: 1px solid color-mix(in srgb, var(--vp-c-brand-1) 28%, transparent) !important;
+  border-radius: 8px !important;
+  color: var(--vp-c-text-1) !important;
+}
+
+.scenario-box strong {
+  color: var(--vp-c-brand-1) !important;
+}
+
+#chat-area {
+  background: var(--vp-c-bg-soft) !important;
+}
+
+#chat-area .empty-state,
+#chat-area .empty-state p {
+  color: var(--vp-c-text-2) !important;
+}
+
+#chat-area .empty-state .ai-avatar {
+  background: var(--vp-c-brand-soft) !important;
+  color: var(--vp-c-brand-1) !important;
+}
+
+.msg-wrap.user .bubble {
+  background: var(--vp-c-brand-1) !important;
+  color: #fff !important;
+  border-radius: 8px !important;
+}
+
+.msg-wrap.ai .bubble {
+  background: var(--vp-c-bg) !important;
+  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+}
+
+#draft-panel,
+.debug-panel {
+  background: var(--vp-c-bg-alt) !important;
+  color: var(--vp-c-text-1) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+}
+
+#draft-panel .draft-body {
+  color: var(--vp-c-text-1) !important;
+}
+
+.likert-row {
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+}
+
+.likert-row .q-text {
+  color: var(--vp-c-text-1) !important;
+}
+
+.likert-line::before {
+  background: var(--vp-c-divider) !important;
+}
+
+.likert-dot .dot {
+  background: var(--vp-c-bg) !important;
+  border-color: var(--vp-c-border) !important;
+}
+
+.likert-dot input:checked + .dot {
+  background: var(--vp-c-brand-1) !important;
+  border-color: var(--vp-c-brand-1) !important;
+  box-shadow: 0 0 0 5px var(--vp-c-brand-soft) !important;
+}
+
+#face-status.found {
+  background: rgba(16, 185, 129, .12) !important;
+}
+
+#face-status.lost,
+.toast {
+  border-radius: 8px !important;
+}
+
+#webcam-wrap {
+  bottom: calc(var(--vp-footer-height) + 16px) !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--vp-c-border) !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .18) !important;
 }
 
 button,
