@@ -221,6 +221,7 @@ button.danger:hover{background:#dc2626;color:#fff}
     <button data-tab="chat">对话记录</button>
     <button data-tab="expression">表情数据</button>
     <button data-tab="baseline">基线数据</button>
+    <button data-tab="debug">Debug Mode</button>
   </div>
   <div id="detail">
     <div class="empty-state">
@@ -329,7 +330,58 @@ $('tabs').addEventListener('click',e=>{
   if(tab==='chat')renderChat(exp);
   if(tab==='expression')renderExpression(exp,st);
   if(tab==='baseline')renderBaseline(exp);
+  if(tab==='debug')renderDebug();
 });
+
+async function setDebugMode(enabled){
+  const body=new URLSearchParams();
+  body.set('enabled', enabled ? 'true' : 'false');
+  const r=await fetch('/api/admin/debug-mode',{method:'POST',body});
+  if(!r.ok){
+    toast('Debug mode update failed','err');
+    return;
+  }
+  await renderDebug();
+}
+
+async function renderDebug(){
+  const r=await fetch('/api/admin/debug');
+  const data=await r.json();
+  const events=(data.events||[]).slice().reverse();
+  const rows=events.map(e=>`
+    <tr>
+      <td>${escHtml(e.ts||'')}</td>
+      <td>${escHtml(e.kind||'')}</td>
+      <td>${escHtml(e.participant_id||'')}</td>
+      <td>${e.session_id??''}</td>
+      <td>${e.bytes?Math.round(e.bytes/1024*10)/10:''}</td>
+      <td>${e.elapsed_ms??''}</td>
+      <td>${e.face_detected?'yes':'no'}</td>
+      <td>${e.reliable?'yes':'no'}</td>
+      <td>${escHtml(e.message||'')}</td>
+    </tr>
+  `).join('');
+  $('detail').innerHTML=`
+    <div class="action-bar">
+      <button class="${data.enabled?'danger':'primary'}" onclick="setDebugMode(${data.enabled?'false':'true'})">
+        ${data.enabled?'Disable Debug Mode':'Enable Debug Mode'}
+      </button>
+      <button onclick="renderDebug()">Refresh</button>
+    </div>
+    <div class="detail-section">
+      <h3>Debug Mode</h3>
+      <p style="color:#94a3b8;font-size:.82em;line-height:1.7">
+        Shows server-to-PyFeat API timing, image payload size, face detection status, and reliability.
+      </p>
+    </div>
+    <div style="max-height:560px;overflow:auto;border:1px solid #334155;border-radius:10px">
+      <table class="frame-table">
+        <thead><tr><th>Time</th><th>Kind</th><th>Participant</th><th>Session</th><th>KB</th><th>ms</th><th>Face</th><th>Reliable</th><th>Message</th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="9" style="text-align:center;color:#64748b;padding:24px">No debug events yet</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
 
 // ── Overview ──
 function renderOverview(exp,st){

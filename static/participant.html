@@ -88,6 +88,15 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
 @keyframes blink{50%{opacity:.4}}
 .timer-meta{display:flex;gap:16px;font-size:.8em;color:#64748b}
 .timer-meta strong{color:#0f172a}
+.debug-panel{
+  display:none;margin:-8px 0 16px;background:#0f172a;color:#cbd5e1;
+  border:1px solid #334155;border-radius:12px;padding:10px 12px;
+  font-family:Consolas,Menlo,monospace;font-size:.72em;line-height:1.45;
+  max-height:140px;overflow-y:auto;
+}
+.debug-panel.on{display:block}
+.debug-panel .line{white-space:pre-wrap;border-bottom:1px solid rgba(148,163,184,.16);padding:3px 0}
+.debug-panel .line:last-child{border-bottom:none}
 
 /* ── Scenario ── */
 .scenario-box{
@@ -436,6 +445,7 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
     </div>
     <div class="time" id="timer">15:00</div>
   </div>
+  <div id="debug-panel" class="debug-panel"></div>
 
   <!-- Scenario -->
   <div class="scenario-box" id="scenario-text"></div>
@@ -616,6 +626,20 @@ const $ = id => document.getElementById(id);
 const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','break-view','complete-view'];
 function showView(id){views.forEach(v=>$(v).classList.add('hidden'));$(id).classList.remove('hidden')}
 
+function appendDebugLog(event){
+  const panel=$('debug-panel');
+  if(!panel)return;
+  panel.classList.add('on');
+  const line=document.createElement('div');
+  line.className='line';
+  const kb=event.bytes?`${(event.bytes/1024).toFixed(1)}KB`:'0KB';
+  const face=event.face_detected?(event.reliable?'face ok':'pose bad'):'no face';
+  line.textContent=`[${event.ts}] ${event.kind} ${kb} ${event.elapsed_ms}ms ${face}`;
+  panel.appendChild(line);
+  while(panel.children.length>40)panel.removeChild(panel.firstChild);
+  panel.scrollTop=panel.scrollHeight;
+}
+
 // ── Global state ──
 let ws, participantId, orderGroup, language;
 let currentSessionId, currentCondition, currentScenario;
@@ -689,6 +713,9 @@ function connectWS(){
         }else{
           el.className='lost';txt.textContent='未检测到面部';
         }
+      }
+      if(msg.type==='debug_log'){
+        appendDebugLog(msg.event);
       }
     };
     // Timeout after 5 seconds

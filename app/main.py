@@ -14,6 +14,7 @@ import json
 import os
 import time
 import httpx
+from collections import deque
 from pathlib import Path
 from typing import Optional
 
@@ -59,8 +60,25 @@ if os.getenv("EVAL_LLM_API_KEY"):
 active_connections: dict[str, WebSocket] = {}
 # Active strategy selectors: participant_id → StrategySelector
 selectors: dict[str, StrategySelector] = {}
+debug_mode = False
+debug_events = deque(maxlen=300)
 
 FIFTEEN_MINUTES = 15 * 60  # seconds
+
+
+def _frame_bytes(image_base64: str) -> int:
+    value = image_base64.split(",", 1)[-1]
+    padding = value.count("=")
+    return max(0, int(len(value) * 3 / 4) - padding)
+
+
+def _push_debug(event: dict) -> dict:
+    payload = {
+        "ts": time.strftime("%H:%M:%S", time.localtime()),
+        **event,
+    }
+    debug_events.append(payload)
+    return payload
 
 
 # ── Startup / Shutdown ─────────────────────────────────────────────
@@ -414,18 +432,23 @@ async def submit_pre_survey(
     p = db_session.query(Participant).filter(Participant.id == participant_id).first()
     if not p:
         raise HTTPException(400, "Participant not found. Complete setup first.")
-    s = PreTaskSurvey(
-        participant_id=participant_id,
-        a1_age=a1_age, a2_gender=a2_gender, a3_ai_frequency=a3_ai_frequency,
-        a4_ai_experience=a4_ai_experience, a5_writing_confidence=a5_writing_confidence,
-        a6_ai_tool_confidence=a6_ai_tool_confidence, a7_email_familiarity=a7_email_familiarity,
-        b1_calm=b1_calm, b2_stressed=b2_stressed, b3_uncertain=b3_uncertain,
-        b4_confident=b4_confident, b5_ready=b5_ready, b6_webcam_comfort=b6_webcam_comfort,
-        c1_expect_helpful=c1_expect_helpful, c2_expect_understand=c2_expect_understand,
-        c3_expect_easy=c3_expect_easy, c4_expect_collaborative=c4_expect_collaborative,
-    )
+    values = {
+        "a1_age": a1_age, "a2_gender": a2_gender, "a3_ai_frequency": a3_ai_frequency,
+        "a4_ai_experience": a4_ai_experience, "a5_writing_confidence": a5_writing_confidence,
+        "a6_ai_tool_confidence": a6_ai_tool_confidence, "a7_email_familiarity": a7_email_familiarity,
+        "b1_calm": b1_calm, "b2_stressed": b2_stressed, "b3_uncertain": b3_uncertain,
+        "b4_confident": b4_confident, "b5_ready": b5_ready, "b6_webcam_comfort": b6_webcam_comfort,
+        "c1_expect_helpful": c1_expect_helpful, "c2_expect_understand": c2_expect_understand,
+        "c3_expect_easy": c3_expect_easy, "c4_expect_collaborative": c4_expect_collaborative,
+    }
+    s = db_session.query(PreTaskSurvey).filter(PreTaskSurvey.participant_id == participant_id).first()
+    if s:
+        for key, value in values.items():
+            setattr(s, key, value)
+    else:
+        s = PreTaskSurvey(participant_id=participant_id, **values)
+        db_session.add(s)
     try:
-        db_session.merge(s)
         db_session.commit()
     except Exception as e:
         db_session.rollback()
@@ -847,6 +870,29 @@ async def admin_face_status(participant_id: str):
     }
 
 
+@app.get("/api/admin/debug")
+async def admin_debug():
+    return {
+        "enabled": debug_mode,
+        "events": list(debug_events),
+    }
+
+
+@app.post("/api/admin/debug-mode")
+async def admin_debug_mode(enabled: bool = Form(...)):
+    global debug_mode
+    debug_mode = enabled
+    event = _push_debug({
+        "kind": "debug",
+        "message": f"debug mode {'enabled' if enabled else 'disabled'}",
+    })
+    return {
+        "ok": True,
+        "enabled": debug_mode,
+        "event": event,
+    }
+
+
 # ── WebSocket ──────────────────────────────────────────────────────
 
 @app.websocket("/ws/{participant_id}")
@@ -881,17 +927,38 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                 elif msg_type == "baseline_frame":
                     # During baseline recording — buffer server-side
                     frame_b64 = msg.get("frame", "")
-                    expression_engine.collect_baseline_frames(frame_b64, participant_id)
+                    started = time.perf_counter()
+                    vector = expression_engine.collect_baseline_frames(frame_b64, participant_id)
+                    elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
                     baseline_count += 1
+                    debug_event = None
+                    if debug_mode:
+                        debug_event = _push_debug({
+                            "kind": "baseline",
+                            "participant_id": participant_id,
+                            "session_id": current_session_id,
+                            "bytes": _frame_bytes(frame_b64),
+                            "elapsed_ms": elapsed_ms,
+                            "face_detected": vector is not None,
+                            "reliable": vector is not None,
+                            "message": f"baseline frame {baseline_count}: {elapsed_ms} ms",
+                        })
                     await websocket.send_text(json.dumps({
                         "type": "baseline_ack",
                         "collected": baseline_count,
                     }))
+                    if debug_event:
+                        await websocket.send_text(json.dumps({
+                            "type": "debug_log",
+                            "event": debug_event,
+                        }))
 
                 elif msg_type == "expression_frame":
                     # Regular expression frame during task
                     frame_b64 = msg.get("frame", "")
+                    started = time.perf_counter()
                     au_frame = await _detect_frame(participant_id, frame_b64)
+                    elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
                     total_frames += 1
 
                     face_ok = au_frame and au_frame.face_detected and au_frame.reliable
@@ -920,6 +987,21 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         "face_detected": au_frame.face_detected if au_frame else False,
                         "reliable": au_frame.reliable if au_frame else False,
                     }))
+                    if debug_mode:
+                        debug_event = _push_debug({
+                            "kind": "expression",
+                            "participant_id": participant_id,
+                            "session_id": current_session_id,
+                            "bytes": _frame_bytes(frame_b64),
+                            "elapsed_ms": elapsed_ms,
+                            "face_detected": au_frame.face_detected if au_frame else False,
+                            "reliable": au_frame.reliable if au_frame else False,
+                            "message": f"expression frame {total_frames}: {elapsed_ms} ms",
+                        })
+                        await websocket.send_text(json.dumps({
+                            "type": "debug_log",
+                            "event": debug_event,
+                        }))
 
                     # Batch DB insert (commit every ~10 frames)
                     if current_session_id and au_frame:
