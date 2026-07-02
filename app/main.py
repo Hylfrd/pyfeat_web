@@ -1068,6 +1068,25 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         "reliable": au_frame.reliable if au_frame else False,
                     }))
                     if debug_mode:
+                        api_response = expression_engine.get_last_api_response()
+                        selector = selectors.get(participant_id)
+                        if selector:
+                            preview_turn = UserTurn(
+                                turn_number=turn_counter + 1,
+                                user_text="",
+                                user_text_length=0,
+                                frames=expression_engine.get_recent_frames(participant_id, 3) or [],
+                                idle_before_typing=time.time() - last_chat_time,
+                            )
+                            trigger_checks = selector.preview_trigger_checks(
+                                preview_turn,
+                                selector.state.turn_history,
+                                expression_engine.get_all_recent_frames(participant_id),
+                            )
+                            if isinstance(api_response, dict):
+                                api_response = {**api_response, **trigger_checks}
+                            else:
+                                api_response = {"raw": api_response, **trigger_checks}
                         debug_event = _push_debug({
                             "kind": "expression",
                             "participant_id": participant_id,
@@ -1077,7 +1096,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             "face_detected": au_frame.face_detected if au_frame else False,
                             "reliable": au_frame.reliable if au_frame else False,
                             "image": _debug_image(frame_b64),
-                            "api_response": expression_engine.get_last_api_response(),
+                            "api_response": api_response,
                             "message": f"expression frame {total_frames}: {elapsed_ms} ms",
                         })
                         await websocket.send_text(json.dumps({

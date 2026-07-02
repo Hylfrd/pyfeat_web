@@ -305,6 +305,27 @@ def _au4_dropping(frame_history: List[AUFrame], n_frames: int = None) -> bool:
     return all_dropped
 
 
+def _trigger_checks(
+    current_turn: UserTurn,
+    all_turns: List[UserTurn],
+    frame_history: List[AUFrame],
+) -> Dict[str, bool]:
+    frames_across_turns = [t.frames for t in all_turns]
+    probe_text = _input_shrinking(all_turns, 3)
+    probe_au = _au4_present(current_turn.frames)
+    esc_triggered, _ = _au4_slope(frame_history)
+    release_triggered = _au4_dropping(frame_history)
+    return {
+        "_au4_present": probe_au,
+        "_au4_rising": _au4_rising(frame_history, 60.0),
+        "_input_shrinking": probe_text,
+        "_sustained_present": _sustained_present(frames_across_turns, 3),
+        "_idle_with_au1": _idle_with_au1(current_turn),
+        "_au4_slope": esc_triggered,
+        "_au4_dropping": release_triggered,
+    }
+
+
 # ── Main strategy selector ─────────────────────────────────────────
 
 class StrategySelector:
@@ -339,24 +360,19 @@ class StrategySelector:
         self.state.frame_history.extend(current_turn.frames)
 
         # Collect all frames across turns for sustained checks
-        frames_across_turns = [t.frames for t in all_turns]
+        self.state.last_trigger_checks = _trigger_checks(
+            current_turn,
+            all_turns,
+            self.state.frame_history,
+        )
 
         # ── 1. Check Release first (always, independent of priority) ──
         # Uses AU4 dropping (corrugator relaxation) instead of AU12 (smile).
         # See _au4_dropping() docstring for rationale.
-        probe_text = _input_shrinking(all_turns, 3)
-        probe_au = _au4_present(current_turn.frames)
-        esc_triggered, _ = _au4_slope(self.state.frame_history)
-        release_triggered = _au4_dropping(self.state.frame_history)
-        self.state.last_trigger_checks = {
-            "_au4_present": probe_au,
-            "_au4_rising": _au4_rising(self.state.frame_history, 60.0),
-            "_input_shrinking": probe_text,
-            "_sustained_present": _sustained_present(frames_across_turns, 3),
-            "_idle_with_au1": _idle_with_au1(current_turn),
-            "_au4_slope": esc_triggered,
-            "_au4_dropping": release_triggered,
-        }
+        probe_text = self.state.last_trigger_checks["_input_shrinking"]
+        probe_au = self.state.last_trigger_checks["_au4_present"]
+        esc_triggered = self.state.last_trigger_checks["_au4_slope"]
+        release_triggered = self.state.last_trigger_checks["_au4_dropping"]
         if release_triggered:
             self._apply_release()
             return Strategy.RELEASE
@@ -434,6 +450,16 @@ class StrategySelector:
 
     def get_trigger_checks(self) -> Dict[str, bool]:
         return dict(self.state.last_trigger_checks)
+
+    def preview_trigger_checks(
+        self,
+        current_turn: UserTurn,
+        prior_turns: List[UserTurn],
+        frame_history: Optional[List[AUFrame]] = None,
+    ) -> Dict[str, bool]:
+        all_turns = prior_turns + [current_turn]
+        frames = frame_history if frame_history is not None else self.state.frame_history + current_turn.frames
+        return _trigger_checks(current_turn, all_turns, frames)
 
     def update_expression_label(self, frames: List[AUFrame]):
         """
