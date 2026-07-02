@@ -305,11 +305,10 @@ class ExpressionEngine:
         else:
             label = "neutral"
 
-         self._expression_labels[participant_id] = label
+        self._expression_labels[participant_id] = label
 
     def get_expression_label(self, participant_id: str = "__default__") -> str:
         label = self._expression_labels.get(participant_id)
         if label is not None:
             return label
-        # fallback: 试试 __default__
         return self._expression_labels.get("__default__", "neutral")
