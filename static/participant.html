@@ -643,7 +643,8 @@ document.querySelectorAll('.likert-line').forEach(row=>{
 // ── WebSocket ──
 function connectWS(){
   return new Promise((resolve, reject) => {
-    ws = new WebSocket(`ws://${location.host}/ws/${participantId}`);
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${wsProtocol}//${location.host}/ws/${participantId}`);
     ws.onopen = () => {
       console.log('[WS] Connected');
       resolve();
