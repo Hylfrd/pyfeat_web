@@ -7,6 +7,4 @@ set "PYFEAT_API_URL=http://100.93.165.44:8055"
 set "PYFEAT_API_TIMEOUT=10"
 
 cd /d "%ROOT%"
-call "%ROOT%\run_server.cmd"
-
-pause
+"%PY%" -m uvicorn app.main:app --host 127.0.0.1 --port 8020
