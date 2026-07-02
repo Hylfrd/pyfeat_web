@@ -5,6 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.6.3",
   "scripts": {
-    "dev": "node server.mjs"
+    "dev": "node backend/server.mjs",
+    "check": "node --check frontend/app.js && node --check backend/server.mjs"
   }
 }

@@ -6,6 +6,8 @@ const previewPlaceholder = document.getElementById('previewPlaceholder')
 const logOutput = document.getElementById('logOutput')
 const statusText = document.getElementById('statusText')
 
+const apiBase = window.PYFEAT_API_BASE || ''
+
 let cameraStream = null
 let captureTimer = null
 let captureCount = 0
@@ -46,7 +48,7 @@ function canvasToJpegBase64(canvas) {
 }
 
 async function uploadImage({ filename, imageBase64 }) {
-  const response = await fetch('/upload', {
+  const response = await fetch(`${apiBase}/api/upload`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -57,6 +59,10 @@ async function uploadImage({ filename, imageBase64 }) {
       imageBase64
     })
   })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
 
   return response.json()
 }

@@ -29,9 +29,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check scripts
-        run: |
-          node --check app.js
-          node --check server.mjs
+        run: pnpm check
 
       - name: Deploy files to server
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -40,7 +38,8 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: "index.html,app.js,style.css,logo.png,package.json,server.mjs"
+          source: "frontend/index.html,frontend/app.js,frontend/style.css,frontend/logo.png"
           target: "/c/web/"
+          strip_components: 1
           tar_dereference: true
           overwrite: true

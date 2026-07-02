@@ -5,7 +5,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
-const uploadDir = root
+const frontendDir = path.resolve(root, '../frontend')
+const uploadDir = path.resolve(root, '../uploads')
 const host = process.env.HOST || '127.0.0.1'
 const port = Number(process.env.PORT || 8000)
 
@@ -65,9 +66,9 @@ function readRequestBody(req) {
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || `${host}:${port}`}`)
   const requestedPath = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname)
-  const filePath = path.resolve(root, `.${requestedPath}`)
+  const filePath = path.resolve(frontendDir, `.${requestedPath}`)
 
-  if (!filePath.startsWith(root + path.sep) || !existsSync(filePath)) {
+  if (!filePath.startsWith(frontendDir + path.sep) || !existsSync(filePath)) {
     res.writeHead(404)
     res.end('Not found')
     return
@@ -123,7 +124,12 @@ async function handleUpload(req, res) {
 
 const server = createServer(async (req, res) => {
   try {
-    if (req.method === 'POST' && req.url === '/upload') {
+    if (req.method === 'GET' && req.url === '/api/health') {
+      sendJson(res, 200, { ok: true })
+      return
+    }
+
+    if (req.method === 'POST' && req.url === '/api/upload') {
       await handleUpload(req, res)
       return
     }
@@ -147,5 +153,6 @@ await mkdir(uploadDir, { recursive: true })
 
 server.listen(port, host, () => {
   console.log(`Serving http://${host}:${port}`)
+  console.log(`Frontend: ${frontendDir}`)
   console.log(`Uploads: ${uploadDir}`)
 })
