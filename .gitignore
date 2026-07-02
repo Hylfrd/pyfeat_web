@@ -2,10 +2,15 @@
 node_modules/
 .venv/
 venv/
+__pycache__/
 
 # Build outputs
 dist/
 build/
+
+# Local uploads
+uploads/*
+!uploads/.gitkeep
 
 # Local env
 .env
