@@ -1,8 +1,8 @@
 ﻿"""
 AI Client — LLM API Abstraction
 ================================
-Wraps the writing-task LLM (DeepSeek V4 Flash) with strategy-specific prompt templates.
-Evaluator LLM is separate (Gemini API, see evaluator.py).
+Wraps the writing-task LLM with strategy-specific prompt templates.
+Evaluator LLM is separate from the writing model.
 
 Both conditions share the same base system prompt.
 The affect-aware condition appends strategy-specific fragments.
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -19,10 +20,26 @@ import httpx
 from .strategy import Strategy
 
 
-# ── Config ─────────────────────────────────────────────────────────
-WRITING_MODEL = os.getenv("WRITING_LLM_MODEL", "deepseek-v4-flash")
-WRITING_API_KEY = os.getenv("WRITING_LLM_API_KEY", os.getenv("DEEPSEEK_API_KEY", ""))
-WRITING_BASE_URL = os.getenv("WRITING_LLM_BASE_URL", "https://api.deepseek.com/v1")
+def _load_env_file() -> None:
+    for path in (Path.cwd() / ".env", Path(__file__).resolve().parent.parent / ".env"):
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            value = line.strip()
+            if not value or value.startswith("#") or "=" not in value:
+                continue
+            key, raw = value.split("=", 1)
+            os.environ.setdefault(key.strip(), raw.strip().strip('"').strip("'"))
+
+
+_load_env_file()
+
+WRITING_MODEL = "kimi-k2.6"
+WRITING_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
+WRITING_BASE_URL = "https://api.moonshot.ai/v1"
+EVALUATOR_MODEL = "deepseek-v4-pro"
+EVALUATOR_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+EVALUATOR_BASE_URL = "https://api.deepseek.com"
 
 
 # ── Base system prompt (shared by both conditions) ─────────────────
@@ -116,7 +133,6 @@ class AIClient:
         email_language: str,
         strategy: Optional[Strategy] = None,
         escalate_level: int = 0,
-        temperature: float = 0.7,
     ) -> str:
         """
         Send a message to the writing LLM and return the AI's response.
@@ -135,8 +151,6 @@ class AIClient:
             The strategy selected by StrategySelector (affect-aware only).
         escalate_level : int
             Current escalation tier (0 = idle, 1-3 = active).
-        temperature : float
-            Sampling temperature.
         """
         # Merge strategy prompt fragment (experimental condition only)
         system_instruction = BASE_SYSTEM_PROMPT
@@ -165,7 +179,6 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
         lang_text = "中文（简体）" if email_language == "zh" else "English"
         system_instruction += f"\n\n最终草稿必须用{lang_text}撰写。"
 
-        # Format message history for DeepSeek API
         messages = [{"role": "system", "content": system_instruction}]
         for msg in history:
             role = "assistant" if msg.role == "ai" else "user"
@@ -182,7 +195,8 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                 json={
                     "model": self.model,
                     "messages": messages,
-                    "temperature": temperature,
+                    "thinking": {"type": "enabled"},
+                    "max_tokens": 16000,
                 },
             )
             response.raise_for_status()
@@ -193,12 +207,10 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
     async def chat_for_evaluation(
         self,
         prompt: str,
-        temperature: float = 0.5,
-        response_format: str = "json",
     ) -> str:
         """
         Send a single-turn evaluation prompt (used by evaluator.py Layer 2).
-        Uses Gemini API or other evaluator-specific model, NOT the writing model.
+        Uses the evaluator-specific model, NOT the writing model.
         """
         messages = [{"role": "user", "content": prompt}]
 
@@ -212,8 +224,9 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                 json={
                     "model": self.model,
                     "messages": messages,
-                    "temperature": temperature,
-                    "response_format": {"type": response_format},
+                    "reasoning_effort": "max",
+                    "thinking": {"type": "enabled"},
+                    "response_format": {"type": "json_object"},
                 },
             )
             response.raise_for_status()

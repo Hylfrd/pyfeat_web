@@ -6,8 +6,8 @@ Layer 1 (60%): Deterministic statistical scoring via 6 weighted signals.
 Layer 2 (40%): LLM heuristic evaluation of 4 semantic patterns.
                3 concurrent runs → median score.
 
-Design note: The LLM used for evaluation (Gemini API) SHALL differ from the LLM
-used for the writing task (DeepSeek V4 Flash), eliminating self-evaluation bias.
+Design note: The LLM used for evaluation differs from the LLM used for the
+writing task, eliminating self-evaluation bias.
 
 Integrates: ai-detector-skill, Humanizer-zh, avoid-ai-writing
 """
@@ -271,12 +271,10 @@ class LLMHeuristicResult:
         return sum(25 for v in self.flags.values() if v)
 
 
-async def llm_heuristic_single(ai_client, email_text: str, temperature: float) -> LLMHeuristicResult:
-    """Run one LLM heuristic evaluation. ai_client must implement .chat(prompt, temperature)."""
-    response = await ai_client.chat(
+async def llm_heuristic_single(ai_client, email_text: str) -> LLMHeuristicResult:
+    """Run one LLM heuristic evaluation."""
+    response = await ai_client.chat_for_evaluation(
         prompt=f"{LLM_HEURISTIC_PROMPT}\n\n---\nEmail to evaluate:\n\n{email_text}",
-        temperature=temperature,
-        response_format="json",
     )
     return LLMHeuristicResult(json.loads(response))
 
@@ -284,8 +282,8 @@ async def llm_heuristic_single(ai_client, email_text: str, temperature: float) -
 async def llm_heuristic_scoring(ai_client, email_text: str) -> float:
     """Run 3 concurrent LLM heuristic evaluations, return median score."""
     tasks = [
-        llm_heuristic_single(ai_client, email_text, temp)
-        for temp in (0.3, 0.5, 0.7)
+        llm_heuristic_single(ai_client, email_text)
+        for _ in range(3)
     ]
     results: List[LLMHeuristicResult] = await asyncio.gather(*tasks)
     scores = [r.score for r in results]
@@ -349,7 +347,7 @@ async def evaluate_email(ai_client, email_text: str) -> EvaluationResult:
     Parameters
     ----------
     ai_client : object
-        Must implement async .chat(prompt, temperature, response_format).
+        Must implement async .chat_for_evaluation(prompt).
         Pass None to skip LLM layer (deterministic-only scoring).
     email_text : str
         The final email draft to evaluate.

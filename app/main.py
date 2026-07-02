@@ -30,7 +30,7 @@ from .database import (
 )
 from .expression import AUFrame, ExpressionEngine, BaselineResult, PYFEAT_API_URL, PYFEAT_API_TIMEOUT
 from .strategy import StrategySelector, UserTurn, Strategy
-from .ai_client import AIClient, ChatMessage
+from .ai_client import AIClient, ChatMessage, EVALUATOR_API_KEY, EVALUATOR_BASE_URL, EVALUATOR_MODEL
 from .evaluator import (
     deterministic_score, evaluate_email, get_matched_markers,
     check_hard_fail, llm_heuristic_single,
@@ -46,15 +46,14 @@ app = FastAPI(title="Co-Writing Emotion AI Study")
 # Initialize components
 db_session = init_db(str(ROOT_DIR / "data" / "experiment.db"))
 expression_engine = ExpressionEngine()
-ai_client = AIClient()  # Writing LLM (DeepSeek)
+ai_client = AIClient()
 
-# Evaluator LLM client (Gemini — separate from writing LLM)
 eval_ai_client = None
-if os.getenv("EVAL_LLM_API_KEY"):
+if EVALUATOR_API_KEY:
     eval_ai_client = AIClient(
-        model=os.getenv("EVAL_LLM_MODEL", "gemini-2.5-flash"),
-        api_key=os.getenv("EVAL_LLM_API_KEY"),
-        base_url=os.getenv("EVAL_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
+        model=EVALUATOR_MODEL,
+        api_key=EVALUATOR_API_KEY,
+        base_url=EVALUATOR_BASE_URL,
     )
 
 # Active WebSocket connections: participant_id → websocket
@@ -271,13 +270,13 @@ async def evaluate_draft(draft_text: str = Form(...)):
             "suggestion": suggestion,
         })
 
-    # Layer 2: LLM heuristic (async, with 5s timeout)
+    # Layer 2: LLM heuristic (async, with 30s timeout)
     llm_flags = []
     if eval_ai_client and draft_text.strip():
         try:
             llm_result = await asyncio.wait_for(
-                llm_heuristic_single(eval_ai_client, draft_text, temperature=0.5),
-                timeout=5.0,
+                llm_heuristic_single(eval_ai_client, draft_text),
+                timeout=30.0,
             )
             FLAG_LABELS = {
                 "emotional_flatline": ("情感平淡",   "危机描述缺乏情感紧迫感，读起来像在描述天气。"),
@@ -371,7 +370,7 @@ async def _run_posthoc_evaluation(session_id: int, final_email: str):
         # Store 3 LLM heuristic runs placeholder (actual runs stored by evaluator)
         bg_db.add(Eval(session_id=session_id, run_number=0, layer="hybrid_composite",
                         score=result.composite_score,
-                        evaluator_model=os.getenv("EVAL_LLM_MODEL", "gemini-2.5-flash"),
+                        evaluator_model=EVALUATOR_MODEL,
                         details_json=json.dumps({
                             "llm_median": result.llm_median_score,
                             "verdict": result.verdict.value,
