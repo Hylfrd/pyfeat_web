@@ -31,5 +31,9 @@ Start-Sleep -Seconds 1
 Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 3
 
-$response = Invoke-WebRequest -Uri "http://127.0.0.1:8020/" -UseBasicParsing -TimeoutSec 20
-Write-Output "HTTP $($response.StatusCode)"
+& curl.exe --fail --silent --show-error --output NUL --max-time 20 "http://127.0.0.1:8020/"
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+Write-Output "HTTP 200"
