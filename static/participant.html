@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Co-Writing Experiment — BNBU FST</title>
+<style>
+/* ── Reset & Base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:#f1f5f9;color:#0f172a;min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;
+}
+.hidden{display:none!important}
+
+/* ── Typography ── */
+h1{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;color:#0f172a}
+h2{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#64748b;margin-bottom:16px}
+.subtitle{color:#94a3b8;font-size:.85em;margin-bottom:24px}
+label{display:block;font-weight:600;margin:16px 0 6px;font-size:.78em;color:#475569;text-transform:uppercase;letter-spacing:.06em}
+input[type=text],input[type=password],select{
+  width:100%;padding:13px 16px;border:1px solid #e2e8f0;border-radius:14px;
+  font-size:1em;background:#f8fafc;color:#0f172a;transition:all .18s;
+  font-family:inherit;
+}
+input:focus,select:focus{outline:none;border-color:#6366f1;background:#fff;box-shadow:0 0 0 4px rgba(99,102,241,.1)}
+
+/* ── Buttons ── */
+button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;border:none;cursor:pointer;transition:all .18s;font-family:inherit}
+.btn-primary{background:#4f46e5;color:#fff;width:100%}
+.btn-primary:hover{background:#4338ca;transform:translateY(-1px);box-shadow:0 4px 12px rgba(79,70,229,.3)}
+.btn-primary:disabled{background:#cbd5e1;color:#94a3b8;cursor:default;transform:none;box-shadow:none}
+.btn-outline{background:#fff;color:#4f46e5;border:2px solid #4f46e5;width:100%}
+.btn-outline:hover{background:#eef2ff}
+.btn-green{background:#059669;color:#fff;width:100%}
+.btn-green:hover{background:#047857;transform:translateY(-1px);box-shadow:0 4px 12px rgba(5,150,105,.3)}
+
+/* ── View Container ── */
+.view{
+  max-width:680px;width:100%;margin:40px auto;padding:0 20px;
+  animation:fadeIn .3s ease;
+}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.card{
+  background:#fff;border-radius:20px;padding:36px 32px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.03);
+  border:1px solid #e2e8f0;margin-bottom:20px;
+}
+
+/* ── Step Indicator ── */
+.steps{display:flex;justify-content:center;gap:8px;margin-bottom:32px;align-items:center}
+.step-dot{width:10px;height:10px;border-radius:50%;background:#cbd5e1;transition:all .3s}
+.step-dot.active{background:#4f46e5;width:28px;border-radius:5px}
+.step-dot.done{background:#818cf8}
+.step-line{width:28px;height:2px;background:#e2e8f0}
+
+/* ── Webcam ── */
+#webcam-wrap{
+  position:fixed;bottom:16px;right:16px;z-index:100;
+  width:160px;border-radius:16px;overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,.25);border:2px solid rgba(99,102,241,.3);
+  transition:all .3s;
+}
+#webcam-wrap:hover{width:240px;border-color:#6366f1}
+#webcam-wrap video{display:block;width:100%}
+#webcam-status{
+  position:absolute;top:0;left:0;right:0;
+  background:linear-gradient(180deg,rgba(0,0,0,.7),transparent);
+  padding:6px 10px;display:flex;align-items:center;gap:6px;
+}
+#webcam-status .rec-dot{width:8px;height:8px;background:#ef4444;border-radius:50%;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+#webcam-status span{font-size:.6em;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.08em}
+
+/* ── Timer ── */
+.timer-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  background:#fff;border:1px solid #e2e8f0;border-radius:14px;
+  padding:10px 16px;margin-bottom:16px;
+}
+.timer-bar .time{
+  font-size:1.4em;font-weight:800;font-variant-numeric:tabular-nums;
+  color:#4f46e5;letter-spacing:-.02em;
+}
+.timer-bar .time.warn{color:#ef4444;animation:blink .8s infinite}
+@keyframes blink{50%{opacity:.4}}
+.timer-meta{display:flex;gap:16px;font-size:.8em;color:#64748b}
+.timer-meta strong{color:#0f172a}
+
+/* ── Scenario ── */
+.scenario-box{
+  background:linear-gradient(135deg,#eef2ff,#faf5ff);
+  border:1px solid #e0e7ff;border-radius:14px;padding:16px 18px;
+  margin-bottom:16px;font-size:.9em;line-height:1.65;color:#3730a3;
+}
+.scenario-box strong{color:#4f46e5}
+
+/* ── Chat ── */
+#chat-area{
+  border:1px solid #e2e8f0;border-radius:16px;height:340px;
+  overflow-y:auto;padding:16px;background:#f8fafc;
+  display:flex;flex-direction:column;gap:8px;margin-bottom:12px;
+}
+#chat-area .empty-state{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;color:#94a3b8;text-align:center;
+}
+#chat-area .empty-state .ai-avatar{
+  width:48px;height:48px;background:#e0e7ff;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.2em;margin-bottom:12px;color:#4f46e5;font-weight:700;
+}
+.msg-wrap{display:flex;flex-direction:column;max-width:85%}
+.msg-wrap.user{align-self:flex-end;align-items:flex-end}
+.msg-wrap.ai{align-self:flex-start;align-items:flex-start}
+.msg-wrap .sender{font-size:.65em;font-weight:700;color:#94a3b8;margin-bottom:2px;text-transform:uppercase;letter-spacing:.06em}
+.msg-wrap .bubble{
+  padding:12px 16px;border-radius:16px;font-size:.9em;line-height:1.55;
+  word-break:break-word;
+}
+.msg-wrap.user .bubble{
+  background:#4f46e5;color:#fff;border-bottom-right-radius:6px;
+}
+.msg-wrap.ai .bubble{
+  background:#fff;border:1px solid #e2e8f0;color:#1e293b;border-bottom-left-radius:6px;
+}
+.msg-wrap .time{font-size:.65em;color:#94a3b8;margin-top:3px}
+.msg-wrap .draft-btn{
+  display:inline-flex;align-items:center;gap:4px;margin-top:8px;
+  font-size:.72em;font-weight:700;color:#4f46e5;cursor:pointer;
+  text-transform:uppercase;letter-spacing:.04em;
+  background:none;border:none;padding:4px 0;
+}
+.msg-wrap .draft-btn:hover{color:#3730a3}
+
+/* ── Draft Panel ── */
+#draft-panel{
+  background:#0f172a;border-radius:16px;padding:20px;margin-bottom:12px;
+  color:#e2e8f0;overflow:hidden;
+}
+#draft-panel .draft-header{
+  display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;
+}
+#draft-panel .draft-header span{
+  font-size:.7em;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;
+}
+#draft-panel .draft-header .badge{
+  font-size:.6em;padding:3px 8px;border-radius:6px;
+  background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3);
+  text-transform:uppercase;letter-spacing:.06em;
+}
+#draft-panel .draft-body{
+  font-family:'Georgia','Noto Serif SC',serif;font-size:.88em;
+  line-height:1.7;white-space:pre-wrap;max-height:200px;overflow-y:auto;
+  color:#cbd5e1;
+}
+
+/* ── Chat Input ── */
+#chat-form{display:flex;gap:8px}
+#chat-form input{flex:1;margin:0}
+#chat-form button{width:auto;margin:0;padding:12px 20px}
+
+/* ── Prompt toast ── */
+.toast{
+  position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:200;
+  background:#fef2f2;border:1px solid #fecaca;color:#991b1b;
+  padding:12px 24px;border-radius:12px;font-size:.85em;font-weight:600;
+  animation:slideDown .3s ease,slideUp .3s ease 2.7s forwards;
+  max-width:500px;text-align:center;
+}
+@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes slideUp{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(-20px)}}
+
+/* ── Face status indicator ── */
+#face-status{
+  display:flex;align-items:center;gap:8px;padding:6px 14px;
+  border-radius:10px;font-size:.75em;font-weight:700;
+  transition:all .3s;
+}
+#face-status.found{background:#ecfdf5;color:#059669;border:1px solid #a7f3d0}
+#face-status.lost{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+#face-status .face-dot{width:8px;height:8px;border-radius:50%}
+#face-status.found .face-dot{background:#22c55e;animation:pulse 2s infinite}
+#face-status.lost .face-dot{background:#ef4444}
+
+/* ── Likert (dot-on-line style) ── */
+.likert-row{border-bottom:1px solid #f1f5f9;padding:20px 16px}
+.likert-row:last-child{border-bottom:none}
+.likert-row .q-text{font-weight:600;font-size:.9em;color:#1e293b;margin-bottom:16px}
+.likert-line{display:flex;align-items:center;justify-content:space-between;position:relative;padding:0 12px}
+.likert-line::before{
+  content:'';position:absolute;top:50%;left:28px;right:28px;height:2px;
+  background:#e2e8f0;z-index:0;transform:translateY(-50%);
+}
+.likert-dot{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;z-index:1}
+.likert-dot input{display:none}
+.likert-dot .dot{
+  width:22px;height:22px;border-radius:50%;border:2px solid #cbd5e1;
+  background:#fff;transition:all .2s;display:flex;align-items:center;justify-content:center;
+}
+.likert-dot:hover .dot{border-color:#818cf8}
+.likert-dot input:checked+.dot{
+  background:#4f46e5;border-color:#4f46e5;
+  box-shadow:0 0 0 6px rgba(99,102,241,.15);
+}
+.likert-dot input:checked+.dot::after{content:'';width:8px;height:8px;border-radius:50%;background:#fff}
+.likert-dot .dot-label{
+  font-size:.62em;color:#94a3b8;font-weight:500;text-align:center;
+  width:48px;line-height:1.2;
+}
+.likert-dot input:checked~.dot-label{color:#4f46e5;font-weight:700}
+.section-label{
+  font-size:.68em;font-weight:700;text-transform:uppercase;
+  letter-spacing:.12em;color:#6366f1;margin:24px 0 8px 4px;
+}
+
+/* ── Progress bar (baseline) ── */
+.progress-bar{height:10px;background:#e2e8f0;border-radius:5px;margin:16px 0;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#6366f1,#4f46e5);border-radius:5px;transition:width .4s ease}
+#baseline-count{text-align:center;font-size:1.8em;font-weight:800;color:#4f46e5;letter-spacing:-.02em}
+
+/* ── Check indicator ── */
+.check-icon{width:64px;height:64px;background:#ecfdf5;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+.check-icon svg{width:32px;height:32px;color:#059669}
+
+/* ── Evaluation Modal ── */
+#eval-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;
+  display:none;align-items:center;justify-content:center;
+}
+#eval-overlay:not(.hidden){display:flex}
+#eval-modal{
+  background:#fff;border-radius:20px;padding:32px 28px 24px;
+  max-width:560px;width:92%;max-height:85vh;overflow-y:auto;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);animation:modalIn .25s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+#eval-modal .eval-header{text-align:center;margin-bottom:24px}
+#eval-modal .eval-header .score-ring{
+  width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  margin:0 auto 12px;font-size:2em;font-weight:800;letter-spacing:-.03em;
+}
+#eval-modal .eval-header .score-ring.pass{background:#ecfdf5;color:#059669;border:3px solid #a7f3d0}
+#eval-modal .eval-header .score-ring.fail{background:#fef2f2;color:#dc2626;border:3px solid #fecaca}
+#eval-modal .eval-header .eval-verdict{font-size:.85em;font-weight:700}
+#eval-modal .eval-header .eval-verdict.pass{color:#059669}
+#eval-modal .eval-header .eval-verdict.fail{color:#dc2626}
+#eval-modal h3{
+  font-size:.7em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:#64748b;margin:24px 0 12px;border-top:1px solid #f1f5f9;padding-top:20px;
+}
+#eval-modal h3:first-of-type{border-top:none;padding-top:0;margin-top:0}
+/* Signal rows */
+.eval-signal{margin-bottom:12px}
+.eval-signal .sig-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.eval-signal .sig-name{font-size:.8em;font-weight:700;color:#1e293b}
+.eval-signal .sig-val{font-size:.7em;color:#64748b;font-family:monospace}
+.eval-signal .sig-bar{height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden;margin-bottom:4px}
+.eval-signal .sig-bar .sig-fill{border-radius:3px;height:100%;transition:width .4s ease}
+.eval-signal .sig-fill.low{background:#22c55e}
+.eval-signal .sig-fill.med{background:#f59e0b}
+.eval-signal .sig-fill.high{background:#ef4444}
+.eval-signal .sig-suggestion{font-size:.7em;color:#64748b;line-height:1.4}
+.eval-signal .sig-hits{font-size:.68em;color:#94a3b8;margin-top:2px}
+/* LLM flags */
+.llm-flags{display:flex;flex-wrap:wrap;gap:8px}
+.llm-flag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;font-size:.72em;font-weight:600}
+.llm-flag.ok{background:#ecfdf5;color:#059669;border:1px solid #a7f3d0}
+.llm-flag.warn{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.llm-flag .flag-dot{width:6px;height:6px;border-radius:50%}
+.llm-flag.ok .flag-dot{background:#22c55e}
+.llm-flag.warn .flag-dot{background:#ef4444}
+/* Modal actions */
+#eval-modal .eval-actions{display:flex;gap:10px;margin-top:24px}
+#eval-modal .eval-actions button{flex:1}
+.btn-secondary{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;border:2px solid #e2e8f0;background:#fff;color:#475569;cursor:pointer;transition:all .18s;font-family:inherit}
+.btn-secondary:hover{background:#f8fafc;border-color:#cbd5e1}
+
+/* ── Thinking bubble ── */
+.msg-wrap .thinking-dots{display:flex;gap:4px;padding:4px 0}
+.msg-wrap .thinking-dots span{width:6px;height:6px;border-radius:50%;background:#94a3b8;animation:thinkBounce 1.2s infinite}
+.msg-wrap .thinking-dots span:nth-child(2){animation-delay:.15s}
+.msg-wrap .thinking-dots span:nth-child(3){animation-delay:.3s}
+@keyframes thinkBounce{0%,60%,100%{transform:translateY(0);opacity:.3}30%{transform:translateY(-6px);opacity:1}}
+
+/* ── Responsive ── */
+@media(max-width:720px){
+  .view{padding:0 12px;margin:20px auto}
+  .card{padding:24px 20px}
+  #eval-modal{padding:24px 20px}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ Webcam (always on) ═══ -->
+<div id="webcam-wrap" class="hidden">
+  <video id="webcam" autoplay playsinline></video>
+  <div id="webcam-status">
+    <div class="rec-dot"></div>
+    <span>Recording</span>
+  </div>
+</div>
+
+<!-- ═══ Evaluation Modal ═══ -->
+<div id="eval-overlay" class="hidden" onclick="if(event.target===this)closeEvalModal()">
+  <div id="eval-modal"></div>
+</div>
+
+<!-- ═══ Toast container ═══ -->
+<div id="toast-container"></div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SETUP VIEW                                     -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="setup-view" class="view">
+  <div class="steps">
+    <div class="step-dot active"></div>
+    <div class="step-line"></div>
+    <div class="step-dot"></div>
+    <div class="step-line"></div>
+    <div class="step-dot"></div>
+  </div>
+  <div class="card">
+    <h1>实验设置</h1>
+    <p class="subtitle">选择语言后点击开始。</p>
+    <form id="setup-form">
+      <label for="lang">界面语言 / Interface Language</label>
+      <select id="lang" autofocus>
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+      </select>
+      <input type="hidden" id="order-group">
+      <button type="submit" class="btn-primary" style="margin-top:24px">开始实验</button>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- BASELINE VIEW                                  -->
+<!-- ═══════════════════════════════════════════════ -->
+
+<!-- PRE-TASK SURVEY VIEW                           -->
+<div id="pre-survey-view" class="view hidden">
+<div class="steps">
+    <div class="step-dot done"></div>
+    <div class="step-line"></div>
+    <div class="step-dot active"></div>
+    <div class="step-line"></div>
+    <div class="step-dot"></div>
+    <div class="step-line"></div>
+    <div class="step-dot"></div>
+  </div>
+  <div class="card">
+    <h1>任务前问卷</h1>
+    <p class="subtitle">请在开始写作任务前回答以下问题。1 = 非常不同意 · 7 = 非常同意</p>
+    <form id="pre-survey-form">
+      <div class="section-label">背景信息</div>
+
+      <div class="likert-row"><div class="q-text">A1. Age</div><input type="text" name="pre-a1_age" placeholder="Your age" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em"></div>
+      <div class="likert-row"><div class="q-text">A2. Gender</div>
+        <select name="pre-a2_gender" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;background:#fff">
+          <option value="">Select...</option><option value="Female">Female</option><option value="Male">Male</option><option value="Non-binary">Non-binary</option><option value="Prefer not to say">Prefer not to say</option><option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="likert-row"><div class="q-text">A3. How often do you use ChatGPT or similar AI tools?</div>
+        <select name="pre-a3_ai_frequency" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;background:#fff">
+          <option value="">Select...</option><option value="Never">Never</option><option value="Rarely">Rarely</option><option value="Monthly">Monthly</option><option value="Weekly">Weekly</option><option value="Daily">Daily</option>
+        </select>
+      </div>
+      <div class="likert-row"><div class="q-text">A4. I have experience using AI tools for writing or revising text.</div><div class="likert-line" id="likert-pre-a4"></div></div>
+      <div class="likert-row"><div class="q-text">A5. I feel confident writing professional or academic emails in English.</div><div class="likert-line" id="likert-pre-a5"></div></div>
+      <div class="likert-row"><div class="q-text">A6. I feel confident using AI tools to support writing tasks.</div><div class="likert-line" id="likert-pre-a6"></div></div>
+      <div class="likert-row"><div class="q-text">A7. I am familiar with writing emails to professors or instructors.</div><div class="likert-line" id="likert-pre-a7"></div></div>
+
+      <div class="section-label">基线状态</div>
+      <div class="likert-row"><div class="q-text">B1. I feel calm right now.</div><div class="likert-line" id="likert-pre-b1"></div></div>
+      <div class="likert-row"><div class="q-text">B2. I feel mentally stressed right now.</div><div class="likert-line" id="likert-pre-b2"></div></div>
+      <div class="likert-row"><div class="q-text">B3. I feel uncertain about the upcoming writing task.</div><div class="likert-line" id="likert-pre-b3"></div></div>
+      <div class="likert-row"><div class="q-text">B4. I feel confident that I can complete the writing task successfully.</div><div class="likert-line" id="likert-pre-b4"></div></div>
+      <div class="likert-row"><div class="q-text">B5. I feel mentally ready to start the task.</div><div class="likert-line" id="likert-pre-b5"></div></div>
+      <div class="likert-row"><div class="q-text">B6. I am comfortable having a webcam active during this study.</div><div class="likert-line" id="likert-pre-b6"></div></div>
+
+      <div class="section-label">任务期望</div>
+      <div class="likert-row"><div class="q-text">C1. I expect the AI system to help me complete the writing task effectively.</div><div class="likert-line" id="likert-pre-c1"></div></div>
+      <div class="likert-row"><div class="q-text">C2. I expect the AI system to understand my writing needs.</div><div class="likert-line" id="likert-pre-c2"></div></div>
+      <div class="likert-row"><div class="q-text">C3. I expect the AI system to make the writing process easier.</div><div class="likert-line" id="likert-pre-c3"></div></div>
+      <div class="likert-row"><div class="q-text">C4. I expect the interaction with the AI to feel collaborative.</div><div class="likert-line" id="likert-pre-c4"></div></div>
+
+      <button type="submit" class="btn-primary" style="margin-top:24px">提交 · 开始基线校准</button>
+    </form>
+  </div>
+</div>
+
+<!-- BASELINE VIEW                                  -->
+<div id="baseline-view" class="view hidden">
+  <div class="steps">
+    <div class="step-dot done"></div>
+    <div class="step-line"></div>
+    <div class="step-dot active"></div>
+    <div class="step-line"></div>
+    <div class="step-dot"></div>
+  </div>
+  <div class="card" style="text-align:center">
+    <h1>基线校准</h1>
+    <p class="subtitle">
+      请面对摄像头，保持<strong>中性表情</strong> 5 秒钟。<br>
+      不要笑，不要皱眉，自然地看向屏幕。
+    </p>
+    <p id="baseline-count">0</p>
+    <p style="color:#94a3b8;font-size:.8em">/ 10 帧</p>
+    <div class="progress-bar"><div id="baseline-bar" class="progress-fill" style="width:0%"></div></div>
+    <p style="color:#94a3b8;font-size:.75em;margin-top:12px">请保持不动，系统正在采集您的面部基线数据</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TASK VIEW                                      -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="task-view" class="view hidden" style="max-width:800px">
+  <!-- Timer bar -->
+  <div class="timer-bar">
+    <div>
+      <span id="task-label" style="font-size:.7em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#64748b">任务 1</span>
+      <span id="condition-badge" style="margin-left:8px;font-size:.65em;padding:3px 8px;border-radius:6px;background:#e0e7ff;color:#4f46e5;font-weight:700;text-transform:uppercase;letter-spacing:.05em"></span>
+    </div>
+    <div id="face-status" class="found" style="margin:0 12px">
+      <span class="face-dot"></span>
+      <span id="face-status-text">面部已检测</span>
+    </div>
+    <div class="timer-meta">
+      <span>轮次 <strong id="turn-num">0</strong></span>
+      <span>修改 <strong id="rev-num">0</strong></span>
+    </div>
+    <div class="time" id="timer">15:00</div>
+  </div>
+
+  <!-- Scenario -->
+  <div class="scenario-box" id="scenario-text"></div>
+
+  <!-- Chat -->
+  <div id="chat-area"></div>
+
+  <!-- Draft panel -->
+  <div id="draft-panel" class="hidden">
+    <div class="draft-header">
+      <span>邮件草稿</span>
+      <span class="badge">AI 生成</span>
+    </div>
+    <div class="draft-body" id="draft-text"></div>
+  </div>
+
+  <!-- Chat input -->
+  <form id="chat-form">
+    <input id="user-input" type="text" maxlength="500" placeholder="输入您要对 AI 说的话..." autocomplete="off">
+    <button type="submit" class="btn-primary">发送</button>
+  </form>
+
+  <!-- Submit -->
+  <button id="submit-email" class="btn-green" style="margin-top:12px">提交草稿 · 进入问卷</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- QUESTIONNAIRE VIEW                             -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="questionnaire-view" class="view hidden">
+  <div class="steps">
+    <div class="step-dot done"></div>
+    <div class="step-line"></div>
+    <div class="step-dot done"></div>
+    <div class="step-line"></div>
+    <div class="step-dot active"></div>
+  </div>
+  <div class="card">
+    <h1>问卷</h1>
+    <p class="subtitle">请根据您刚才与 AI 助手的互动体验作答。1 = 非常不同意 · 7 = 非常同意</p>
+    <form id="q-form">
+      <div class="section-label">感知理解与支持</div>
+      <div class="likert-row"><div class="q-text">1. AI 理解了我试图达成的目标。</div><div class="likert-line" id="likert-q1"></div></div>
+      <div class="likert-row"><div class="q-text">2. AI 和我在同一频道上。</div><div class="likert-line" id="likert-q2"></div></div>
+      <div class="likert-row"><div class="q-text">3. AI 知道我在交互中需要什么。</div><div class="likert-line" id="likert-q3"></div></div>
+      <div class="likert-row"><div class="q-text">4. AI 与我建立了连接感。</div><div class="likert-line" id="likert-q4"></div></div>
+
+      <div class="section-label">满意度</div>
+      <div class="likert-row"><div class="q-text">5. 这次体验让我感到有收获。</div><div class="likert-line" id="likert-q5"></div></div>
+      <div class="likert-row"><div class="q-text">6. 我对这次体验感到有兴趣。</div><div class="likert-line" id="likert-q6"></div></div>
+      <div class="likert-row"><div class="q-text">7. 这次体验是值得的。</div><div class="likert-line" id="likert-q7"></div></div>
+
+      <div class="section-label">挫折感</div>
+      <div class="likert-row"><div class="q-text">8. 使用这个助手让我感到沮丧。</div><div class="likert-line" id="likert-q8"></div></div>
+      <div class="likert-row"><div class="q-text">9. 我觉得这个助手让人困惑。</div><div class="likert-line" id="likert-q9"></div></div>
+      <div class="likert-row"><div class="q-text">10. 使用这个助手让我感到脑力消耗很大。</div><div class="likert-line" id="likert-q10"></div></div>
+
+      <button type="submit" class="btn-primary" style="margin-top:24px">提交问卷</button>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- BREAK VIEW                                     -->
+<!-- ═══════════════════════════════════════════════ -->
+
+<!-- POST-TASK SURVEY VIEW                          -->
+<div id="post-survey-view" class="view hidden">
+<div class="steps">
+    <div class="step-dot done"></div>
+    <div class="step-line"></div>
+    <div class="step-dot done"></div>
+    <div class="step-line"></div>
+    <div class="step-dot active"></div>
+    <div class="step-line"></div>
+    <div class="step-dot"></div>
+  </div>
+  <div class="card">
+    <h1>任务后问卷</h1>
+    <p class="subtitle">请在完成写作任务后回答以下问题。1 = 非常不同意 · 7 = 非常同意</p>
+    <form id="post-survey-form">
+      <div class="section-label">感知理解</div>
+      <div class="likert-row"><div class="q-text">U1. The AI system seemed to understand what I needed during the writing task.</div><div class="likert-line" id="likert-post-u1"></div></div>
+      <div class="likert-row"><div class="q-text">U2. The AI seemed aware of my difficulty, hesitation, or confusion during the writing process.</div><div class="likert-line" id="likert-post-u2"></div></div>
+      <div class="likert-row"><div class="q-text">U3. The AI responded in a way that matched my writing intentions.</div><div class="likert-line" id="likert-post-u3"></div></div>
+      <div class="likert-row"><div class="q-text">U4. The AI noticed when I was stuck or needed a different type of help.</div><div class="likert-line" id="likert-post-u4"></div></div>
+      <div class="likert-row"><div class="q-text">U5. The AI"s responses were well aligned with my ongoing thoughts and intentions.</div><div class="likert-line" id="likert-post-u5"></div></div>
+
+      <div class="section-label">感知支持</div>
+      <div class="likert-row"><div class="q-text">S1. I felt supported by the AI during the writing process.</div><div class="likert-line" id="likert-post-s1"></div></div>
+      <div class="likert-row"><div class="q-text">S2. The AI provided useful guidance when I was unsure how to continue.</div><div class="likert-line" id="likert-post-s2"></div></div>
+      <div class="likert-row"><div class="q-text">S3. The AI helped me reduce the effort required to revise the email.</div><div class="likert-line" id="likert-post-s3"></div></div>
+      <div class="likert-row"><div class="q-text">S4. The AI provided concrete suggestions that improved my draft.</div><div class="likert-line" id="likert-post-s4"></div></div>
+      <div class="likert-row"><div class="q-text">S5. The AI helped me complete the writing task efficiently.</div><div class="likert-line" id="likert-post-s5"></div></div>
+
+      <div class="section-label">社交存在感</div>
+      <div class="likert-row"><div class="q-text">SP1. The AI felt socially responsive during the interaction.</div><div class="likert-line" id="likert-post-sp1"></div></div>
+      <div class="likert-row"><div class="q-text">SP2. The AI felt like an active interaction partner rather than only a text generator.</div><div class="likert-line" id="likert-post-sp2"></div></div>
+      <div class="likert-row"><div class="q-text">SP3. The interaction with the AI felt socially engaging.</div><div class="likert-line" id="likert-post-sp3"></div></div>
+
+      <div class="section-label">共存感</div>
+      <div class="likert-row"><div class="q-text">CP1. I felt that the AI was "with me" during the writing task.</div><div class="likert-line" id="likert-post-cp1"></div></div>
+      <div class="likert-row"><div class="q-text">CP2. The AI seemed aware of me as I worked through the task.</div><div class="likert-line" id="likert-post-cp2"></div></div>
+      <div class="likert-row"><div class="q-text">CP3. I felt a sense of mutual awareness between myself and the AI.</div><div class="likert-line" id="likert-post-cp3"></div></div>
+
+      <div class="section-label">修复识别</div>
+      <div class="likert-row"><div class="q-text">R1. The AI acknowledged when I was having difficulty or seemed stuck.</div><div class="likert-line" id="likert-post-r1"></div></div>
+      <div class="likert-row"><div class="q-text">R2. The AI clearly signaled that it noticed my uncertainty, confusion, or frustration.</div><div class="likert-line" id="likert-post-r2"></div></div>
+      <div class="likert-row"><div class="q-text">R3. After acknowledging my difficulty, the AI helped me in a different way.</div><div class="likert-line" id="likert-post-r3"></div></div>
+      <div class="likert-row"><div class="q-text">R4. The AI"s repair or clarification messages made the interaction feel more supportive.</div><div class="likert-line" id="likert-post-r4"></div></div>
+      <div class="likert-row"><div class="q-text">R5. The AI"s acknowledgement of my state felt appropriate rather than intrusive.</div><div class="likert-line" id="likert-post-r5"></div></div>
+
+      <div class="section-label">期望满足</div>
+      <div class="likert-row"><div class="q-text">E1. The AI"s level of support matched the level of awareness it appeared to show.</div><div class="likert-line" id="likert-post-e1"></div></div>
+      <div class="likert-row"><div class="q-text">E2. The AI met my expectations for writing support.</div><div class="likert-line" id="likert-post-e2"></div></div>
+      <div class="likert-row"><div class="q-text">E3. The AI appeared more emotionally aware than it was practically helpful.</div><div class="likert-line" id="likert-post-e3"></div></div>
+      <div class="likert-row"><div class="q-text">E4. I felt disappointed when the AI did not provide the help I expected.</div><div class="likert-line" id="likert-post-e4"></div></div>
+      <div class="likert-row"><div class="q-text">E5. The AI"s social responsiveness raised my expectations for better writing help.</div><div class="likert-line" id="likert-post-e5"></div></div>
+
+      <div class="section-label">满意度</div>
+      <div class="likert-row"><div class="q-text">F1. I felt frustrated while working with the AI.</div><div class="likert-line" id="likert-post-f1"></div></div>
+      <div class="likert-row"><div class="q-text">F2. The collaborative process with this AI writing assistant was smooth.</div><div class="likert-line" id="likert-post-f2"></div></div>
+      <div class="likert-row"><div class="q-text">F3. I am satisfied with the final email draft created with the AI.</div><div class="likert-line" id="likert-post-f3"></div></div>
+      <div class="likert-row"><div class="q-text">F4. Overall, I am satisfied with the AI writing experience.</div><div class="likert-line" id="likert-post-f4"></div></div>
+      <div class="likert-row"><div class="q-text">F5. I would like to use a writing tool that interacts in this way in the future.</div><div class="likert-line" id="likert-post-f5"></div></div>
+
+      <div class="section-label">反馈</div>
+      <div class="likert-row"><div class="q-text">M1. The AI seemed to respond to my emotional or facial-expression cues.</div><div class="likert-line" id="likert-post-m1"></div></div>
+      <div class="likert-row"><div class="q-text">M2. I thought the webcam was used to adapt the AI"s responses.</div><div class="likert-line" id="likert-post-m2"></div></div>
+      <div class="likert-row"><div class="q-text">M3. The AI seemed to change its strategy when I looked confused, hesitant, or frustrated.</div><div class="likert-line" id="likert-post-m3"></div></div>
+      <div class="likert-row"><div class="q-text">M4. At any specific moment, did you realize or suspect that the AI was responding to your facial expressions? If yes, please describe.</div><textarea name="post-m4" rows="3" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;font-family:inherit;resize:vertical"></textarea></div>
+      <div class="likert-row"><div class="q-text">M5. What did the AI do after you seemed confused, hesitant, or frustrated?</div><textarea name="post-m5" rows="3" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;font-family:inherit;resize:vertical"></textarea></div>
+
+      <button type="submit" class="btn-primary" style="margin-top:24px">提交问卷</button>
+    </form>
+  </div>
+</div>
+
+<!-- BREAK VIEW                                     -->
+<div id="break-view" class="view hidden">
+  <div class="card" style="text-align:center">
+    <div class="check-icon">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+    </div>
+    <h1>第一个任务完成！</h1>
+    <p class="subtitle">休息一下，准备好后点击下方开始第二个任务。</p>
+    <button id="start-task2" class="btn-primary">开始第二个任务</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- COMPLETE VIEW                                  -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="complete-view" class="view hidden">
+  <div class="card" style="text-align:center">
+    <div class="check-icon" style="background:#eef2ff">
+      <svg fill="none" viewBox="0 0 24 24" stroke="#4f46e5" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+    </div>
+    <h1>实验完成</h1>
+    <p class="subtitle">感谢您的参与！</p>
+    <div style="text-align:left;margin-top:20px">
+      <label for="debrief-guess">在实验过程中，您觉得两个版本有什么不同？（可选）</label>
+      <input id="debrief-guess" type="text" placeholder="您的猜测...">
+      <label for="debrief-comments">其他想说的？（可选）</label>
+      <input id="debrief-comments" type="text" placeholder="...">
+      <button id="debrief-submit" class="btn-primary" style="margin-top:12px">提交反馈</button>
+      <p id="debrief-done" class="hidden" style="text-align:center;color:#059669;margin-top:12px;font-weight:600">✓ 已记录，谢谢！</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SCRIPTS                                        -->
+<!-- ═══════════════════════════════════════════════ -->
+<script>
+// ── DOM refs ──
+const $ = id => document.getElementById(id);
+const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','break-view','complete-view'];
+function showView(id){views.forEach(v=>$(v).classList.add('hidden'));$(id).classList.remove('hidden')}
+
+// ── Global state ──
+let ws, participantId, orderGroup, language;
+let currentSessionId, currentCondition, currentScenario;
+let turnCounter = 0, revisionCounter = 0, taskStartTime = 0;
+let timerInterval, expressionInterval, baselineInterval;
+let mediaRecorder, chunkIndex = 0;
+let isTask1 = true;
+
+// ── Toast ──
+function toast(msg, duration=3000){
+  const el = document.createElement('div');el.className='toast';el.textContent=msg;
+  $('toast-container').appendChild(el);
+  setTimeout(()=>el.remove(),duration);
+}
+
+// ── Build Likert ──
+document.querySelectorAll('.likert-line').forEach(row=>{
+  for(let v=1;v<=7;v++){
+    const lbl=document.createElement('label');lbl.className='likert-dot';
+    lbl.innerHTML=`<input type="radio" name="${row.id}" value="${v}" required><div class="dot"></div><span class="dot-label">${v}</span>`;
+    row.appendChild(lbl);
+  }
+});
+
+// ── WebSocket ──
+function connectWS(){
+  return new Promise((resolve, reject) => {
+    ws = new WebSocket(`ws://${location.host}/ws/${participantId}`);
+    ws.onopen = () => {
+      console.log('[WS] Connected');
+      resolve();
+    };
+    ws.onerror = (err) => {
+      console.error('[WS] Connection error:', err);
+      reject(new Error('WebSocket connection failed'));
+    };
+    ws.onclose = (e) => {
+      console.log('[WS] Closed:', e.code, e.reason);
+    };
+    ws.onmessage = e => {
+      const msg = JSON.parse(e.data);
+      if(msg.type==='baseline_ack'){
+        baselineAckedCount=msg.collected;
+        const pct=Math.min(100,(msg.collected/10)*100);
+        $('baseline-bar').style.width=pct+'%';
+        $('baseline-count').textContent=msg.collected;
+        if(msg.collected>=10 && !baselineDone){
+          baselineDone=true;clearInterval(baselineInterval);finishBaseline();
+        }
+      }
+      if(msg.type==='ai_response'){
+        removeThinking();
+        appendChat('ai',msg.text);
+        $('turn-num').textContent=msg.turn;
+        turnCounter=msg.turn;
+        if(msg.revision)revisionCounter=msg.revision;
+        $('rev-num').textContent=revisionCounter;
+        extractDraft(msg.text);
+      }
+      if(msg.type==='prompt'){
+        toast(msg.message,4000);
+      }
+      if(msg.type==='face_status'){
+        const el=$('face-status');
+        const txt=$('face-status-text');
+        if(msg.face_detected&&msg.reliable){
+          el.className='found';txt.textContent='面部已检测';
+        }else if(msg.face_detected){
+          el.className='lost';txt.textContent='头部角度不佳';
+        }else{
+          el.className='lost';txt.textContent='未检测到面部';
+        }
+      }
+    };
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      if(ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket connection timeout'));
+      }
+    }, 5000);
+  });
+}
+
+// ── Webcam ──
+async function startWebcam(){
+  const stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,frameRate:15},audio:false});
+  $('webcam').srcObject=stream;
+  $('webcam-wrap').classList.remove('hidden');
+  // Wait for video to actually start playing (first frame rendered)
+  await new Promise(resolve => {
+    const v = $('webcam');
+    if(v.readyState >= 2) { resolve(); return; }
+    v.addEventListener('loadeddata', resolve, {once: true});
+    // Fallback: resolve after 2 seconds even if event doesn't fire
+    setTimeout(resolve, 2000);
+  });
+  mediaRecorder=new MediaRecorder(stream,{mimeType:'video/webm'});
+  mediaRecorder.ondataavailable=async e=>{
+    if(e.data.size>0){
+      const f=new FormData();
+      f.append('participant_id',participantId);f.append('session_id',currentSessionId);
+      f.append('chunk_index',chunkIndex++);f.append('chunk',e.data);
+      fetch('/api/video-chunk',{method:'POST',body:f}).catch(()=>{});
+    }
+  };
+  mediaRecorder.start(10000);
+}
+function captureFrame(){
+  const v=$('webcam');
+  const w=v.videoWidth||640;
+  const h=v.videoHeight||480;
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  c.getContext('2d').drawImage(v,0,0,w,h);
+  return c.toDataURL('image/jpeg',0.7);
+}
+
+// ── Baseline ──
+let baselineSentCount = 0;
+let baselineAckedCount = 0;
+let baselineDone = false;
+let baselineSendComplete = false;
+function startBaseline(){
+  showView('baseline-view');
+  baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false;
+  baselineInterval=setInterval(()=>{
+    if(baselineDone) return;
+    if(ws.readyState===WebSocket.OPEN){
+      ws.send(JSON.stringify({type:'baseline_frame',frame:captureFrame()}));
+    }
+    baselineSentCount++;
+    if(baselineSentCount>=10){
+      clearInterval(baselineInterval);
+      baselineSendComplete=true;
+      // If server already acked 10, proceed immediately; else wait up to 2s for late acks
+      if(baselineAckedCount>=10 && !baselineDone){
+        baselineDone=true; finishBaseline();
+      } else {
+        setTimeout(()=>{
+          if(!baselineDone){baselineDone=true;finishBaseline();}
+        }, 2000);
+      }
+    }
+  },500);
+  // Overall safety timeout: 15 seconds max
+  setTimeout(()=>{
+    if(!baselineDone){baselineDone=true;clearInterval(baselineInterval);finishBaseline();}
+  },15000);
+}
+async function finishBaseline(){
+  clearInterval(baselineInterval);
+  const f=new FormData();f.append('participant_id',participantId);
+  await fetch('/api/baseline-calibrate',{method:'POST',body:f});
+  startTask();
+}
+
+// ── Task ──
+async function startTask(){
+  if(!isTask1 || !currentSessionId){
+    const endpoint=isTask1?'/api/session/start':'/api/session/next';
+    const f=new FormData();
+    if(isTask1){
+      f.append('language',language);
+    } else {
+      f.append('participant_id',participantId);
+    }
+    const r=await fetch(endpoint,{method:'POST',body:f});
+    const d=await r.json();
+    if(isTask1){
+      participantId=d.participant_id;
+      orderGroup=d.order_group;
+    }
+    currentSessionId=d.session_id;currentCondition=d.condition;currentScenario=d.scenario;
+  }
+  ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
+
+  // Update UI
+  $('task-label').textContent=isTask1?'任务 1':'任务 2';
+  $('condition-badge').textContent=currentCondition==='affect-aware'?'情感感知 AI':'纯文本 AI';
+  $('condition-badge').style.background=currentCondition==='affect-aware'?'#e0e7ff':'#f1f5f9';
+  $('condition-badge').style.color=currentCondition==='affect-aware'?'#4f46e5':'#64748b';
+  $('scenario-text').innerHTML=currentScenario==='A'
+    ?'<strong>情境 A</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。'
+    :'<strong>情境 B</strong><br>小组项目中一名组员始终没有回应，你独自承担了全部工作量。请与 AI 协作写一封邮件向教授请求帮助。';
+
+  showView('task-view');
+  turnCounter=0;revisionCounter=0;taskStartTime=Date.now();
+  $('turn-num').textContent='0';$('rev-num').textContent='0';
+  $('chat-area').innerHTML='<div class="empty-state"><div class="ai-avatar">AI</div><p>你好！我是你的 AI 写作助手。</p><p style="font-size:.85em;margin-top:4px">今天我可以如何帮助你撰写邮件？</p></div>';
+  $('draft-panel').classList.add('hidden');$('draft-text').textContent='';
+  $('user-input').value='';$('timer').classList.remove('warn');
+
+  timerInterval=setInterval(updateTimer,1000);
+  expressionInterval=setInterval(()=>{
+    if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'expression_frame',frame:captureFrame()}));
+  },500);
+}
+
+function updateTimer(){
+  const remaining=Math.max(0,15*60-(Date.now()-taskStartTime)/1000);
+  const m=Math.floor(remaining/60),s=Math.floor(remaining%60);
+  const el=$('timer');el.textContent=`${m}:${String(s).padStart(2,'0')}`;
+  if(remaining<60)el.classList.add('warn');
+  if(remaining<=0){clearInterval(timerInterval);submitEmail(true);}
+}
+
+function appendChat(role,text){
+  const area=$('chat-area');
+  if(area.querySelector('.empty-state'))area.innerHTML='';
+  const wrap=document.createElement('div');wrap.className='msg-wrap '+role;
+  const now=new Date();
+  const timeStr=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  const clean=text.replace(/\[DRAFT_START\]|\[DRAFT_END\]/g,'');
+  wrap.innerHTML=`
+    <div class="sender">${role==='ai'?'AI 助手':'你'}</div>
+    <div class="bubble">${escapeHtml(clean)}</div>
+    ${role==='ai'&&text.includes('[DRAFT_START]')?`<button class="draft-btn" onclick="extractDraft(\`${escapeHtml(text)}\`)">→ 应用草稿</button>`:''}
+    <div class="time">${timeStr}</div>
+  `;
+  area.appendChild(wrap);
+  area.scrollTop=area.scrollHeight;
+}
+
+function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function extractDraft(aiText){
+  const m=aiText.match(/\[DRAFT_START\]([\s\S]*?)\[DRAFT_END\]/);
+  if(m){
+    $('draft-text').textContent=m[1].trim();
+    $('draft-panel').classList.remove('hidden');
+    revisionCounter++;
+    $('rev-num').textContent=revisionCounter;
+  }
+}
+
+// ── Chat submit ──
+let thinkingEl = null;
+$('chat-form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const input=$('user-input'),text=input.value.trim();
+  if(!text)return;
+  appendChat('user',text);
+  showThinking();
+  ws.send(JSON.stringify({type:'chat',text,condition:currentCondition,language}));
+  input.value='';input.disabled=true;$('submit-email').disabled=true;
+});
+function showThinking(){
+  removeThinking();
+  const area=$('chat-area');
+  if(area.querySelector('.empty-state'))area.innerHTML='';
+  const wrap=document.createElement('div');wrap.className='msg-wrap ai';wrap.id='thinking-msg';
+  wrap.innerHTML=`
+    <div class="sender">AI 助手</div>
+    <div class="bubble" style="padding:10px 20px">
+      <div class="thinking-dots"><span></span><span></span><span></span></div>
+      <div style="font-size:.7em;color:#94a3b8;margin-top:4px">思考中...</div>
+    </div>
+  `;
+  area.appendChild(wrap);
+  area.scrollTop=area.scrollHeight;
+  thinkingEl=wrap;
+}
+function removeThinking(){
+  if(thinkingEl){thinkingEl.remove();thinkingEl=null}
+  $('user-input').disabled=false;$('submit-email').disabled=false;
+}
+
+// ── Submit email ──
+$('submit-email').addEventListener('click',()=>submitEmail(false));
+
+let evalResult = null;  // cache last evaluation result
+
+async function submitEmail(isTimeout){
+  const draftText=$('draft-text').textContent||'';
+  if(!draftText&&!isTimeout){toast('还没有生成草稿。请先与 AI 对话生成一封草稿。');return;}
+  if(!isTimeout){
+    // Show loading in button
+    const btn=$('submit-email');
+    const origText=btn.textContent;
+    btn.textContent='正在评估...';btn.disabled=true;
+    try {
+      const ef=new FormData();ef.append('draft_text',draftText);
+      evalResult=await(await fetch('/api/evaluate-draft',{method:'POST',body:ef})).json();
+    } catch(e) { toast('评估失败，请重试。');btn.textContent=origText;btn.disabled=false;return; }
+    btn.textContent=origText;btn.disabled=false;
+    showEvalModal(evalResult, isTimeout);
+    return; // wait for user to see modal
+  }
+  // Timeout: bypass check
+  doFinalSubmit(true);
+}
+
+function showEvalModal(result, isTimeout){
+  const passed = result.passed || isTimeout;
+  const score = result.score;
+  const cls = passed ? 'pass' : 'fail';
+  const canSubmit = passed;
+
+  let html = `<div class="eval-header">
+    <div class="score-ring ${cls}">${score}</div>
+    <div class="eval-verdict ${cls}">${isTimeout ? '⏱ 时间到 — 自动提交' : (passed ? '✓ 通过 — 可以提交' : '✗ 未通过 — 请继续修改')}</div>
+    <div style="font-size:.72em;color:#94a3b8;margin-top:4px">及格线 ${result.threshold} 分 · 分数越低越像人写的</div>
+  </div>`;
+
+  // Hard fail
+  if(result.hard_fail){
+    html += `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:16px">
+      <strong style="color:#dc2626">硬性失败</strong>
+      <p style="font-size:.78em;color:#991b1b;margin-top:4px">${escapeHtml(result.hard_fail_reason)}</p>
+    </div>`;
+  }
+
+  // Deterministic signals
+  if(result.signals && result.signals.length){
+    html += `<h3>📊 六维检测</h3>`;
+    for(const s of result.signals){
+      const pct = Math.round(s.value * 100);
+      const level = pct < 40 ? 'low' : (pct < 70 ? 'med' : 'high');
+      const hits = (result.matched_markers && result.matched_markers.hits && s.key === 'formulaic_markers')
+        ? `<div class="sig-hits">命中: ${result.matched_markers.hits.map(h => '「'+escapeHtml(h)+'」').join(', ')}</div>`
+        : '';
+      html += `<div class="eval-signal">
+        <div class="sig-head"><span class="sig-name">${s.name}</span><span class="sig-val">${pct}% · ${Math.round(s.value*s.weight*100)}分</span></div>
+        <div class="sig-bar"><div class="sig-fill ${level}" style="width:${pct}%"></div></div>
+        ${pct >= 40 ? `<div class="sig-suggestion">💡 ${s.suggestion}</div>` : ''}
+        ${hits}
+      </div>`;
+    }
+  }
+
+  // LLM flags
+  if(result.llm_flags && result.llm_flags.length){
+    html += `<h3>🤖 AI 语义检测</h3><div class="llm-flags">`;
+    for(const f of result.llm_flags){
+      html += `<div class="llm-flag ${f.flagged?'warn':'ok'}">
+        <span class="flag-dot"></span>${f.name}
+      </div>`;
+    }
+    html += `</div>`;
+    const warned = result.llm_flags.filter(f=>f.flagged);
+    if(warned.length){
+      html += `<div style="margin-top:8px;font-size:.72em;color:#64748b">`;
+      for(const f of warned){
+        html += `<div style="margin-bottom:2px">• <strong>${f.name}</strong>: ${f.note}</div>`;
+      }
+      html += `</div>`;
+    }
+  }
+
+  // Composite info
+  html += `<div style="margin-top:16px;font-size:.68em;color:#94a3b8;text-align:center">
+    确定性评分 ${result.det_score ?? score} × 60% + LLM评分 ${result.llm_score ?? 0} × 40% = ${score} 分
+  </div>`;
+
+  // Actions
+  html += `<div class="eval-actions">`;
+  if(canSubmit){
+    html += `<button class="btn-green" onclick="closeEvalModal();doFinalSubmit(${isTimeout});">提交并进入问卷</button>`;
+  }
+  html += `<button class="${canSubmit?'btn-secondary':'btn-primary'}" onclick="closeEvalModal()">继续修改</button>`;
+  html += `</div>`;
+
+  $('eval-modal').innerHTML = html;
+  $('eval-overlay').classList.remove('hidden');
+}
+
+function closeEvalModal(){
+  $('eval-overlay').classList.add('hidden');
+}
+
+async function doFinalSubmit(isTimeout){
+  clearInterval(timerInterval);clearInterval(expressionInterval);
+  const draftText=$('draft-text').textContent||'';
+  const f=new FormData();
+  f.append('session_id',currentSessionId);
+  f.append('final_email',draftText);
+  f.append('duration_ms',Date.now()-taskStartTime);
+  f.append('completion_type',isTimeout?'timeout':'manual');
+  f.append('total_turns',turnCounter);
+  f.append('total_revisions',revisionCounter);
+  f.append('total_frames',Math.floor((Date.now()-taskStartTime)/500));
+  f.append('unreliable_frames',0);
+  await fetch('/api/session/complete',{method:'POST',body:f});
+  showView('questionnaire-view');
+}
+
+// ── Questionnaire ──
+$('q-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const f=new FormData();f.append('session_id',currentSessionId);
+  for(let i=1;i<=10;i++){
+    const v=document.querySelector(`input[name="likert-q${i}"]:checked`)?.value;
+    if(!v){toast('请完成所有 10 道题目。');return;}
+    f.append(`q${i}`,v);
+  }
+  await fetch('/api/questionnaire',{method:'POST',body:f});
+  if(isTask1){showView('post-survey-view')}else{showView('complete-view')}
+});
+
+// ── Task 2 ──
+$('start-task2').addEventListener('click',()=>{isTask1=false;startTask()});
+
+// ── Debrief ──
+$('debrief-submit').addEventListener('click',async()=>{
+  const f=new FormData();
+  f.append('participant_id',participantId);
+  f.append('guessed_purpose',$('debrief-guess').value);
+  f.append('comments',$('debrief-comments').value);
+  await fetch('/api/debrief',{method:'POST',body:f});
+  $('debrief-submit').classList.add('hidden');$('debrief-done').classList.remove('hidden');
+});
+
+
+// ── Pre-Survey Submit ──
+document.getElementById('pre-survey-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = new FormData();
+  f.append('participant_id', participantId);
+  const preFields = {
+    a1_age: 'pre-a1_age', a2_gender: 'pre-a2_gender', a3_ai_frequency: 'pre-a3_ai_frequency',
+    a4_ai_experience: 'likert-pre-a4', a5_writing_confidence: 'likert-pre-a5',
+    a6_ai_tool_confidence: 'likert-pre-a6', a7_email_familiarity: 'likert-pre-a7',
+    b1_calm: 'likert-pre-b1', b2_stressed: 'likert-pre-b2', b3_uncertain: 'likert-pre-b3',
+    b4_confident: 'likert-pre-b4', b5_ready: 'likert-pre-b5', b6_webcam_comfort: 'likert-pre-b6',
+    c1_expect_helpful: 'likert-pre-c1', c2_expect_understand: 'likert-pre-c2',
+    c3_expect_easy: 'likert-pre-c3', c4_expect_collaborative: 'likert-pre-c4',
+  };
+  for (const [key, elementId] of Object.entries(preFields)) {
+    const el = document.getElementById(elementId);
+    if (!el) continue;
+    if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+      f.append(key, el.value);
+    } else {
+      const checked = el.querySelector('input:checked');
+      f.append(key, checked ? checked.value : '');
+    }
+  }
+  // Also get text input/select values for A1-A3
+  for (const name of ['pre-a1_age', 'pre-a2_gender', 'pre-a3_ai_frequency']) {
+    const el = document.querySelector(`[name="${name}"]`);
+    if (el) f.append(name.replace('pre-', ''), el.value);
+  }
+  try {
+    const r = await fetch('/api/pre-survey', {method:'POST', body: new URLSearchParams(f)});
+    if (!r.ok) { const d = await r.json(); throw new Error(d.detail || r.statusText); }
+  } catch(err) {
+    toast('Failed to save pre-survey: ' + err.message, 5000);
+    return;
+  }
+  startBaseline();
+});
+
+// ── Post-Survey Submit ──
+document.getElementById('post-survey-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = new FormData();
+  f.append('session_id', currentSessionId);
+  const postFields = [
+    'u1','u2','u3','u4','u5',
+    's1','s2','s3','s4','s5',
+    'sp1','sp2','sp3',
+    'cp1','cp2','cp3',
+    'r1','r2','r3','r4','r5',
+    'e1','e2','e3','e4','e5',
+    'f1','f2','f3','f4','f5',
+    'm1','m2','m3','m4','m5'
+  ];
+  for (const key of postFields) {
+    const el = document.querySelector(`[name="post-${key}"]`);
+    if (el) {
+      f.append(key, el.value || '');
+      continue;
+    }
+    const likertEl = document.getElementById('likert-post-' + key);
+    if (likertEl) {
+      const checked = likertEl.querySelector('input:checked');
+      f.append(key, checked ? checked.value : '');
+    }
+  }
+  try {
+    const r = await fetch('/api/post-survey', {method:'POST', body: new URLSearchParams(f)});
+    if (!r.ok) { const d = await r.json(); throw new Error(d.detail || r.statusText); }
+  } catch(err) {
+    toast('Failed to save post-survey: ' + err.message, 5000);
+    return;
+  }
+  if (isTask1) { showView('break-view'); } else { showView('complete-view'); }
+});
+
+// ── Setup ──
+
+$('setup-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  language=$('lang').value;
+  try {
+    const f=new FormData();
+    f.append('language',language);
+    const r=await fetch('/api/session/start',{method:'POST',body:f});
+    const d=await r.json();
+    participantId=d.participant_id;
+    orderGroup=d.order_group;
+    currentSessionId=d.session_id;
+    currentCondition=d.condition;
+    currentScenario=d.scenario;
+  } catch(err) {
+    toast('无法创建实验会话，请刷新页面重试。', 5000);
+    console.error('Session start failed:', err);
+    return;
+  }
+  try {
+    await connectWS();
+  } catch(err) {
+    toast('无法连接到服务器，请刷新页面重试。', 5000);
+    console.error('WS connect failed:', err);
+    return;
+  }
+  try {
+    await startWebcam();
+  } catch(err) {
+    toast('无法访问摄像头。请允许摄像头权限并确保没有其他程序占用摄像头。', 6000);
+    console.error('Webcam failed:', err);
+    return;
+  }
+  showView('pre-survey-view');
+});
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Experimenter Dashboard — Co-Writing Study</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:#0f172a;color:#e2e8f0;height:100vh;overflow:hidden;display:flex;
+}
+
+/* ── Sidebar ── */
+#sidebar{
+  width:380px;min-width:380px;background:#1e293b;border-right:1px solid #334155;
+  display:flex;flex-direction:column;height:100vh;
+}
+#sidebar .head{
+  padding:20px;border-bottom:1px solid #334155;flex-shrink:0;
+}
+#sidebar .head h1{font-size:1.1em;font-weight:700;letter-spacing:-.02em;color:#f1f5f9}
+#sidebar .head .sub{font-size:.68em;color:#64748b;margin-top:2px}
+
+/* Stats row */
+#sidebar .stats-row{
+  display:flex;gap:1px;background:#334155;flex-shrink:0;
+}
+#sidebar .stats-row .stat{
+  flex:1;background:#1e293b;text-align:center;padding:12px 8px;
+}
+#sidebar .stats-row .stat .val{font-size:1.3em;font-weight:800;letter-spacing:-.02em}
+#sidebar .stats-row .stat .lbl{font-size:.58em;text-transform:uppercase;letter-spacing:.1em;color:#64748b;margin-top:2px}
+.stat .val.green{color:#22c55e}.stat .val.amber{color:#f59e0b}.stat .val.indigo{color:#818cf8}
+
+/* Search & filters */
+#sidebar .filters{padding:12px 16px;border-bottom:1px solid #1e293b;flex-shrink:0;display:flex;gap:8px}
+#sidebar .filters input,#sidebar .filters select{
+  background:#0f172a;border:1px solid #334155;border-radius:8px;
+  padding:8px 12px;font-size:.78em;color:#e2e8f0;font-family:inherit;
+}
+#sidebar .filters input{flex:1}
+#sidebar .filters input:focus,#sidebar .filters select:focus{outline:none;border-color:#6366f1}
+#sidebar .filters select{width:100px}
+
+/* Session list */
+#session-list{flex:1;overflow-y:auto;padding:0}
+.session-item{
+  padding:12px 16px;border-bottom:1px solid #1e293b;cursor:pointer;
+  transition:background .12s;display:flex;align-items:center;justify-content:space-between;
+  gap:10px;
+}
+.session-item:hover{background:rgba(99,102,241,.06)}
+.session-item.active{background:rgba(99,102,241,.12);border-left:3px solid #6366f1}
+.session-item .left{flex:1;min-width:0}
+.session-item .left .top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.session-item .left .pid{font-family:monospace;font-weight:700;font-size:.88em;color:#f1f5f9}
+.session-item .left .meta{font-size:.68em;color:#64748b;display:flex;gap:12px}
+.session-item .right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.session-item .right .turns{font-size:.72em;font-weight:700;color:#94a3b8}
+
+.badge{
+  display:inline-block;font-size:.62em;padding:2px 8px;border-radius:5px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+}
+.badge.affect{background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.25)}
+.badge.text{background:rgba(100,116,139,.15);color:#94a3b8;border:1px solid rgba(100,116,139,.25)}
+.badge.s{background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.2)}
+
+.status-dot{width:7px;height:7px;border-radius:50%}
+.status-dot.done{background:#22c55e}.status-dot.pending{background:#f59e0b}.status-dot.excl{background:#ef4444}
+.excluded .pid{text-decoration:line-through;text-decoration-color:#ef4444}
+
+/* ── Main Panel ── */
+#main{
+  flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;
+}
+#main .empty-state{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:#475569;gap:12px;
+}
+#main .empty-state .icon{font-size:3em;opacity:.3}
+
+/* Tabs */
+#tabs{
+  display:flex;gap:0;border-bottom:1px solid #334155;flex-shrink:0;padding:0 24px;
+  background:#1e293b;
+}
+#tabs button{
+  padding:12px 20px;font-size:.75em;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;color:#64748b;background:none;border:none;border-bottom:2px solid transparent;
+  cursor:pointer;transition:all .15s;font-family:inherit;
+}
+#tabs button:hover{color:#e2e8f0}
+#tabs button.active{color:#818cf8;border-bottom-color:#6366f1}
+
+/* Detail content */
+#detail{flex:1;overflow-y:auto;padding:24px}
+.detail-section{margin-bottom:28px}
+.detail-section h3{
+  font-size:.68em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:#64748b;margin-bottom:12px;
+}
+
+/* Info grid */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.info-card{
+  background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px 16px;
+}
+.info-card .lbl{font-size:.6em;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px}
+.info-card .val{font-size:1em;font-weight:700;color:#f1f5f9}
+.info-card .val.mono{font-family:monospace}
+
+/* Action bar */
+.action-bar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+button{
+  padding:8px 16px;border-radius:10px;font-size:.78em;font-weight:600;
+  border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer;
+  transition:all .15s;font-family:inherit;white-space:nowrap;
+}
+button:hover{background:#334155}
+button.primary{background:#4f46e5;border-color:#4f46e5;color:#fff}
+button.primary:hover{background:#4338ca}
+button.danger{background:transparent;border-color:#dc2626;color:#dc2626}
+button.danger:hover{background:#dc2626;color:#fff}
+
+/* Expression strip */
+.au-strip{display:flex;gap:1px;flex-wrap:wrap;margin:12px 0}
+.au-strip .cell{width:5px;height:24px;border-radius:1px;opacity:.85;cursor:pointer}
+.au-strip .cell:hover{opacity:1;transform:scaleY(1.5)}
+.au-strip .cell.lost{opacity:.25}
+
+.au-legend{display:flex;gap:16px;font-size:.65em;color:#64748b;margin-bottom:8px;flex-wrap:wrap}
+.au-legend span{display:flex;align-items:center;gap:5px}
+.au-legend .swatch{width:10px;height:10px;border-radius:2px}
+
+/* AU chart */
+.au-chart-wrap{margin:16px 0;overflow-x:auto}
+#au-chart{width:100%;min-width:600px}
+
+/* Chat log */
+.chat-entry{margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #1e293b}
+.chat-entry:last-child{border-bottom:none}
+.chat-entry .ch-meta{font-size:.65em;color:#64748b;margin-bottom:4px;display:flex;gap:12px;flex-wrap:wrap}
+.chat-entry .ch-meta .tag{
+  display:inline-block;padding:1px 7px;border-radius:4px;font-size:.9em;
+}
+.chat-entry .ch-meta .tag.expr{background:rgba(99,102,241,.12);color:#818cf8}
+.chat-entry .ch-meta .tag.strat{background:rgba(245,158,11,.12);color:#fbbf24}
+.chat-entry .ch-content{font-size:.82em;line-height:1.6;color:#cbd5e1;padding:8px 12px;border-radius:10px}
+.chat-entry.user .ch-content{background:rgba(99,102,241,.08);border-left:3px solid #6366f1}
+.chat-entry.ai .ch-content{background:rgba(15,23,42,.5);border-left:3px solid #475569}
+
+/* Expression frame table */
+.frame-table{width:100%;border-collapse:collapse;font-size:.75em}
+.frame-table th{
+  text-align:left;padding:6px 10px;background:#0f172a;font-size:.7em;
+  text-transform:uppercase;letter-spacing:.06em;color:#64748b;position:sticky;top:0;z-index:1;
+}
+.frame-table td{padding:4px 10px;border-bottom:1px solid #1e293b;font-family:monospace;font-size:.85em}
+.frame-table tr:hover td{background:rgba(99,102,241,.04)}
+.frame-table .lost{opacity:.4}
+.frame-table .trigger{color:#fbbf24;font-weight:700}
+
+/* Loading */
+.loading{text-align:center;padding:40px;color:#64748b}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:24px;height:24px;border:3px solid #334155;border-top-color:#6366f1;border-radius:50%;animation:spin .6s linear infinite;margin:0 auto 12px}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;
+  padding:10px 24px;border-radius:10px;font-size:.82em;font-weight:600;
+  animation:toastIn .25s ease,toastOut .25s ease 2.5s forwards;
+}
+.toast.ok{background:#065f46;color:#d1fae5}
+.toast.err{background:#7f1d1d;color:#fecaca}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(10px)}}
+
+/* Confirm modal */
+#modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;
+  display:none;align-items:center;justify-content:center;
+}
+#modal-overlay:not(.hidden){
+  display:flex;
+}
+#modal-overlay .modal{
+  background:#1e293b;border:1px solid #334155;border-radius:16px;padding:28px;
+  max-width:400px;width:90%;
+}
+#modal-overlay .modal h3{font-size:1em;margin-bottom:8px}
+#modal-overlay .modal p{font-size:.82em;color:#94a3b8;margin-bottom:20px}
+</style>
+</head>
+<body>
+
+<!-- ═══ Sidebar ═══ -->
+<div id="sidebar">
+  <div class="head">
+    <h1>Experimenter Dashboard</h1>
+    <div class="sub">Co-Writing Emotion AI Study · BNBU FST</div>
+  </div>
+  <div class="stats-row" id="stats-row"></div>
+  <div class="filters">
+    <input id="search" type="text" placeholder="搜索 ID / 参与者..." oninput="renderList()">
+    <select id="filter-cond" onchange="renderList()">
+      <option value="all">全部条件</option>
+      <option value="affect-aware">情感感知</option>
+      <option value="text-only">纯文本</option>
+    </select>
+  </div>
+  <div id="session-list"></div>
+</div>
+
+<!-- ═══ Main Panel ═══ -->
+<div id="main">
+  <div id="tabs" class="hidden">
+    <button data-tab="overview" class="active">概览</button>
+    <button data-tab="chat">对话记录</button>
+    <button data-tab="expression">表情数据</button>
+    <button data-tab="baseline">基线数据</button>
+  </div>
+  <div id="detail">
+    <div class="empty-state">
+      <div class="icon">←</div>
+      <p>从左侧选择一个 Session 查看详情</p>
+      <p style="font-size:.75em;color:#475569">支持导出 JSON、删除记录、查看面部识别数据</p>
+    </div>
+  </div>
+</div>
+
+<div id="modal-overlay" class="hidden" onclick="if(event.target===this)closeModal()">
+  <div class="modal"></div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+let sessions=[],activeSid=null,sessionCache={};
+
+// ── Fetch & render ──
+async function refresh(){
+  const r=await fetch('/api/admin/sessions');
+  sessions=await r.json();
+  renderStats();
+  renderList();
+  // Re-fetch active session detail if open
+  if(activeSid){await loadSession(activeSid,true)}
+}
+async function renderStats(){
+  const done=sessions.filter(s=>s.completed);
+  const excl=sessions.filter(s=>s.excluded);
+  $('stats-row').innerHTML=`
+    <div class="stat"><div class="val green">${done.length}</div><div class="lbl">已完成</div></div>
+    <div class="stat"><div class="val indigo">${sessions.length}</div><div class="lbl">总计</div></div>
+    <div class="stat"><div class="val amber">${excl.length}</div><div class="lbl">已排除</div></div>
+  `;
+}
+function renderList(){
+  const q=($('search').value||'').toLowerCase();
+  const cond=$('filter-cond').value;
+  let filtered=sessions;
+  if(q)filtered=filtered.filter(s=>(s.participant_id||'').toLowerCase().includes(q)||String(s.id).includes(q));
+  if(cond!=='all')filtered=filtered.filter(s=>s.condition===cond);
+
+  let html='';
+  for(const s of filtered){
+    const dur=s.duration_ms?Math.floor(s.duration_ms/1000)+'s':'';
+    const loss=s.frame_loss_ratio>0.3?`<span style="color:#ef4444">⚠${Math.round(s.frame_loss_ratio*100)}%</span>`:'';
+    html+=`<div class="session-item ${s.id===activeSid?'active':''} ${s.excluded?'excluded':''}"
+      onclick="selectSession(${s.id})">
+      <div class="left">
+        <div class="top">
+          <span class="pid">${escHtml(s.participant_id)}</span>
+          <span class="badge ${s.condition==='affect-aware'?'affect':'text'}">${s.condition==='affect-aware'?'情感感知':'纯文本'}</span>
+          <span class="badge s">场景${s.task_scenario}</span>
+        </div>
+        <div class="meta">
+          <span>#${s.id}</span>
+          <span>顺序${s.condition_order}</span>
+          <span>${s.completion_type||'进行中'}</span>
+          ${loss}
+        </div>
+      </div>
+      <div class="right">
+        <div class="status-dot ${s.completed?'done':(s.excluded?'excl':'pending')}" title="${s.completed?'完成':'进行中'}"></div>
+        <span class="turns">${s.total_turns||0}轮</span>
+      </div>
+    </div>`;
+  }
+  $('session-list').innerHTML=html||'<div style="padding:32px;text-align:center;color:#475569;font-size:.82em">无匹配的 Session</div>';
+}
+
+// ── Session selection ──
+async function selectSession(sid){
+  activeSid=sid;
+  renderList();
+  await loadSession(sid);
+}
+async function loadSession(sid,silent=false){
+  if(!silent){$('detail').innerHTML='<div class="loading"><div class="spinner"></div><p>加载中...</p></div>'}
+
+  // Fetch data
+  const [exportR,statsR]=await Promise.all([
+    fetch(`/api/admin/sessions/${sid}/export`),
+    fetch(`/api/admin/expression/${sid}/stats`)
+  ]);
+  const exp=await exportR.json();
+  const st=await statsR.json();
+  sessionCache[sid]={exp,st};
+
+  $('tabs').classList.remove('hidden');
+  $('tabs').querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+  $('tabs').querySelector('[data-tab="overview"]').classList.add('active');
+  renderOverview(exp,st);
+}
+
+// ── Tab switching ──
+$('tabs').addEventListener('click',e=>{
+  if(e.target.tagName!=='BUTTON')return;
+  $('tabs').querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+  e.target.classList.add('active');
+  const tab=e.target.dataset.tab;
+  const {exp,st}=sessionCache[activeSid]||{};
+  if(!exp)return;
+  if(tab==='overview')renderOverview(exp,st);
+  if(tab==='chat')renderChat(exp);
+  if(tab==='expression')renderExpression(exp,st);
+  if(tab==='baseline')renderBaseline(exp);
+});
+
+// ── Overview ──
+function renderOverview(exp,st){
+  const s=exp.session;
+  const p=exp.participant||{};
+  const q=exp.questionnaire;
+  const evals=exp.evaluations||[];
+  const dur=s.duration_ms?Math.floor(s.duration_ms/1000):0;
+  const durStr=dur?`${Math.floor(dur/60)}分${dur%60}秒`:'-';
+  const framesOk=(st.total_frames||0)-(st.face_lost_frames||0);
+  const faceOkPct=st.total_frames?Math.round(framesOk/st.total_frames*100):0;
+
+  let html=`
+    <div class="action-bar">
+      <button onclick="exportSession(${s.id})">⬇ 导出 JSON</button>
+      <button onclick="exportSessionCSV(${s.id})">⬇ 导出 CSV</button>
+      <button class="danger" onclick="confirmDelete(${s.id},'${escHtml(s.participant_id)}')">✕ 删除此 Session</button>
+    </div>
+
+    <div class="detail-section"><h3>会话信息</h3>
+      <div class="info-grid">
+        <div class="info-card"><div class="lbl">Session ID</div><div class="val mono">#${s.id}</div></div>
+        <div class="info-card"><div class="lbl">参与者</div><div class="val mono">${escHtml(s.participant_id)}</div></div>
+        <div class="info-card"><div class="lbl">条件</div><div class="val">${s.condition==='affect-aware'?'情感感知 AI':'纯文本 AI'}</div></div>
+        <div class="info-card"><div class="lbl">场景</div><div class="val">${s.task_scenario==='A'?'场景 A (电脑崩溃)':'场景 B (组员失联)'}</div></div>
+        <div class="info-card"><div class="lbl">条件顺序</div><div class="val">第 ${s.condition_order} 个任务</div></div>
+        <div class="info-card"><div class="lbl">完成方式</div><div class="val">${s.completion_type==='timeout'?'⏱ 超时':'手动提交'} ${s.completed?'✅':''}</div></div>
+        <div class="info-card"><div class="lbl">用时</div><div class="val">${durStr}</div></div>
+        <div class="info-card"><div class="lbl">对话轮次 / 修改</div><div class="val mono">${s.total_turns||0} 轮 · ${s.total_revisions||0} 修改</div></div>
+        <div class="info-card"><div class="lbl">表情帧</div><div class="val mono">${st.total_frames||0} 帧 (可靠 ${st.reliable_frames||0})</div></div>
+        <div class="info-card"><div class="lbl">帧丢失率</div><div class="val" style="color:${s.frame_loss_ratio>0.3?'#ef4444':'#22c55e'}">${Math.round(s.frame_loss_ratio*100)}%</div></div>
+        <div class="info-card"><div class="lbl">排除</div><div class="val" style="color:${s.excluded_by_frame_loss?'#ef4444':'#22c55e'}">${s.excluded_by_frame_loss?'是 (>30%丢失)':'否'}</div></div>
+      </div>
+    </div>
+
+    <div class="detail-section"><h3>面部检测概况</h3>
+      <div class="info-grid">
+        <div class="info-card"><div class="lbl">总帧数</div><div class="val mono">${st.total_frames||0}</div></div>
+        <div class="info-card"><div class="lbl">检测到面部</div><div class="val" style="color:#22c55e">${framesOk} (${faceOkPct}%)</div></div>
+        <div class="info-card"><div class="lbl">面部丢失</div><div class="val" style="color:#ef4444">${st.face_lost_frames||0} (${st.face_lost_pct||0}%)</div></div>
+        <div class="info-card"><div class="lbl">均值 AU4 (困惑)</div><div class="val mono">${st.means?.au4||'-'}</div></div>
+        <div class="info-card"><div class="lbl">均值 AU12 (正向)</div><div class="val mono">${st.means?.au12||'-'}</div></div>
+        <div class="info-card"><div class="lbl">触发帧 (AU4≥2)</div><div class="val mono">${st.triggers_above_2?.au4||0} / ${st.total_frames||0}</div></div>
+        <div class="info-card"><div class="lbl">触发帧 (AU12≥2)</div><div class="val mono">${st.triggers_above_2?.au12||0} / ${st.total_frames||0}</div></div>
+      </div>
+    </div>`;
+
+  // Face detection timeline
+  if(st.frames&&st.frames.length){
+    html+=`<div class="detail-section"><h3>面部检测时间线 (每点 = 1 帧, ${st.frames.length} 帧)</h3>`;
+    html+=`<div class="au-legend">
+      <span><span class="swatch" style="background:#22c55e"></span>已检测</span>
+      <span><span class="swatch" style="background:#ef4444"></span>丢失</span>
+      <span><span class="swatch" style="background:#64748b;opacity:.4"></span>不可靠</span>
+    </div>`;
+    html+=`<div class="au-strip">`;
+    for(const f of st.frames){
+      const cls=f.ok?'':'lost';
+      const color=f.ok?(f.face?'#22c55e':'#ef4444'):'#64748b';
+      html+=`<div class="cell ${cls}" style="background:${color}" title="t=${f.t}s AU4:${f.au4} AU12:${f.au12} ${f.ok?'✅':'⚠️'}"></div>`;
+    }
+    html+=`</div></div>`;
+  }
+
+  // Questionnaire
+  if(q){
+    html+=`<div class="detail-section"><h3>问卷结果</h3>
+      <div class="info-grid">
+        <div class="info-card"><div class="lbl">Q1 理解目标</div><div class="val mono">${q.q1||'-'}</div></div>
+        <div class="info-card"><div class="lbl">Q2 同一频道</div><div class="val mono">${q.q2||'-'}</div></div>
+        <div class="info-card"><div class="lbl">Q3 了解需求</div><div class="val mono">${q.q3||'-'}</div></div>
+        <div class="info-card"><div class="lbl">Q4 连接感</div><div class="val mono">${q.q4||'-'}</div></div>
+        <div class="info-card"><div class="lbl">Q5 有收获</div><div class="val mono">${q.q5||'-'}</div></div>
+        <div class="info-card"><div class="lbl">Q6 有兴趣</div><div class="val mono">${q.q6||'-'}</div></div>
+        <div class="info-card"><div class="lbl">Q7 值得</div><div class="val mono">${q.q7||'-'}</div></div>
+        <div class="info-card"><div class="lbl">Q8 沮丧 [R]</div><div class="val mono">${q.q8||'-'}</div></div>
+        <div class="info-card"><div class="lbl">Q9 困惑 [R]</div><div class="val mono">${q.q9||'-'}</div></div>
+        <div class="info-card"><div class="lbl">Q10 费力 [R]</div><div class="val mono">${q.q10||'-'}</div></div>
+      </div>
+    </div>`;
+  }
+
+  // Final email
+  if(s.final_email){
+    html+=`<div class="detail-section"><h3>最终草稿</h3>
+      <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px;
+        font-family:Georgia,serif;font-size:.85em;line-height:1.7;color:#cbd5e1;white-space:pre-wrap;max-height:300px;overflow-y:auto">${escHtml(s.final_email)}</div>
+    </div>`;
+  }
+
+  // Evaluations
+  if(evals.length){
+    html+=`<div class="detail-section"><h3>评估结果</h3>`;
+    for(const e of evals){
+      let detail='';
+      try{detail=JSON.stringify(JSON.parse(e.details_json||'{}'),null,2)}catch(_){detail=e.details_json||''}
+      html+=`<div class="info-card" style="margin-bottom:8px">
+        <div class="lbl">${e.layer} · 模型 ${e.evaluator_model}</div>
+        <div class="val mono">${e.score?.toFixed(1)}</div>
+        ${detail?`<pre style="font-size:.7em;color:#94a3b8;margin-top:4px">${escHtml(detail)}</pre>`:''}
+      </div>`;
+    }
+    html+=`</div>`;
+  }
+
+  $('detail').innerHTML=html;
+}
+
+// ── Chat ──
+function renderChat(exp){
+  const logs=exp.chat_logs||[];
+  let html=`<div class="action-bar">
+    <button onclick="exportSession(${exp.session.id})">⬇ 导出 JSON</button>
+  </div><div class="detail-section"><h3>对话记录 (${logs.length} 条)</h3></div>`;
+
+  for(const l of logs){
+    const isUser=l.role==='user';
+    html+=`<div class="chat-entry ${isUser?'user':'ai'}">
+      <div class="ch-meta">
+        <span>${isUser?'👤 用户':'🤖 AI'} · #${l.seq}</span>
+        <span>${l.timestamp||''}</span>
+        ${l.expression_label?`<span class="tag expr">面部: ${l.expression_label}</span>`:''}
+        ${l.strategy_applied?`<span class="tag strat">策略: ${l.strategy_applied}</span>`:''}
+      </div>
+      <div class="ch-content">${escHtml(l.content)}</div>
+    </div>`;
+  }
+  if(!logs.length)html+='<div class="loading">暂无对话记录</div>';
+  $('detail').innerHTML=html;
+}
+
+// ── Expression ──
+function renderExpression(exp,st){
+  const frames=st.frames||[];
+  let html=`<div class="action-bar">
+    <button onclick="exportExpressionCSV(${exp.session.id})">⬇ 导出 AU 数据 CSV</button>
+  </div><div class="detail-section"><h3>表情 AU 数据 (${frames.length} 帧)</h3></div>`;
+
+  // AU timeline strip
+  html+=`<div class="au-legend">
+    <span><span class="swatch" style="background:#ef4444"></span>AU4≥2 (困惑/沮丧)</span>
+    <span><span class="swatch" style="background:#22c55e"></span>AU12≥2 (正向)</span>
+    <span><span class="swatch" style="background:#f59e0b"></span>AU7≥2</span>
+    <span><span class="swatch" style="background:#818cf8"></span>AU1≥1.5</span>
+    <span><span class="swatch" style="background:#334155"></span>中性</span>
+  </div>`;
+  html+=`<div class="au-strip">`;
+  for(const f of frames){
+    let color='#334155';
+    if(f.au4>=2)color='#ef4444';
+    else if(f.au12>=2)color='#22c55e';
+    else if(f.au7>=2)color='#f59e0b';
+    else if(f.au1>=1.5)color='#818cf8';
+    html+=`<div class="cell ${f.ok?'':'lost'}" style="background:${color}"
+      title="t=${f.t}s AU1:${f.au1} AU4:${f.au4} AU7:${f.au7} AU12:${f.au12} ${f.ok?'✅':'⚠️'}"></div>`;
+  }
+  html+=`</div>`;
+
+  // AU table (first 200 rows for performance)
+  const show=frames.slice(0,200);
+  html+=`<div class="detail-section"><h3>帧数据表 (显示前 ${show.length} 帧, 共 ${frames.length})</h3>
+    <div style="max-height:500px;overflow-y:auto;border:1px solid #334155;border-radius:10px">
+    <table class="frame-table">
+      <thead><tr><th>时间(s)</th><th>AU1</th><th>AU4</th><th>AU7</th><th>AU12</th><th>Yaw°</th><th>Pitch°</th><th>面部</th><th>可靠</th></tr></thead>
+      <tbody>`;
+  for(const f of show){
+    const au4ok=f.au4>=2;
+    const au12ok=f.au12>=2;
+    const clsRow=f.ok?'':'lost';
+    html+=`<tr class="${clsRow}">
+      <td>${f.t}</td>
+      <td class="${f.au1>=1.5?'trigger':''}">${f.au1}</td>
+      <td class="${au4ok?'trigger':''}">${f.au4}</td>
+      <td class="${f.au7>=2?'trigger':''}">${f.au7}</td>
+      <td class="${au12ok?'trigger':''}">${f.au12}</td>
+      <td>${f.yaw}</td><td>${f.pitch}</td>
+      <td>${f.face?'✅':'❌'}</td><td>${f.ok?'✅':'⚠️'}</td>
+    </tr>`;
+  }
+  html+=`</tbody></table></div></div>`;
+
+  $('detail').innerHTML=html;
+}
+
+// ── Baseline ──
+function renderBaseline(exp){
+  const p=exp.participant;
+  let html=`<div class="detail-section"><h3>参与者基线数据</h3>`;
+  if(!p){
+    html+='<div class="loading">无基线数据</div>';
+  }else{
+    html+=`
+    <div class="info-grid">
+      <div class="info-card"><div class="lbl">参与者 ID</div><div class="val mono">${escHtml(p.id)}</div></div>
+      <div class="info-card"><div class="lbl">顺序组</div><div class="val mono">${p.order_group}</div></div>
+      <div class="info-card"><div class="lbl">基线 AU1</div><div class="val mono">${p.baseline_au1?.toFixed(3)||'-'}</div></div>
+      <div class="info-card"><div class="lbl">基线 AU4</div><div class="val mono">${p.baseline_au4?.toFixed(3)||'-'}</div></div>
+      <div class="info-card"><div class="lbl">基线 AU7</div><div class="val mono">${p.baseline_au7?.toFixed(3)||'-'}</div></div>
+      <div class="info-card"><div class="lbl">基线 AU12</div><div class="val mono">${p.baseline_au12?.toFixed(3)||'-'}</div></div>
+      <div class="info-card"><div class="lbl">基线帧数</div><div class="val mono">${p.baseline_frame_count||0}</div></div>
+    </div>
+    <div style="margin-top:20px;padding:16px;background:#0f172a;border:1px solid #334155;border-radius:10px">
+      <p style="font-size:.75em;color:#64748b;margin-bottom:8px">基线 AU 向量 (用于偏差计算)</p>
+      <div style="display:flex;gap:24px;font-family:monospace;font-size:.9em">
+        <div><span style="color:#818cf8">AU1</span> <strong>${p.baseline_au1?.toFixed(3)||'-'}</strong></div>
+        <div><span style="color:#ef4444">AU4</span> <strong>${p.baseline_au4?.toFixed(3)||'-'}</strong></div>
+        <div><span style="color:#f59e0b">AU7</span> <strong>${p.baseline_au7?.toFixed(3)||'-'}</strong></div>
+        <div><span style="color:#22c55e">AU12</span> <strong>${p.baseline_au12?.toFixed(3)||'-'}</strong></div>
+      </div>
+    </div>`;
+  }
+  // Also show the session's expression stats summary
+  $('detail').innerHTML=html;
+}
+
+// ── Export ──
+function downloadJSON(data,filename){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+}
+async function exportSession(sid){
+  const r=await fetch(`/api/admin/sessions/${sid}/export`);
+  const data=await r.json();
+  downloadJSON(data,`session_${sid}_${data.session.participant_id}.json`);
+  toast('导出 JSON 完成','ok');
+}
+function exportSessionCSV(sid){
+  const {exp}=sessionCache[sid]||{};
+  if(!exp)return;
+  const logs=exp.chat_logs||[];
+  let csv='seq,role,content,timestamp,expression_label,strategy_applied\n';
+  for(const l of logs){
+    csv+=`${l.seq},"${l.role}","${(l.content||'').replace(/"/g,'""')}","${l.timestamp}","${l.expression_label||''}","${l.strategy_applied||''}"\n`;
+  }
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`session_${sid}_chat.csv`;a.click();
+  toast('导出 CSV 完成','ok');
+}
+async function exportExpressionCSV(sid){
+  const r=await fetch(`/api/admin/expression/${sid}/stats`);
+  const st=await r.json();
+  const frames=st.frames||[];
+  let csv='time_s,au1,au4,au7,au12,head_yaw,head_pitch,face_detected,reliable\n';
+  for(const f of frames){
+    csv+=`${f.t},${f.au1},${f.au4},${f.au7},${f.au12},${f.yaw},${f.pitch},${f.face},${f.ok}\n`;
+  }
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`session_${sid}_expression.csv`;a.click();
+  toast('导出 AU CSV 完成','ok');
+}
+
+// ── Delete ──
+function confirmDelete(sid,pid){
+  $('modal-overlay').classList.remove('hidden');
+  $('modal-overlay').querySelector('.modal').innerHTML=`
+    <h3>删除 Session #${sid}</h3>
+    <p>确定删除 <strong>${escHtml(pid)}</strong> 的 Session #${sid}？<br>
+    这将同时删除所有关联的聊天记录、表情数据、问卷和评估结果。<br><br>
+    <span style="color:#ef4444">此操作不可撤销。</span></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeModal()">取消</button>
+      <button class="danger" onclick="doDelete(${sid})">确认删除</button>
+    </div>
+  `;
+}
+function closeModal(){$('modal-overlay').classList.add('hidden')}
+async function doDelete(sid){
+  const r=await fetch(`/api/admin/sessions/${sid}`,{method:'DELETE'});
+  if(r.ok){
+    closeModal();
+    activeSid=null;
+    $('tabs').classList.add('hidden');
+    $('detail').innerHTML='<div class="empty-state"><div class="icon">🗑</div><p>Session 已删除</p></div>';
+    toast('已删除','ok');
+    refresh();
+  }else{
+    toast('删除失败','err');
+  }
+}
+
+// ── Toast ──
+function toast(msg,type='ok'){
+  const el=document.createElement('div');el.className='toast '+type;el.textContent=msg;
+  $('toast-container').appendChild(el);
+  setTimeout(()=>el.remove(),3000);
+}
+
+// ── Helpers ──
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+// ── Init ──
+refresh();
+setInterval(refresh,10000);
+</script>
+</body>
+</html>
