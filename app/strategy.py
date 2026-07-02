@@ -78,8 +78,8 @@ COOLDOWN: Dict[Strategy, int] = {
 }
 
 # Hard gate: AU must reach this FACS intensity threshold
-FACS_B_LEVEL = 2  # "slight but clearly present"
-FACS_C_LEVEL = 3  # "pronounced"
+FACS_B_LEVEL = 0.3  # "slight but clearly present"
+FACS_C_LEVEL = 0.5  # "pronounced"
 
 # Dual threshold: delta AU must exceed multiplier × baseline_sd
 # (adapts to per-participant noise — a restless baseline widens the gate)
