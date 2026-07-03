@@ -49,7 +49,7 @@ def main():
             {"role": "system", "content": "你是一个简洁的中文助手。"},
             {"role": "user", "content": "只回复两个字：你好"},
         ],
-        "temperature": 0.2,
+        "temperature": 1,
         "max_completion_tokens": 64,
     }
     status, body = request_json("POST", f"{BASE_URL}/chat/completions", api_key, payload)
@@ -61,7 +61,7 @@ def main():
             {"role": "system", "content": "只输出 JSON。"},
             {"role": "user", "content": "输出 {\"score\": 1, \"note\": \"ok\"}"},
         ],
-        "temperature": 0,
+        "temperature": 1,
         "max_completion_tokens": 128,
         "response_format": {"type": "json_object"},
         "thinking": {"type": "enabled"},
