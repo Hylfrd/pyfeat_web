@@ -195,7 +195,7 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                 json={
                     "model": self.model,
                     "messages": messages,
-                    "reasoning_effort": "max",
+                    "reasoning_effort": "high",
                     "thinking": {"type": "enabled"},
                 },
             )
@@ -224,7 +224,6 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                 json={
                     "model": self.model,
                     "messages": messages,
-                    "max_completion_tokens": 512,
                     "response_format": {"type": "json_object"},
                 },
             )
