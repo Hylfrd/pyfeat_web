@@ -758,6 +758,9 @@ function connectWS(){
         $('rev-num').textContent=revisionCounter;
         extractDraft(msg.text);
       }
+      if(msg.type==='chat_sync'){
+        applyChatSync(msg);
+      }
       if(msg.type==='ai_wait'){
         updateThinking();
       }
@@ -865,6 +868,31 @@ function renderRestoredChat(){
   if(!chatTranscript.length)return;
   $('chat-area').innerHTML='';
   for(const msg of chatTranscript)appendChat(msg.role,msg.text,false);
+}
+function applyChatSync(msg){
+  const messages=Array.isArray(msg.messages)?msg.messages:[];
+  if(currentStage!=='task-view'||messages.length<chatTranscript.length)return;
+  chatTranscript=messages.map(m=>({role:m.role,text:m.text||''}));
+  renderRestoredChat();
+  if(msg.turn!==undefined){
+    turnCounter=msg.turn;
+    $('turn-num').textContent=turnCounter;
+  }
+  if(msg.revision!==undefined){
+    revisionCounter=msg.revision;
+    $('rev-num').textContent=revisionCounter;
+  }
+  const last=chatTranscript[chatTranscript.length-1];
+  if(last&&last.role==='ai'){
+    isAiWaiting=false;
+    removeThinking();
+    const draft=parseDraft(last.text);
+    if(draft){
+      $('draft-text').textContent=draft;
+      $('draft-panel').classList.remove('hidden');
+    }
+  }
+  writeProgress();
 }
 async function resumeProgress(saved){
   participantId=saved.participantId;
@@ -1064,9 +1092,13 @@ function appendChat(role,text,record=true){
 
 function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
-function extractDraft(aiText){
+function parseDraft(aiText){
   const m=aiText.match(/\[DRAFT_START\]([\s\S]*?)\[DRAFT_END\]/);
-  let draft=m?m[1].trim():'';
+  return m?m[1].trim():'';
+}
+
+function extractDraft(aiText){
+  const draft=parseDraft(aiText);
   if(draft){
     $('draft-text').textContent=draft;
     $('draft-panel').classList.remove('hidden');

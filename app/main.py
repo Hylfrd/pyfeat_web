@@ -1085,6 +1085,16 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         if log.role == "ai" and "[DRAFT_START]" in log.content
                     )
                     await websocket.send_text(json.dumps({"type": "ready"}))
+                    await websocket.send_text(json.dumps({
+                        "type": "chat_sync",
+                        "messages": [
+                            {"role": log.role, "text": log.content}
+                            for log in logs
+                            if log.role in ("user", "ai")
+                        ],
+                        "turn": turn_counter,
+                        "revision": revision_counter,
+                    }, ensure_ascii=False))
 
                 elif msg_type == "baseline_frame":
                     # During baseline recording — buffer server-side
