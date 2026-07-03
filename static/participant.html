@@ -179,6 +179,7 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
   animation:slideDown .3s ease,slideUp .3s ease 2.7s forwards;
   max-width:500px;text-align:center;
 }
+.toast.sticky{animation:slideDown .3s ease}
 @keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes slideUp{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(-20px)}}
 
@@ -652,8 +653,9 @@ let isAiWaiting = false;
 // ── Toast ──
 function toast(msg, duration=3000){
   const el = document.createElement('div');el.className='toast';el.textContent=msg;
+  if(duration<=0)el.classList.add('sticky');
   $('toast-container').appendChild(el);
-  setTimeout(()=>el.remove(),duration);
+  if(duration>0)setTimeout(()=>el.remove(),duration);
 }
 
 // ── Build Likert ──
@@ -682,6 +684,7 @@ function connectWS(){
       console.log('[WS] Closed:', e.code, e.reason);
       isAiWaiting=false;
       removeThinking();
+      if(e.code!==1000)toast('连接中断，请刷新页面重试。',0);
     };
     ws.onmessage = e => {
       const msg = JSON.parse(e.data);
@@ -802,7 +805,7 @@ function startBaseline(){
       }
     }else{
       clearInterval(baselineInterval);
-      toast('连接中断，请刷新页面重试。',4000);
+      toast('连接中断，请刷新页面重试。',0);
     }
   },500);
 }
@@ -1193,14 +1196,14 @@ $('setup-form').addEventListener('submit',async e=>{
     currentCondition=d.condition;
     currentScenario=d.scenario;
   } catch(err) {
-    toast('无法创建实验会话，请刷新页面重试。', 5000);
+    toast('无法创建实验会话，请刷新页面重试。', 0);
     console.error('Session start failed:', err);
     return;
   }
   try {
     await connectWS();
   } catch(err) {
-    toast('无法连接到服务器，请刷新页面重试。', 5000);
+    toast('无法连接到服务器，请刷新页面重试。', 0);
     console.error('WS connect failed:', err);
     return;
   }
