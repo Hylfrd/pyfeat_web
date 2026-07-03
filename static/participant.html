@@ -961,8 +961,7 @@ function startBaseline(){
         baselineSentCount=0;
       }
     }else{
-      clearInterval(baselineInterval);
-      toast('连接中断，请刷新页面重试。',0);
+      scheduleReconnect();
     }
   },500);
 }
