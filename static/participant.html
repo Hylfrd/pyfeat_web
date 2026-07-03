@@ -934,8 +934,17 @@ function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 
 function extractDraft(aiText){
   const m=aiText.match(/\[DRAFT_START\]([\s\S]*?)\[DRAFT_END\]/);
-  if(m){
-    $('draft-text').textContent=m[1].trim();
+  let draft=m?m[1].trim():'';
+  if(!draft){
+    const clean=aiText.replace(/\[DRAFT_START\]|\[DRAFT_END\]/g,'').trim();
+    const hasGreeting=/尊敬的|敬爱的|老师|教授|Dear\s+(Professor|Dr\.?|Teacher)/i.test(clean);
+    const hasRequest=/请求|恳请|希望|申请|帮助|延期|评分|协助|would like to|request|ask for|help|extension/i.test(clean);
+    const hasClosing=/此致|敬礼|顺颂|时祺|谢谢|感谢|您的学生|学生|Sincerely|Best regards|Regards|Thank you/i.test(clean);
+    const looksLikeAssistant=/写作助手|智能写作|模型|系统|算法|语料库|架构|今日有何困境|如何帮助/i.test(clean);
+    if(clean.length>160&&hasGreeting&&hasRequest&&hasClosing&&!looksLikeAssistant)draft=clean;
+  }
+  if(draft){
+    $('draft-text').textContent=draft;
     $('draft-panel').classList.remove('hidden');
     revisionCounter++;
     $('rev-num').textContent=revisionCounter;
