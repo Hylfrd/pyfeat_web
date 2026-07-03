@@ -29,7 +29,7 @@ def _load_env_file() -> None:
             if not value or value.startswith("#") or "=" not in value:
                 continue
             key, raw = value.split("=", 1)
-            os.environ.setdefault(key.strip(), raw.strip().strip('"').strip("'"))
+            os.environ[key.strip()] = raw.strip().strip('"').strip("'")
 
 
 _load_env_file()
@@ -225,7 +225,8 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                     "model": self.model,
                     "messages": messages,
                     "thinking": {"type": "enabled"},
-                    "max_tokens": 16000,
+                    "max_completion_tokens": 2048,
+                    "response_format": {"type": "json_object"},
                 },
             )
             response.raise_for_status()
