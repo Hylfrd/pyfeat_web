@@ -381,7 +381,7 @@ async def evaluate_email(ai_client, email_text: str) -> EvaluationResult:
         llm_median = 0.0
 
     # Composite
-    composite = 0.6 * det_result.score + 0.4 * llm_median
+    composite = 0.3* det_result.score + 0.7 * llm_median
     verdict = interpret_score(composite)
 
     return EvaluationResult(
