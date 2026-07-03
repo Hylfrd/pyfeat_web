@@ -1068,6 +1068,22 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
 
                 if msg_type == "session_init":
                     current_session_id = msg.get("session_id")
+                    logs = (
+                        db_session.query(ChatLog)
+                        .filter(ChatLog.session_id == current_session_id)
+                        .order_by(ChatLog.seq)
+                        .all()
+                    )
+                    chat_history = [
+                        ChatMessage(role=log.role, content=log.content)
+                        for log in logs
+                        if log.role in ("user", "ai")
+                    ]
+                    turn_counter = sum(1 for log in logs if log.role == "user")
+                    revision_counter = sum(
+                        1 for log in logs
+                        if log.role == "ai" and "[DRAFT_START]" in log.content
+                    )
                     await websocket.send_text(json.dumps({"type": "ready"}))
 
                 elif msg_type == "baseline_frame":
