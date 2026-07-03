@@ -18,10 +18,7 @@ if (!(Test-Path $pythonExe)) {
     & $pythonExe -m pip install -r (Join-Path $root "requirements.txt") -i https://mirrors.aliyun.com/pypi/simple/
 }
 
-$task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-if (!$task) {
-    & (Join-Path $root "install_windows_task.ps1")
-}
+& (Join-Path $root "install_windows_task.ps1")
 
 Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 
@@ -42,13 +39,7 @@ if (Test-Path $errLog) {
     Remove-Item $errLog -Force
 }
 
-Start-Process `
-    -FilePath "C:\Windows\System32\cmd.exe" `
-    -ArgumentList @("/c", "`"$runScript`"") `
-    -WorkingDirectory $root `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $outLog `
-    -RedirectStandardError $errLog
+Start-ScheduledTask -TaskName $taskName
 
 $healthy = $false
 for ($i = 0; $i -lt 60; $i++) {
