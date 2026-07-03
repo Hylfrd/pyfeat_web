@@ -305,7 +305,7 @@ async def evaluate_draft(draft_text: str = Form(...)):
         try:
             llm_result = await asyncio.wait_for(
                 llm_heuristic_single(eval_ai_client, draft_text),
-                timeout=30.0,
+                timeout=120.0,
             )
             eval_elapsed_ms = round((time.perf_counter() - eval_started) * 1000, 1)
             FLAG_LABELS = {

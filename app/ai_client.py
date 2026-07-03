@@ -185,7 +185,7 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
             messages.append({"role": role, "content": msg.content})
         messages.append({"role": "user", "content": prompt or " "})
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=180.0) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers={
@@ -195,6 +195,8 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                 json={
                     "model": self.model,
                     "messages": messages,
+                    "reasoning_effort": "max",
+                    "thinking": {"type": "enabled"},
                 },
             )
             response.raise_for_status()
@@ -212,7 +214,7 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
         """
         messages = [{"role": "user", "content": prompt}]
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=180.0) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers={
@@ -222,9 +224,7 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                 json={
                     "model": self.model,
                     "messages": messages,
-                    "temperature": 1,
-                    "thinking": {"type": "enabled"},
-                    "max_completion_tokens": 2048,
+                    "max_completion_tokens": 512,
                     "response_format": {"type": "json_object"},
                 },
             )
