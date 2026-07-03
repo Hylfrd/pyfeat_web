@@ -1068,6 +1068,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
 
                 if msg_type == "session_init":
                     current_session_id = msg.get("session_id")
+                    session = db_session.query(Session).get(current_session_id)
                     logs = (
                         db_session.query(ChatLog)
                         .filter(ChatLog.session_id == current_session_id)
@@ -1094,6 +1095,10 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         ],
                         "turn": turn_counter,
                         "revision": revision_counter,
+                        "session_id": current_session_id,
+                        "condition": session.condition if session else None,
+                        "scenario": session.task_scenario if session else None,
+                        "task_index": session.condition_order if session else None,
                     }, ensure_ascii=False))
 
                 elif msg_type == "baseline_frame":

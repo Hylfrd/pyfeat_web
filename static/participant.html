@@ -636,11 +636,25 @@ function readProgress(){
 }
 function writeProgress(extra={}){
   if(!participantId)return;
+  const previous=readProgress()||{};
+  const currentDraft=$('draft-text')?.textContent||'';
+  const currentForms=collectFormValues();
+  const forms={...(previous.forms||{})};
+  for(const [key,value] of Object.entries(currentForms)){
+    if(value!==''&&value!==undefined&&value!==null)forms[key]=value;
+  }
   const state={
-    participantId,orderGroup,language,currentSessionId,currentCondition,currentScenario,
+    participantId,
+    orderGroup:orderGroup||previous.orderGroup,
+    language:language||previous.language,
+    currentSessionId:currentSessionId||previous.currentSessionId,
+    currentCondition:currentCondition||previous.currentCondition,
+    currentScenario:currentScenario||previous.currentScenario,
     isTask1,currentStage,turnCounter,revisionCounter,taskStartTime,
-    draftText:$('draft-text')?.textContent||'',chatTranscript,
-    forms:collectFormValues(),updatedAt:Date.now(),...extra
+    draftText:currentDraft||previous.draftText||'',
+    chatTranscript:chatTranscript.length?chatTranscript:(previous.chatTranscript||[]),
+    forms,
+    updatedAt:Date.now(),...extra
   };
   localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
 }
@@ -869,9 +883,27 @@ function renderRestoredChat(){
   $('chat-area').innerHTML='';
   for(const msg of chatTranscript)appendChat(msg.role,msg.text,false);
 }
+function renderTaskMeta(){
+  $('task-label').textContent=isTask1?'任务 1':'任务 2';
+  if(currentCondition){
+    $('condition-badge').textContent=currentCondition==='affect-aware'?'情感感知 AI':'纯文本 AI';
+    $('condition-badge').style.background=currentCondition==='affect-aware'?'#e0e7ff':'#f1f5f9';
+    $('condition-badge').style.color=currentCondition==='affect-aware'?'#4f46e5':'#64748b';
+  }
+  if(currentScenario){
+    $('scenario-text').innerHTML=currentScenario==='A'
+      ?'<strong>情境 A</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。'
+      :'<strong>情境 B</strong><br>小组项目中一名组员始终没有回应，你独自承担了全部工作量。请与 AI 协作写一封邮件向教授请求帮助。';
+  }
+}
 function applyChatSync(msg){
   const messages=Array.isArray(msg.messages)?msg.messages:[];
   if(currentStage!=='task-view'||messages.length<chatTranscript.length)return;
+  if(msg.session_id)currentSessionId=msg.session_id;
+  if(msg.condition)currentCondition=msg.condition;
+  if(msg.scenario)currentScenario=msg.scenario;
+  if(msg.task_index)isTask1=msg.task_index===1;
+  renderTaskMeta();
   chatTranscript=messages.map(m=>({role:m.role,text:m.text||''}));
   renderRestoredChat();
   if(msg.turn!==undefined){
@@ -923,6 +955,7 @@ async function resumeProgress(saved){
   }
   showView(currentStage);
   if(currentStage==='task-view'){
+    renderTaskMeta();
     $('draft-text').textContent=saved.draftText||'';
     if(saved.draftText)$('draft-panel').classList.remove('hidden');
     renderRestoredChat();
