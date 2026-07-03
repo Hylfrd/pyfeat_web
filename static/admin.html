@@ -393,6 +393,7 @@ async function renderDebug(){
   debugEvents=(data.events||[]).slice().reverse();
   const participants=[...new Set(debugEvents.map(e=>e.participant_id).filter(Boolean))].sort();
   const sessions=[...new Set(debugEvents.map(e=>e.session_id).filter(v=>v!==undefined&&v!==null&&v!==''))].sort((a,b)=>Number(a)-Number(b));
+  const kinds=[...new Set(debugEvents.map(e=>e.kind).filter(Boolean))].sort();
   $('detail').innerHTML=`
     <div class="action-bar">
       <button class="${data.enabled?'danger':'primary'}" onclick="setDebugMode(${data.enabled?'false':'true'})">
@@ -427,10 +428,7 @@ async function renderDebug(){
       </select>
       <select id="debug-kind" onchange="renderDebugRows()">
         <option value="">全部类型</option>
-        <option value="baseline">baseline</option>
-        <option value="expression">expression</option>
-        <option value="strategy">strategy</option>
-        <option value="debug">debug</option>
+        ${kinds.map(k=>`<option value="${escAttr(k)}">${escHtml(k)}</option>`).join('')}
       </select>
     </div>
     <div style="max-height:560px;overflow:auto;border:1px solid #334155;border-radius:10px">
