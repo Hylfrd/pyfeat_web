@@ -62,6 +62,7 @@ active_connections: dict[str, WebSocket] = {}
 selectors: dict[str, StrategySelector] = {}
 debug_mode = False
 debug_events = deque(maxlen=300)
+DEBUG_LOG_PATH = ROOT_DIR / "data" / "debug_events.jsonl"
 
 FIFTEEN_MINUTES = 15 * 60  # seconds
 
@@ -73,11 +74,7 @@ def _frame_bytes(image_base64: str) -> int:
 
 
 def _debug_image(image_base64: str) -> Optional[str]:
-    if not image_base64:
-        return None
-    if image_base64.startswith("data:image/"):
-        return image_base64
-    return f"data:image/jpeg;base64,{image_base64}"
+    return None
 
 
 def _pyfeat_base_url() -> str:
@@ -93,7 +90,23 @@ def _push_debug(event: dict) -> dict:
         **event,
     }
     debug_events.append(payload)
+    DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
     return payload
+
+
+def _debug_tail(limit: int = 300) -> list[dict]:
+    if not DEBUG_LOG_PATH.exists():
+        return list(debug_events)
+    rows = deque(maxlen=limit)
+    with open(DEBUG_LOG_PATH, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    return list(rows)
 
 
 def _api_error_payload(err: Exception) -> dict:
@@ -945,7 +958,7 @@ async def admin_face_status(participant_id: str):
 async def admin_debug():
     return {
         "enabled": debug_mode,
-        "events": list(debug_events),
+        "events": _debug_tail(),
     }
 
 

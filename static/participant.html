@@ -762,6 +762,37 @@ async function startWebcam(){
   };
   mediaRecorder.start(10000);
 }
+function startRecordingCapture(){
+  if(mediaRecorder||!webcamStream)return;
+  mediaRecorder=new MediaRecorder(webcamStream,{mimeType:'video/webm'});
+  mediaRecorder.ondataavailable=async e=>{
+    if(e.data.size>0){
+      const f=new FormData();
+      f.append('participant_id',participantId);f.append('session_id',currentSessionId);
+      f.append('chunk_index',chunkIndex++);f.append('chunk',e.data);
+      fetch('/api/video-chunk',{method:'POST',body:f}).catch(()=>{});
+    }
+  };
+  mediaRecorder.start(10000);
+}
+function startExpressionCapture(){
+  clearInterval(expressionInterval);
+  expressionInterval=setInterval(()=>{
+    if(!isAiWaiting&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'expression_frame',frame:captureFrame()}));
+  },500);
+}
+function pauseTaskCapture(){
+  clearInterval(expressionInterval);
+  if(mediaRecorder&&mediaRecorder.state!=='inactive'){
+    mediaRecorder.ondataavailable=null;
+    mediaRecorder.stop();
+  }
+  mediaRecorder=null;
+}
+function resumeTaskCapture(){
+  startRecordingCapture();
+  startExpressionCapture();
+}
 function webcamLive(){
   const stream=$('webcam').srcObject||webcamStream;
   const track=stream&&stream.getVideoTracks&&stream.getVideoTracks()[0];
@@ -971,10 +1002,11 @@ async function submitEmail(isTimeout){
     const btn=$('submit-email');
     const origText=btn.textContent;
     btn.textContent='正在评估...';btn.disabled=true;
+    pauseTaskCapture();
     try {
       const ef=new FormData();ef.append('draft_text',draftText);
       evalResult=await(await fetch('/api/evaluate-draft',{method:'POST',body:ef})).json();
-    } catch(e) { toast('评估失败，请重试。');btn.textContent=origText;btn.disabled=false;return; }
+    } catch(e) { toast('评估失败，请重试。');btn.textContent=origText;btn.disabled=false;resumeTaskCapture();return; }
     btn.textContent=origText;btn.disabled=false;
     showEvalModal(evalResult, isTimeout);
     return; // wait for user to see modal
@@ -1048,21 +1080,23 @@ function showEvalModal(result, isTimeout){
   // Actions
   html += `<div class="eval-actions">`;
   if(canSubmit){
-    html += `<button class="btn-green" onclick="closeEvalModal();doFinalSubmit(${isTimeout});">提交并进入问卷</button>`;
+    html += `<button class="btn-green" onclick="closeEvalModal(false);doFinalSubmit(${isTimeout});">提交并进入问卷</button>`;
   }
-  html += `<button class="${canSubmit?'btn-secondary':'btn-primary'}" onclick="closeEvalModal()">继续修改</button>`;
+  html += `<button class="${canSubmit?'btn-secondary':'btn-primary'}" onclick="closeEvalModal(true)">继续修改</button>`;
   html += `</div>`;
 
   $('eval-modal').innerHTML = html;
   $('eval-overlay').classList.remove('hidden');
 }
 
-function closeEvalModal(){
+function closeEvalModal(resume=false){
   $('eval-overlay').classList.add('hidden');
+  if(resume)resumeTaskCapture();
 }
 
 async function doFinalSubmit(isTimeout){
   clearInterval(timerInterval);clearInterval(expressionInterval);
+  pauseTaskCapture();
   const draftText=$('draft-text').textContent||'';
   const f=new FormData();
   f.append('session_id',currentSessionId);
