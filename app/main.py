@@ -1230,14 +1230,23 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     # Call AI
                     ai_started = time.perf_counter()
                     try:
-                        ai_response_text = await ai_client.chat(
+                        ai_task = asyncio.create_task(ai_client.chat(
                             prompt=user_text,
                             history=chat_history,
                             condition=condition,
                             email_language=email_language,
                             strategy=strategy,
                             escalate_level=escalate_level,
-                        )
+                        ))
+                        while not ai_task.done():
+                            try:
+                                await asyncio.wait_for(asyncio.shield(ai_task), timeout=10.0)
+                            except asyncio.TimeoutError:
+                                await websocket.send_text(json.dumps({
+                                    "type": "ai_wait",
+                                    "elapsed_ms": round((time.perf_counter() - ai_started) * 1000, 1),
+                                }))
+                        ai_response_text = ai_task.result()
                         ai_elapsed_ms = round((time.perf_counter() - ai_started) * 1000, 1)
                         if debug_mode:
                             _push_debug({

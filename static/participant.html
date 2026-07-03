@@ -700,6 +700,9 @@ function connectWS(){
         $('rev-num').textContent=revisionCounter;
         extractDraft(msg.text);
       }
+      if(msg.type==='ai_wait'){
+        updateThinking(msg.elapsed_ms);
+      }
       if(msg.type==='prompt'){
         toast(msg.message,4000);
       }
@@ -927,6 +930,14 @@ function showThinking(){
   area.appendChild(wrap);
   area.scrollTop=area.scrollHeight;
   thinkingEl=wrap;
+}
+function updateThinking(elapsedMs){
+  if(!thinkingEl)showThinking();
+  const label=thinkingEl&&(thinkingEl.querySelector('.thinking-label')||thinkingEl.querySelector('.bubble div:last-child'));
+  if(label){
+    const seconds=Math.max(1,Math.round((elapsedMs||0)/1000));
+    label.textContent=`思考中... ${seconds}s`;
+  }
 }
 function removeThinking(){
   if(thinkingEl){thinkingEl.remove();thinkingEl=null}
