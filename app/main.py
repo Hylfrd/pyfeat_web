@@ -1260,6 +1260,8 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                                     "base_url": ai_client.base_url,
                                     "condition": condition,
                                     "strategy": strategy_name,
+                                    "prompt": user_text,
+                                    "response": ai_response_text,
                                     "prompt_chars": len(user_text),
                                     "history_messages": len(chat_history),
                                     "response_chars": len(ai_response_text),
@@ -1275,6 +1277,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             "base_url": ai_client.base_url,
                             "condition": condition,
                             "strategy": strategy_name,
+                            "prompt": user_text,
                             "prompt_chars": len(user_text),
                             "history_messages": len(chat_history),
                         })
