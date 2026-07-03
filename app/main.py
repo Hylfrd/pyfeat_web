@@ -84,6 +84,31 @@ def _pyfeat_base_url() -> str:
     return value
 
 
+async def _pyfeat_health() -> dict:
+    started = time.perf_counter()
+    url = _pyfeat_base_url() + "/health"
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.get(url)
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+        body = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
+        return {
+            "ok": response.is_success,
+            "url": url,
+            "status_code": response.status_code,
+            "elapsed_ms": elapsed_ms,
+            "body": body,
+        }
+    except Exception as exc:
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+        return {
+            "ok": False,
+            "url": url,
+            "elapsed_ms": elapsed_ms,
+            "error": str(exc),
+        }
+
+
 def _push_debug(event: dict) -> dict:
     payload = {
         "ts": time.strftime("%H:%M:%S", time.localtime()),
@@ -161,6 +186,11 @@ async def admin_page():
         "Pragma": "no-cache",
         "Expires": "0",
     })
+
+
+@app.get("/api/model-health")
+async def model_health():
+    return await _pyfeat_health()
 
 
 # ── Participant API ────────────────────────────────────────────────
@@ -423,7 +453,7 @@ async def complete_session(
 
 
 async def _detect_frame(participant_id: str, image_base64: str) -> AUFrame:
-    return expression_engine.process_frame(image_base64, participant_id)
+    return await asyncio.to_thread(expression_engine.process_frame, image_base64, participant_id)
 
 async def _run_posthoc_evaluation(session_id: int, final_email: str):
     """Background task: run full hybrid evaluator and store results."""
@@ -979,27 +1009,7 @@ async def admin_debug_mode(enabled: bool = Form(...)):
 
 @app.get("/api/admin/debug-health")
 async def admin_debug_health():
-    started = time.perf_counter()
-    url = _pyfeat_base_url() + "/health"
-    try:
-        async with httpx.AsyncClient(timeout=PYFEAT_API_TIMEOUT) as client:
-            response = await client.get(url)
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-        return {
-            "ok": response.is_success,
-            "url": url,
-            "status_code": response.status_code,
-            "elapsed_ms": elapsed_ms,
-            "body": response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text,
-        }
-    except Exception as exc:
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-        return {
-            "ok": False,
-            "url": url,
-            "elapsed_ms": elapsed_ms,
-            "error": str(exc),
-        }
+    return await _pyfeat_health()
 
 
 @app.post("/api/admin/debug-detect")
@@ -1105,7 +1115,11 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     # During baseline recording — buffer server-side
                     frame_b64 = msg.get("frame", "")
                     started = time.perf_counter()
-                    vector = expression_engine.collect_baseline_frames(frame_b64, participant_id)
+                    vector = await asyncio.to_thread(
+                        expression_engine.collect_baseline_frames,
+                        frame_b64,
+                        participant_id,
+                    )
                     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
                     if vector is not None:
                         baseline_count += 1

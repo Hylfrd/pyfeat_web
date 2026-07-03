@@ -823,6 +823,16 @@ function scheduleReconnect(){
 }
 
 // ── Webcam ──
+async function checkModelReady(){
+  try{
+    const r=await fetch('/api/model-health',{cache:'no-store'});
+    const d=await r.json();
+    if(d.ok)return true;
+  }catch(e){}
+  toast('模型未启动，请联系管理员。',0);
+  return false;
+}
+
 async function startWebcam(){
   const stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,frameRate:15},audio:false});
   webcamStream=stream;
@@ -949,7 +959,7 @@ async function resumeProgress(saved){
     try{await startWebcam();}catch(err){cameraReady=false;toast('无法访问摄像头。请允许摄像头权限并确保没有其他程序占用摄像头。',6000);}
   }
   if(currentStage==='baseline-view'&&cameraReady){
-    startBaseline();
+    await startBaseline();
     writeProgress();
     return;
   }
@@ -1009,7 +1019,8 @@ let baselineSentCount = 0;
 let baselineAckedCount = 0;
 let baselineDone = false;
 let baselineSendComplete = false;
-function startBaseline(){
+async function startBaseline(){
+  if(!await checkModelReady())return;
   setStage('baseline-view');
   baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false;
   baselineInterval=setInterval(()=>{
@@ -1029,7 +1040,7 @@ function startBaseline(){
 async function finishBaseline(){
   if(baselineAckedCount<10){
     baselineDone=false;
-    startBaseline();
+    await startBaseline();
     return;
   }
   clearInterval(baselineInterval);
@@ -1043,7 +1054,7 @@ async function finishBaseline(){
     $('baseline-count').textContent='0';
     toast('未采集到有效面部基线，请确认摄像头开启并正对屏幕。',5000);
     setFaceLost();
-    startBaseline();
+    await startBaseline();
     return;
   }
   startTask();
@@ -1374,7 +1385,7 @@ document.getElementById('pre-survey-form').addEventListener('submit', async e =>
     toast('Failed to save pre-survey: ' + err.message, 5000);
     return;
   }
-  startBaseline();
+  await startBaseline();
 });
 
 // ── Post-Survey Submit ──
@@ -1419,6 +1430,7 @@ document.getElementById('post-survey-form').addEventListener('submit', async e =
 $('setup-form').addEventListener('submit',async e=>{
   e.preventDefault();
   language=$('lang').value;
+  if(!await checkModelReady())return;
   try {
     const f=new FormData();
     f.append('language',language);
