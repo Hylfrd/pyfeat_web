@@ -39,7 +39,7 @@ WRITING_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 WRITING_BASE_URL = "https://api.deepseek.com"
 EVALUATOR_MODEL = "kimi-k2.6"
 EVALUATOR_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
-EVALUATOR_BASE_URL = "https://api.moonshot.ai/v1"
+EVALUATOR_BASE_URL = "https://api.moonshot.cn/v1"
 
 
 # ── Base system prompt (shared by both conditions) ─────────────────
