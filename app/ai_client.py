@@ -224,6 +224,7 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
                 json={
                     "model": self.model,
                     "messages": messages,
+                    "thinking": {"type": "disabled"},
                     "response_format": {"type": "json_object"},
                 },
             )
