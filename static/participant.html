@@ -626,6 +626,51 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
 const $ = id => document.getElementById(id);
 const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','break-view','complete-view'];
 function showView(id){views.forEach(v=>$(v).classList.add('hidden'));$(id).classList.remove('hidden')}
+function setStage(id){currentStage=id;showView(id);writeProgress()}
+const STORAGE_KEY='hmcl-helper-progress-v1';
+let currentStage='setup-view';
+let chatTranscript=[];
+
+function readProgress(){
+  try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){return null}
+}
+function writeProgress(extra={}){
+  if(!participantId)return;
+  const state={
+    participantId,orderGroup,language,currentSessionId,currentCondition,currentScenario,
+    isTask1,currentStage,turnCounter,revisionCounter,taskStartTime,
+    draftText:$('draft-text')?.textContent||'',chatTranscript,
+    forms:collectFormValues(),updatedAt:Date.now(),...extra
+  };
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+}
+function clearProgress(){localStorage.removeItem(STORAGE_KEY)}
+function collectFormValues(){
+  const values={};
+  document.querySelectorAll('input,select,textarea').forEach(el=>{
+    if(!el.name&&!el.id)return;
+    const key=el.name||el.id;
+    if(el.type==='radio'){
+      if(el.checked)values[key]=el.value;
+    }else if(el.type==='checkbox'){
+      values[key]=el.checked;
+    }else{
+      values[key]=el.value;
+    }
+  });
+  return values;
+}
+function restoreFormValues(values={}){
+  document.querySelectorAll('input,select,textarea').forEach(el=>{
+    const key=el.name||el.id;
+    if(!(key in values))return;
+    if(el.type==='radio')el.checked=el.value===values[key];
+    else if(el.type==='checkbox')el.checked=!!values[key];
+    else el.value=values[key];
+  });
+}
+document.addEventListener('input',()=>writeProgress());
+document.addEventListener('change',()=>writeProgress());
 
 function appendDebugLog(event){
   const panel=$('debug-panel');
@@ -793,6 +838,65 @@ function resumeTaskCapture(){
   startRecordingCapture();
   startExpressionCapture();
 }
+function renderRestoredChat(){
+  if(!chatTranscript.length)return;
+  $('chat-area').innerHTML='';
+  for(const msg of chatTranscript)appendChat(msg.role,msg.text,false);
+}
+async function resumeProgress(saved){
+  participantId=saved.participantId;
+  orderGroup=saved.orderGroup;
+  language=saved.language||'zh';
+  currentSessionId=saved.currentSessionId;
+  currentCondition=saved.currentCondition;
+  currentScenario=saved.currentScenario;
+  isTask1=saved.isTask1!==false;
+  currentStage=saved.currentStage||'setup-view';
+  turnCounter=saved.turnCounter||0;
+  revisionCounter=saved.revisionCounter||0;
+  taskStartTime=saved.taskStartTime||Date.now();
+  chatTranscript=Array.isArray(saved.chatTranscript)?saved.chatTranscript:[];
+  restoreFormValues(saved.forms||{});
+  try{
+    await connectWS();
+    if(currentSessionId)ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
+    if(['pre-survey-view','baseline-view','task-view'].includes(currentStage))await startWebcam();
+  }catch(err){
+    toast('恢复失败，请刷新页面或重新开始。',0);
+    console.error('Resume failed:',err);
+    return;
+  }
+  if(currentStage==='baseline-view'){
+    startBaseline();
+    writeProgress();
+    return;
+  }
+  showView(currentStage);
+  if(currentStage==='task-view'){
+    $('draft-text').textContent=saved.draftText||'';
+    if(saved.draftText)$('draft-panel').classList.remove('hidden');
+    renderRestoredChat();
+    $('turn-num').textContent=turnCounter;
+    $('rev-num').textContent=revisionCounter;
+    startExpressionCapture();
+    timerInterval=setInterval(updateTimer,1000);
+  }
+  writeProgress();
+}
+function initProgressRecovery(){
+  const saved=readProgress();
+  if(!saved||!saved.participantId)return;
+  if(saved.completed){
+    if(confirm('检测到这个浏览器已经完成过实验。是否重新开始？'))clearProgress();
+    else showView('complete-view');
+    return;
+  }
+  if(confirm('检测到未完成的实验进度。是否继续上次实验？')){
+    resumeProgress(saved);
+  }else{
+    clearProgress();
+  }
+}
 function webcamLive(){
   const stream=$('webcam').srcObject||webcamStream;
   const track=stream&&stream.getVideoTracks&&stream.getVideoTracks()[0];
@@ -823,7 +927,7 @@ let baselineAckedCount = 0;
 let baselineDone = false;
 let baselineSendComplete = false;
 function startBaseline(){
-  showView('baseline-view');
+  setStage('baseline-view');
   baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false;
   baselineInterval=setInterval(()=>{
     if(baselineDone) return;
@@ -881,6 +985,7 @@ async function startTask(){
     }
     currentSessionId=d.session_id;currentCondition=d.condition;currentScenario=d.scenario;
   }
+  if(!webcamLive())await startWebcam();
   ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
 
   // Update UI
@@ -892,12 +997,14 @@ async function startTask(){
     ?'<strong>情境 A</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。'
     :'<strong>情境 B</strong><br>小组项目中一名组员始终没有回应，你独自承担了全部工作量。请与 AI 协作写一封邮件向教授请求帮助。';
 
-  showView('task-view');
+  setStage('task-view');
   turnCounter=0;revisionCounter=0;taskStartTime=Date.now();
+  chatTranscript=[];
   $('turn-num').textContent='0';$('rev-num').textContent='0';
   $('chat-area').innerHTML='<div class="empty-state"><div class="ai-avatar">AI</div><p>你好！我是你的 AI 写作助手。</p><p style="font-size:.85em;margin-top:4px">今天我可以如何帮助你撰写邮件？</p></div>';
   $('draft-panel').classList.add('hidden');$('draft-text').textContent='';
   $('user-input').value='';$('timer').classList.remove('warn');
+  writeProgress();
 
   timerInterval=setInterval(updateTimer,1000);
   expressionInterval=setInterval(()=>{
@@ -913,7 +1020,7 @@ function updateTimer(){
   if(remaining<=0){clearInterval(timerInterval);submitEmail(true);}
 }
 
-function appendChat(role,text){
+function appendChat(role,text,record=true){
   const area=$('chat-area');
   if(area.querySelector('.empty-state'))area.innerHTML='';
   const wrap=document.createElement('div');wrap.className='msg-wrap '+role;
@@ -928,6 +1035,10 @@ function appendChat(role,text){
   `;
   area.appendChild(wrap);
   area.scrollTop=area.scrollHeight;
+  if(record){
+    chatTranscript.push({role,text});
+    writeProgress();
+  }
 }
 
 function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -948,6 +1059,7 @@ function extractDraft(aiText){
     $('draft-panel').classList.remove('hidden');
     revisionCounter++;
     $('rev-num').textContent=revisionCounter;
+    writeProgress();
   }
 }
 
@@ -1117,7 +1229,7 @@ async function doFinalSubmit(isTimeout){
   f.append('total_frames',Math.floor((Date.now()-taskStartTime)/500));
   f.append('unreliable_frames',0);
   await fetch('/api/session/complete',{method:'POST',body:f});
-  showView('questionnaire-view');
+  setStage('questionnaire-view');
 }
 
 // ── Questionnaire ──
@@ -1130,11 +1242,11 @@ $('q-form').addEventListener('submit',async e=>{
     f.append(`q${i}`,v);
   }
   await fetch('/api/questionnaire',{method:'POST',body:f});
-  if(isTask1){showView('post-survey-view')}else{showView('complete-view')}
+  if(isTask1){setStage('post-survey-view')}else{setStage('complete-view');writeProgress({completed:true})}
 });
 
 // ── Task 2 ──
-$('start-task2').addEventListener('click',()=>{isTask1=false;startTask()});
+$('start-task2').addEventListener('click',()=>{isTask1=false;writeProgress();startTask()});
 
 // ── Debrief ──
 $('debrief-submit').addEventListener('click',async()=>{
@@ -1144,6 +1256,7 @@ $('debrief-submit').addEventListener('click',async()=>{
   f.append('comments',$('debrief-comments').value);
   await fetch('/api/debrief',{method:'POST',body:f});
   $('debrief-submit').classList.add('hidden');$('debrief-done').classList.remove('hidden');
+  writeProgress({completed:true});
 });
 
 
@@ -1220,7 +1333,7 @@ document.getElementById('post-survey-form').addEventListener('submit', async e =
     toast('Failed to save post-survey: ' + err.message, 5000);
     return;
   }
-  if (isTask1) { showView('break-view'); } else { showView('complete-view'); }
+  if (isTask1) { setStage('break-view'); } else { setStage('complete-view');writeProgress({completed:true}); }
 });
 
 // ── Setup ──
@@ -1238,6 +1351,8 @@ $('setup-form').addEventListener('submit',async e=>{
     currentSessionId=d.session_id;
     currentCondition=d.condition;
     currentScenario=d.scenario;
+    currentStage='pre-survey-view';
+    writeProgress();
   } catch(err) {
     toast('无法创建实验会话，请刷新页面重试。', 0);
     console.error('Session start failed:', err);
@@ -1257,9 +1372,10 @@ $('setup-form').addEventListener('submit',async e=>{
     console.error('Webcam failed:', err);
     return;
   }
-  showView('pre-survey-view');
+  setStage('pre-survey-view');
 });
 
+initProgressRecovery();
 
 </script>
 </body>
