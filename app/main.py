@@ -290,12 +290,24 @@ async def evaluate_draft(draft_text: str = Form(...)):
 
     # Layer 2: LLM heuristic (async, with 30s timeout)
     llm_flags = []
-    if eval_ai_client and draft_text.strip():
+    if not eval_ai_client:
+        _push_debug({
+            "kind": "eval",
+            "api_response": {
+                "ok": False,
+                "error": "eval_client_disabled",
+                "model": EVALUATOR_MODEL,
+            },
+            "message": "draft evaluation skipped: no evaluator client",
+        })
+    elif draft_text.strip():
+        eval_started = time.perf_counter()
         try:
             llm_result = await asyncio.wait_for(
                 llm_heuristic_single(eval_ai_client, draft_text),
                 timeout=30.0,
             )
+            eval_elapsed_ms = round((time.perf_counter() - eval_started) * 1000, 1)
             FLAG_LABELS = {
                 "emotional_flatline": ("情感平淡",   "危机描述缺乏情感紧迫感，读起来像在描述天气。"),
                 "hollow_empathy":     ("空洞共情",   "表达了理解但没有具体行动，共情没有落到实处。"),
@@ -310,7 +322,33 @@ async def evaluate_draft(draft_text: str = Form(...)):
                     "flagged": flagged,
                     "note": note,
                 })
-        except (asyncio.TimeoutError, Exception):
+            _push_debug({
+                "kind": "eval",
+                "elapsed_ms": eval_elapsed_ms,
+                "api_response": {
+                    "ok": True,
+                    "model": eval_ai_client.model,
+                    "base_url": eval_ai_client.base_url,
+                    "draft_chars": len(draft_text),
+                    "flag_count": len(llm_flags),
+                    "flagged": [f["key"] for f in llm_flags if f["flagged"]],
+                },
+                "message": f"draft evaluation LLM: {eval_elapsed_ms} ms",
+            })
+        except (asyncio.TimeoutError, Exception) as eval_err:
+            eval_elapsed_ms = round((time.perf_counter() - eval_started) * 1000, 1)
+            api_response = _api_error_payload(eval_err)
+            api_response.update({
+                "model": eval_ai_client.model,
+                "base_url": eval_ai_client.base_url,
+                "draft_chars": len(draft_text),
+            })
+            _push_debug({
+                "kind": "eval",
+                "elapsed_ms": eval_elapsed_ms,
+                "api_response": api_response,
+                "message": f"draft evaluation LLM error: {type(eval_err).__name__}",
+            })
             llm_flags = []  # graceful degradation
 
     # Composite score
