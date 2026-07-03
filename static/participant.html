@@ -647,6 +647,7 @@ let turnCounter = 0, revisionCounter = 0, taskStartTime = 0;
 let timerInterval, expressionInterval, baselineInterval;
 let mediaRecorder, webcamStream, chunkIndex = 0;
 let isTask1 = true;
+let isAiWaiting = false;
 
 // ── Toast ──
 function toast(msg, duration=3000){
@@ -679,6 +680,8 @@ function connectWS(){
     };
     ws.onclose = (e) => {
       console.log('[WS] Closed:', e.code, e.reason);
+      isAiWaiting=false;
+      removeThinking();
     };
     ws.onmessage = e => {
       const msg = JSON.parse(e.data);
@@ -692,6 +695,7 @@ function connectWS(){
         }
       }
       if(msg.type==='ai_response'){
+        isAiWaiting=false;
         removeThinking();
         appendChat('ai',msg.text);
         $('turn-num').textContent=msg.turn;
@@ -701,7 +705,7 @@ function connectWS(){
         extractDraft(msg.text);
       }
       if(msg.type==='ai_wait'){
-        updateThinking(msg.elapsed_ms);
+        updateThinking();
       }
       if(msg.type==='prompt'){
         toast(msg.message,4000);
@@ -863,7 +867,7 @@ async function startTask(){
 
   timerInterval=setInterval(updateTimer,1000);
   expressionInterval=setInterval(()=>{
-    if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'expression_frame',frame:captureFrame()}));
+    if(!isAiWaiting&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'expression_frame',frame:captureFrame()}));
   },500);
 }
 
@@ -906,17 +910,21 @@ function extractDraft(aiText){
 
 // ── Chat submit ──
 let thinkingEl = null;
+let thinkingStartedAt = 0;
+let thinkingTimer = null;
 $('chat-form').addEventListener('submit',e=>{
   e.preventDefault();
   const input=$('user-input'),text=input.value.trim();
   if(!text)return;
   appendChat('user',text);
+  isAiWaiting=true;
   showThinking();
   ws.send(JSON.stringify({type:'chat',text,condition:currentCondition,language}));
   input.value='';input.disabled=true;$('submit-email').disabled=true;
 });
 function showThinking(){
   removeThinking();
+  thinkingStartedAt=Date.now();
   const area=$('chat-area');
   if(area.querySelector('.empty-state'))area.innerHTML='';
   const wrap=document.createElement('div');wrap.className='msg-wrap ai';wrap.id='thinking-msg';
@@ -930,16 +938,19 @@ function showThinking(){
   area.appendChild(wrap);
   area.scrollTop=area.scrollHeight;
   thinkingEl=wrap;
+  updateThinking();
+  thinkingTimer=setInterval(updateThinking,1000);
 }
-function updateThinking(elapsedMs){
+function updateThinking(){
   if(!thinkingEl)showThinking();
   const label=thinkingEl&&(thinkingEl.querySelector('.thinking-label')||thinkingEl.querySelector('.bubble div:last-child'));
   if(label){
-    const seconds=Math.max(1,Math.round((elapsedMs||0)/1000));
+    const seconds=Math.max(0,Math.floor((Date.now()-thinkingStartedAt)/1000));
     label.textContent=`思考中... ${seconds}s`;
   }
 }
 function removeThinking(){
+  if(thinkingTimer){clearInterval(thinkingTimer);thinkingTimer=null}
   if(thinkingEl){thinkingEl.remove();thinkingEl=null}
   $('user-input').disabled=false;$('submit-email').disabled=false;
 }
