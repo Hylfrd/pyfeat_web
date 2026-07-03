@@ -880,16 +880,15 @@ async function resumeProgress(saved){
   taskStartTime=saved.taskStartTime||Date.now();
   chatTranscript=Array.isArray(saved.chatTranscript)?saved.chatTranscript:[];
   restoreFormValues(saved.forms||{});
-  try{
-    await connectWS();
-    if(currentSessionId)ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
-    if(['pre-survey-view','baseline-view','task-view'].includes(currentStage))await startWebcam();
-  }catch(err){
-    toast('恢复失败，请刷新页面或重新开始。',0);
-    console.error('Resume failed:',err);
-    return;
+  connectWS().catch(err=>{
+    console.error('Resume websocket failed:',err);
+    scheduleReconnect();
+  });
+  let cameraReady=true;
+  if(['pre-survey-view','baseline-view','task-view'].includes(currentStage)){
+    try{await startWebcam();}catch(err){cameraReady=false;toast('无法访问摄像头。请允许摄像头权限并确保没有其他程序占用摄像头。',6000);}
   }
-  if(currentStage==='baseline-view'){
+  if(currentStage==='baseline-view'&&cameraReady){
     startBaseline();
     writeProgress();
     return;
