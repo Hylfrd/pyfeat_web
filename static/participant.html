@@ -694,6 +694,8 @@ let timerInterval, expressionInterval, baselineInterval;
 let mediaRecorder, webcamStream, chunkIndex = 0;
 let isTask1 = true;
 let isAiWaiting = false;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
 
 // ── Toast ──
 function toast(msg, duration=3000){
@@ -715,10 +717,14 @@ document.querySelectorAll('.likert-line').forEach(row=>{
 // ── WebSocket ──
 function connectWS(){
   return new Promise((resolve, reject) => {
+    if(ws&&ws.readyState===WebSocket.OPEN){resolve();return;}
     const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${wsProtocol}//${location.host}/ws/${participantId}`);
     ws.onopen = () => {
       console.log('[WS] Connected');
+      reconnectAttempts=0;
+      if(currentSessionId)ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
+      if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
       resolve();
     };
     ws.onerror = (err) => {
@@ -729,7 +735,7 @@ function connectWS(){
       console.log('[WS] Closed:', e.code, e.reason);
       isAiWaiting=false;
       removeThinking();
-      if(e.code!==1000)toast('连接中断，请刷新页面重试。',0);
+      if(e.code!==1000)scheduleReconnect();
     };
     ws.onmessage = e => {
       const msg = JSON.parse(e.data);
@@ -776,10 +782,27 @@ function connectWS(){
     // Timeout after 5 seconds
     setTimeout(() => {
       if(ws.readyState !== WebSocket.OPEN) {
+        try{ws.close();}catch(e){}
         reject(new Error('WebSocket connection timeout'));
       }
-    }, 5000);
+    }, 15000);
   });
+}
+
+function scheduleReconnect(){
+  if(!participantId||reconnectTimer)return;
+  reconnectAttempts++;
+  toast('连接中断，正在自动重连...',4000);
+  const delay=Math.min(30000,1000*Math.pow(2,Math.min(reconnectAttempts,5)));
+  reconnectTimer=setTimeout(async()=>{
+    reconnectTimer=null;
+    try{
+      await connectWS();
+      toast('连接已恢复。',2000);
+    }catch(e){
+      scheduleReconnect();
+    }
+  },delay);
 }
 
 // ── Webcam ──
