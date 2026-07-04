@@ -697,11 +697,17 @@ let lastCaptureNoticeAt = 0;
 let captureState = '';
 
 // ── Toast ──
-function toast(msg, duration=3000){
+function toast(msg, duration=3000, kind=''){
   const el = document.createElement('div');el.className='toast';el.textContent=msg;
+  if(kind)el.dataset.kind=kind;
   if(duration<=0)el.classList.add('sticky');
   $('toast-container').appendChild(el);
   if(duration>0)setTimeout(()=>el.remove(),duration);
+  return el;
+}
+function clearToasts(kind){
+  const selector=kind?`.toast[data-kind="${kind}"]`:'.toast';
+  document.querySelectorAll(selector).forEach(el=>el.remove());
 }
 
 // ── Build Likert ──
@@ -723,6 +729,7 @@ function connectWS(){
     ws.onopen = () => {
       console.log('[WS] Connected');
       reconnectAttempts=0;
+      clearToasts('connection');
       if(currentSessionId)ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
       if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
       settled=true;
@@ -805,13 +812,14 @@ function connectWS(){
 function scheduleReconnect(){
   if(!participantId||reconnectTimer)return;
   reconnectAttempts++;
-  toast('连接中断，正在自动重连...',4000);
+  toast('连接中断，正在自动重连...',4000,'connection');
   const delay=Math.min(30000,1000*Math.pow(2,Math.min(reconnectAttempts,5)));
   reconnectTimer=setTimeout(async()=>{
     reconnectTimer=null;
     try{
       await connectWS();
-      toast('连接已恢复。',2000);
+      clearToasts('connection');
+      toast('连接已恢复。',2000,'connection');
     }catch(e){
       scheduleReconnect();
     }
@@ -1113,7 +1121,7 @@ async function startBaseline(){
   try{
     await connectWS();
   }catch(err){
-    toast('无法连接到服务器，请刷新页面重试。', 0);
+    toast('无法连接到服务器，请刷新页面重试。', 0, 'connection');
     console.error('Baseline websocket failed:', err);
     return;
   }
@@ -1249,7 +1257,7 @@ $('chat-form').addEventListener('submit',e=>{
   const input=$('user-input'),text=input.value.trim();
   if(!text)return;
   if(!ws||ws.readyState!==WebSocket.OPEN){
-    toast('连接正在恢复，请稍后再发送。',3000);
+    toast('连接正在恢复，请稍后再发送。',3000,'connection');
     scheduleReconnect();
     return;
   }
@@ -1563,7 +1571,7 @@ $('setup-form').addEventListener('submit',async e=>{
   try {
     await connectWS();
   } catch(err) {
-    toast('无法连接到服务器，请刷新页面重试。', 0);
+    toast('无法连接到服务器，请刷新页面重试。', 0, 'connection');
     console.error('WS connect failed:', err);
     return;
   }
