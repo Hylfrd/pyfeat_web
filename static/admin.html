@@ -230,7 +230,6 @@ button.danger:hover{background:#dc2626;color:#fff}
   color:#c4b5fd;text-decoration:none;font-weight:700;font-size:.78em;line-height:1.4;
 }
 .debug-json-link:hover{border-color:#6366f1;background:#1e293b}
-.debug-json-note{color:#64748b;font-size:.76em}
 .debug-expand{border:0;background:transparent;color:#818cf8;padding:0;font-weight:700;cursor:pointer}
 .debug-detail-row td{background:#0b1220;padding:0 16px 16px}
 .debug-detail-body{border-top:1px solid #334155;padding-top:12px}
@@ -799,9 +798,8 @@ function renderDebugDetail(e){
       &#31867;&#22411;: ${escHtml(e.kind||'-')} · &#21442;&#19982;&#32773;: ${escHtml(e.participant_id||'-')} · Session: ${escHtml(e.session_id??'-')} · ${escHtml(e.message||'')}
     </div>
     <div class="debug-json-actions">
-      ${hasApi?`<a class="debug-json-link" href="${escAttr(apiUrl)}" target="_blank" rel="noopener noreferrer">&#26597;&#30475; PyFeat JSON</a>`:'<span class="debug-json-note">&#27809;&#26377; PyFeat JSON</span>'}
+      ${hasApi?`<a class="debug-json-link" href="${escAttr(apiUrl)}" target="_blank" rel="noopener noreferrer">&#26597;&#30475; PyFeat JSON</a>`:''}
       <a class="debug-json-link" href="${escAttr(eventUrl)}" target="_blank" rel="noopener noreferrer">&#26597;&#30475;&#23436;&#25972;&#26085;&#24535;&#20107;&#20214;</a>
-      <span class="debug-json-note">PyFeat JSON &#26159;&#27169;&#22411;/API &#36820;&#22238;&#65307;&#23436;&#25972;&#26085;&#24535;&#20107;&#20214;&#36824;&#21253;&#21547;&#21442;&#19982;&#32773;&#12289;Session&#12289;&#32791;&#26102;&#12289;&#22270;&#29255;&#36335;&#24452;&#21644;&#26085;&#24535;&#28040;&#24687;&#12290;</span>
     </div>`;
 }
 
