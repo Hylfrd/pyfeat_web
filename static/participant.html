@@ -191,9 +191,11 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
 }
 #face-status.found{background:#ecfdf5;color:#059669;border:1px solid #a7f3d0}
 #face-status.lost{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+#face-status.paused{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
 #face-status .face-dot{width:8px;height:8px;border-radius:50%}
 #face-status.found .face-dot{background:#22c55e;animation:pulse 2s infinite}
 #face-status.lost .face-dot{background:#ef4444}
+#face-status.paused .face-dot{background:#f59e0b}
 
 /* ── Likert (dot-on-line style) ── */
 .likert-row{border-bottom:1px solid #f1f5f9;padding:20px 16px}
@@ -684,11 +686,14 @@ function appendDebugLog(event){
 let ws, participantId, orderGroup, language;
 let currentSessionId, currentCondition, currentScenario;
 let turnCounter = 0, revisionCounter = 0, taskStartTime = 0;
-let timerInterval, expressionInterval, baselineInterval;
+let timerInterval, expressionInterval, expressionWatchdogInterval, baselineInterval;
 let mediaRecorder, webcamStream, chunkIndex = 0;
 let isAiWaiting = false;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
+let lastExpressionSentAt = 0;
+let lastCaptureNoticeAt = 0;
+let captureState = '';
 
 // ── Toast ──
 function toast(msg, duration=3000){
@@ -731,6 +736,7 @@ function connectWS(){
     };
     ws.onclose = (e) => {
       console.log('[WS] Closed:', e.code, e.reason);
+      if(currentStage==='task-view')setCapturePaused('连接恢复中',true);
       if(isAiWaiting){
         updateThinking('连接中断，正在恢复...');
       }
@@ -767,14 +773,13 @@ function connectWS(){
         toast(msg.message,4000);
       }
       if(msg.type==='face_status'){
-        const el=$('face-status');
-        const txt=$('face-status-text');
+        captureState='';
         if(msg.face_detected&&msg.reliable){
-          el.className='found';txt.textContent='面部已检测';
+          setFaceStatus('found','面部已检测');
         }else if(msg.face_detected){
-          el.className='lost';txt.textContent='头部角度不佳';
+          setFaceStatus('lost','头部角度不佳');
         }else{
-          el.className='lost';txt.textContent='未检测到面部';
+          setFaceStatus('lost','未检测到面部');
         }
       }
       if(msg.type==='debug_log'){
@@ -861,11 +866,31 @@ function startRecordingCapture(){
 function startExpressionCapture(){
   clearInterval(expressionInterval);
   expressionInterval=setInterval(()=>{
-    if(!isAiWaiting&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'expression_frame',frame:captureFrame()}));
+    if(currentStage!=='task-view')return;
+    if(isAiWaiting){
+      setCapturePaused('AI 回复中，采集暂停');
+      return;
+    }
+    if(!ws||ws.readyState!==WebSocket.OPEN){
+      setCapturePaused('连接恢复中',true);
+      scheduleReconnect();
+      return;
+    }
+    const frame=captureFrame();
+    if(!frame){
+      setCapturePaused('摄像头中断',true);
+      return;
+    }
+    ws.send(JSON.stringify({type:'expression_frame',frame}));
+    lastExpressionSentAt=Date.now();
   },500);
+  startExpressionWatchdog();
 }
 function pauseTaskCapture(){
   clearInterval(expressionInterval);
+  clearInterval(expressionWatchdogInterval);
+  expressionInterval=null;
+  expressionWatchdogInterval=null;
   if(mediaRecorder&&mediaRecorder.state!=='inactive'){
     mediaRecorder.ondataavailable=null;
     mediaRecorder.stop();
@@ -960,6 +985,8 @@ async function resumeProgress(saved){
     renderRestoredChat();
     $('turn-num').textContent=turnCounter;
     $('rev-num').textContent=revisionCounter;
+    lastExpressionSentAt=Date.now();
+    captureState='';
     startExpressionCapture();
     timerInterval=setInterval(updateTimer,1000);
   }
@@ -985,10 +1012,46 @@ function webcamLive(){
   const v=$('webcam');
   return !!(track&&track.readyState==='live'&&track.enabled&&!track.muted&&v.readyState>=2&&v.videoWidth&&v.videoHeight);
 }
-function setFaceLost(){
+function setFaceStatus(kind,text){
   const el=$('face-status');
   const txt=$('face-status-text');
-  if(el&&txt){el.className='lost';txt.textContent='未检测到面部'}
+  if(el&&txt){el.className=kind;txt.textContent=text}
+}
+function setFaceLost(){
+  setFaceStatus('lost','未检测到面部');
+}
+function setCapturePaused(reason, notify=false){
+  if(captureState!==reason){
+    captureState=reason;
+    setFaceStatus('paused',reason);
+  }
+  if(notify&&Date.now()-lastCaptureNoticeAt>8000){
+    lastCaptureNoticeAt=Date.now();
+    toast(reason,2500);
+  }
+}
+function startExpressionWatchdog(){
+  clearInterval(expressionWatchdogInterval);
+  expressionWatchdogInterval=setInterval(()=>{
+    if(currentStage!=='task-view')return;
+    if(!webcamLive()){
+      setCapturePaused('摄像头中断',true);
+      return;
+    }
+    if(!ws||ws.readyState!==WebSocket.OPEN){
+      setCapturePaused('连接恢复中',true);
+      scheduleReconnect();
+      return;
+    }
+    if(isAiWaiting){
+      setCapturePaused('AI 回复中，采集暂停');
+      return;
+    }
+    if(!expressionInterval||Date.now()-lastExpressionSentAt>3000){
+      setCapturePaused('采集恢复中',true);
+      startExpressionCapture();
+    }
+  },2000);
 }
 function captureFrame(){
   if(!webcamLive()){
@@ -1074,6 +1137,8 @@ async function startTask(){
 
   setStage('task-view');
   turnCounter=0;revisionCounter=0;taskStartTime=Date.now();
+  lastExpressionSentAt=Date.now();
+  captureState='';
   chatTranscript=[];
   $('turn-num').textContent='0';$('rev-num').textContent='0';
   $('chat-area').innerHTML='<div class="empty-state"><div class="ai-avatar">AI</div><p>你好！我是你的 AI 写作助手。</p><p style="font-size:.85em;margin-top:4px">今天我可以如何帮助你撰写邮件？</p></div>';
@@ -1082,9 +1147,7 @@ async function startTask(){
   writeProgress();
 
   timerInterval=setInterval(updateTimer,1000);
-  expressionInterval=setInterval(()=>{
-    if(!isAiWaiting&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'expression_frame',frame:captureFrame()}));
-  },500);
+  startExpressionCapture();
 }
 
 function updateTimer(){
