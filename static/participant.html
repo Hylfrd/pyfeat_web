@@ -1297,20 +1297,30 @@ function removeThinking(){
 $('submit-email').addEventListener('click',()=>submitEmail(false));
 
 let evalResult = null;  // cache last evaluation result
+let evalInFlight = false;
+let finalSubmitting = false;
 
 async function submitEmail(isTimeout){
+  if(evalInFlight||finalSubmitting)return;
   const draftText=$('draft-text').textContent||'';
   if(!draftText&&!isTimeout){toast('还没有生成草稿。请先与 AI 对话生成一封草稿。');return;}
   if(!isTimeout){
     // Show loading in button
     const btn=$('submit-email');
     const origText=btn.textContent;
+    evalInFlight=true;
     btn.textContent='正在评估...';btn.disabled=true;
     pauseTaskCapture();
     try {
       const ef=new FormData();ef.append('draft_text',draftText);
       evalResult=await(await fetch('/api/evaluate-draft',{method:'POST',body:ef})).json();
-    } catch(e) { toast('评估失败，请重试。');btn.textContent=origText;btn.disabled=false;resumeTaskCapture();return; }
+    } catch(e) {
+      toast('评估失败，请重试。');
+      btn.textContent=origText;btn.disabled=false;evalInFlight=false;
+      resumeTaskCapture();
+      return;
+    }
+    evalInFlight=false;
     btn.textContent=origText;btn.disabled=false;
     showEvalModal(evalResult, isTimeout);
     return; // wait for user to see modal
@@ -1399,6 +1409,8 @@ function closeEvalModal(resume=false){
 }
 
 async function doFinalSubmit(isTimeout){
+  if(finalSubmitting)return;
+  finalSubmitting=true;
   clearInterval(timerInterval);clearInterval(expressionInterval);
   pauseTaskCapture();
   const draftText=$('draft-text').textContent||'';
@@ -1411,7 +1423,15 @@ async function doFinalSubmit(isTimeout){
   f.append('total_revisions',revisionCounter);
   f.append('total_frames',Math.floor((Date.now()-taskStartTime)/500));
   f.append('unreliable_frames',0);
-  await fetch('/api/session/complete',{method:'POST',body:f});
+  try{
+    const r=await fetch('/api/session/complete',{method:'POST',body:f});
+    if(!r.ok)throw new Error(`complete failed: ${r.status}`);
+  }catch(e){
+    finalSubmitting=false;
+    resumeTaskCapture();
+    toast('提交失败，请重试。',4000);
+    return;
+  }
   setStage('questionnaire-view');
 }
 
