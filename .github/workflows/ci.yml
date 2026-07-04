@@ -25,6 +25,21 @@ jobs:
       - name: Check Python
         run: python -m compileall app
 
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          blocked="$(find . -maxdepth 1 -type f \( \
+            -iname 'clear_*participants*.ps1' -o \
+            -iname 'clear_*demo*.ps1' -o \
+            -iname 'cleanup_*participants*.ps1' -o \
+            -iname 'cleanup_*demo*.ps1' \
+          \) -print)"
+          if [ -n "$blocked" ]; then
+            echo "Do not commit one-off data maintenance scripts:"
+            echo "$blocked"
+            exit 1
+          fi
+
       - name: Deploy files to server
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: appleboy/scp-action@v1

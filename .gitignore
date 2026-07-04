@@ -44,3 +44,9 @@ Thumbs.db
 
 # Local handoff notes
 docs/background.md
+
+# Local one-off maintenance scripts
+clear_*participants*.ps1
+clear_*demo*.ps1
+cleanup_*participants*.ps1
+cleanup_*demo*.ps1
