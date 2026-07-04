@@ -32,7 +32,12 @@ jobs:
             -iname 'clear_*participants*.ps1' -o \
             -iname 'clear_*demo*.ps1' -o \
             -iname 'cleanup_*participants*.ps1' -o \
-            -iname 'cleanup_*demo*.ps1' \
+            -iname 'cleanup_*demo*.ps1' -o \
+            -iname 'deploy_restart.ps1' -o \
+            -iname 'install_server_deps.bat' -o \
+            -iname 'install_windows_task.ps1' -o \
+            -iname 'run_server.cmd' -o \
+            -iname 'start_server.bat' \
           \) -print)"
           if [ -n "$blocked" ]; then
             echo "Do not commit one-off data maintenance scripts:"
@@ -47,7 +52,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: "app/**,static/**,requirements.txt,install_server_deps.bat,install_windows_task.ps1,deploy_restart.ps1,run_server.cmd,start_server.bat,Caddyfile.example"
+          source: "app/**,static/**,requirements.txt,deploy.ps1,Caddyfile.example"
           target: "/c/web/"
           tar_dereference: true
           overwrite: true
@@ -59,4 +64,4 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          script: powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/web/deploy_restart.ps1
+          script: powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/web/deploy.ps1
