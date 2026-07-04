@@ -49,26 +49,21 @@ function Start-AppDetached {
         throw "Python executable not found: $PythonExe"
     }
 
-    $env:PYFEAT_API_URL = $PyFeatApiUrl
-    $env:PYFEAT_API_TIMEOUT = $PyFeatApiTimeout
-
-    $args = @(
-        "-m", "uvicorn", "app.main:app",
-        "--host", "127.0.0.1",
-        "--port", "$Port",
-        "--ws-ping-interval", "20",
-        "--ws-ping-timeout", "180"
-    )
-    $process = Start-Process `
-        -FilePath $PythonExe `
-        -ArgumentList $args `
-        -WorkingDirectory $Root `
-        -RedirectStandardOutput $OutLog `
-        -RedirectStandardError $ErrLog `
-        -WindowStyle Hidden `
-        -PassThru
-    $script:StartedPid = $process.Id
-    Write-Output "Started app process PID $($process.Id)"
+    $command = @(
+        "cd /d $Root",
+        "set PYFEAT_API_URL=$PyFeatApiUrl",
+        "set PYFEAT_API_TIMEOUT=$PyFeatApiTimeout",
+        "$PythonExe -m uvicorn app.main:app --host 127.0.0.1 --port $Port --ws-ping-interval 20 --ws-ping-timeout 180 >> $OutLog 2>> $ErrLog"
+    ) -join " && "
+    $result = Invoke-CimMethod `
+        -ClassName Win32_Process `
+        -MethodName Create `
+        -Arguments @{ CommandLine = "cmd.exe /d /c `"$command`"" }
+    if ($result.ReturnValue -ne 0) {
+        throw "Failed to start app process via WMI. ReturnValue=$($result.ReturnValue)"
+    }
+    $script:StartedPid = $result.ProcessId
+    Write-Output "Started app process PID $($result.ProcessId)"
 }
 
 function Remove-LegacyScripts {
