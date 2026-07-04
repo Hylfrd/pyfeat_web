@@ -218,6 +218,19 @@ button.danger:hover{background:#dc2626;color:#fff}
   margin-top:8px;max-height:260px;overflow:auto;background:#020617;border:1px solid #334155;
   border-radius:8px;padding:10px;color:#cbd5e1;font-size:.82em;line-height:1.5;white-space:pre-wrap;
 }
+.debug-detail-summary{
+  margin-top:10px;color:#94a3b8;line-height:1.7;font-size:.8em;
+}
+.debug-json-actions{
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;
+}
+.debug-json-link{
+  display:inline-flex;align-items:center;justify-content:center;min-height:34px;
+  padding:7px 12px;border:1px solid #334155;border-radius:8px;background:#0f172a;
+  color:#c4b5fd;text-decoration:none;font-weight:700;font-size:.78em;line-height:1.4;
+}
+.debug-json-link:hover{border-color:#6366f1;background:#1e293b}
+.debug-json-note{color:#64748b;font-size:.76em}
 .debug-expand{border:0;background:transparent;color:#818cf8;padding:0;font-weight:700;cursor:pointer}
 .debug-detail-row td{background:#0b1220;padding:0 16px 16px}
 .debug-detail-body{border-top:1px solid #334155;padding-top:12px}
@@ -334,6 +347,8 @@ let debugPollTimer=null;
 let debugHealthTimer=null;
 let debugCacheTimer=null;
 let debugAutoFollow=true;
+let debugPendingReload=false;
+let debugLastFilterKey='';
 let activeTab='debug';
 let refreshTimer=null;
 const DEBUG_LIMIT=80;
@@ -623,6 +638,12 @@ function debugParams(before=null){
   return params;
 }
 
+function currentDebugFilterKey(){
+  const params=debugParams(null);
+  params.delete('before');
+  return params.toString();
+}
+
 function scheduleDebugReload(){
   clearTimeout(debugFilterTimer);
   debugFilterTimer=setTimeout(()=>reloadDebug(),350);
@@ -630,6 +651,10 @@ function scheduleDebugReload(){
 
 async function reloadDebug(){
   debugAutoFollow=false;
+  if(debugLoading){
+    debugPendingReload=true;
+    return;
+  }
   await loadDebugPage({reset:true});
 }
 
@@ -639,9 +664,18 @@ async function loadMoreDebug(){
 }
 
 async function loadDebugPage({reset=false,before=null,live=false,silent=false}={}){
-  if(debugLoading||!$('debug-rows'))return;
+  if(debugLoading||!$('debug-rows')){
+    if(reset)debugPendingReload=true;
+    return;
+  }
   debugLoading=true;
   try{
+    const filterKey=currentDebugFilterKey();
+    if(live&&filterKey!==debugLastFilterKey){
+      reset=true;
+      live=false;
+      before=null;
+    }
     const params=debugParams(reset?null:before);
     const r=await adminFetch(`/api/admin/debug?${params.toString()}`);
     const data=await r.json();
@@ -653,6 +687,7 @@ async function loadDebugPage({reset=false,before=null,live=false,silent=false}={
       debugEvents=events;
       debugDetailCache.clear();
       debugExpandedIds.clear();
+      debugLastFilterKey=filterKey;
     }else if(live){
       const incomingIds=new Set(events.map(e=>String(e.id)));
       debugEvents=events.concat(debugEvents.filter(e=>!incomingIds.has(String(e.id))));
@@ -670,6 +705,10 @@ async function loadDebugPage({reset=false,before=null,live=false,silent=false}={
     renderDebugRows();
   }finally{
     debugLoading=false;
+    if(debugPendingReload){
+      debugPendingReload=false;
+      setTimeout(()=>reloadDebug(),0);
+    }
   }
 }
 
@@ -739,9 +778,10 @@ async function loadDebugDetail(eventId){
 
 function renderDebugDetail(e){
   const kb=e.bytes?Math.round(e.bytes/1024*10)/10:'';
-  const api=e.api_response===undefined?null:e.api_response;
-  const apiJson=api===null?'No API response recorded':JSON.stringify(api,null,2);
-  const eventJson=JSON.stringify({...e,image:e.image?'[image omitted from event json]':undefined},null,2);
+  const eventId=encodeURIComponent(e.id??'');
+  const hasApi=e.api_response!==undefined;
+  const apiUrl=`/api/admin/debug-event/${eventId}/json?part=api`;
+  const eventUrl=`/api/admin/debug-event/${eventId}/json?part=event`;
   const image=e.image?`
     <div class="debug-face">
       <img src="${escAttr(e.image)}" alt="captured frame">
@@ -750,16 +790,19 @@ function renderDebugDetail(e){
           Captured frame sent to PyFeat.<br>
           Payload: ${kb||0} KB · Time: ${e.elapsed_ms??''} ms
         </div>
-        <a href="${escAttr(e.image)}" download="debug-${escAttr(e.participant_id||'unknown')}-${escAttr(e.session_id??'none')}-${escAttr(e.ts||e.id)}.jpg">下载图片</a>
+        <a href="${escAttr(e.image)}" download="debug-${escAttr(e.participant_id||'unknown')}-${escAttr(e.session_id??'none')}-${escAttr(e.ts||e.id)}.jpg">&#19979;&#36733;&#22270;&#29255;</a>
       </div>
-    </div>`:'<div style="color:#64748b;margin-top:8px">这个事件没有图片。</div>';
+    </div>`:'<div style="color:#64748b;margin-top:8px">&#36825;&#20010;&#20107;&#20214;&#27809;&#26377;&#22270;&#29255;&#12290;</div>';
   return `
     ${image}
-    <pre>${escHtml(apiJson)}</pre>
-    <details class="debug-details" style="margin-top:8px">
-      <summary>完整日志事件</summary>
-      <pre>${escHtml(eventJson)}</pre>
-    </details>`;
+    <div class="debug-detail-summary">
+      &#31867;&#22411;: ${escHtml(e.kind||'-')} · &#21442;&#19982;&#32773;: ${escHtml(e.participant_id||'-')} · Session: ${escHtml(e.session_id??'-')} · ${escHtml(e.message||'')}
+    </div>
+    <div class="debug-json-actions">
+      ${hasApi?`<a class="debug-json-link" href="${escAttr(apiUrl)}" target="_blank" rel="noopener noreferrer">&#26597;&#30475; PyFeat JSON</a>`:'<span class="debug-json-note">&#27809;&#26377; PyFeat JSON</span>'}
+      <a class="debug-json-link" href="${escAttr(eventUrl)}" target="_blank" rel="noopener noreferrer">&#26597;&#30475;&#23436;&#25972;&#26085;&#24535;&#20107;&#20214;</a>
+      <span class="debug-json-note">PyFeat JSON &#26159;&#27169;&#22411;/API &#36820;&#22238;&#65307;&#23436;&#25972;&#26085;&#24535;&#20107;&#20214;&#36824;&#21253;&#21547;&#21442;&#19982;&#32773;&#12289;Session&#12289;&#32791;&#26102;&#12289;&#22270;&#29255;&#36335;&#24452;&#21644;&#26085;&#24535;&#28040;&#24687;&#12290;</span>
+    </div>`;
 }
 
 function bindDebugScroll(){

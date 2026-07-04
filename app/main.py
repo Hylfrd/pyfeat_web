@@ -24,7 +24,7 @@ from typing import Optional
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, UploadFile, File, Request, Response, Depends, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 
 from .database import (
     init_db, Participant, Session, ChatLog, ExpressionFrame,
@@ -324,9 +324,12 @@ def _debug_event_summary(event: dict) -> dict:
 
 
 def _debug_event_matches(event: dict, participant_id: str = "", session_id: str = "", kind: str = "", q: str = "") -> bool:
-    if participant_id and event.get("participant_id") != participant_id:
+    participant_id = participant_id.strip().lower()
+    session_id = session_id.strip().lstrip("#").lower()
+    kind = kind.strip()
+    if participant_id and participant_id not in str(event.get("participant_id", "")).lower():
         return False
-    if session_id and str(event.get("session_id", "")) != session_id:
+    if session_id and session_id not in str(event.get("session_id", "")).lower():
         return False
     if kind and event.get("kind") != kind:
         return False
@@ -1377,6 +1380,26 @@ async def admin_debug(
 @app.get("/api/admin/debug-event/{event_id}")
 async def admin_debug_event(event_id: int, _: None = Depends(require_admin)):
     return _debug_event_by_id(event_id)
+
+
+@app.get("/api/admin/debug-event/{event_id}/json")
+async def admin_debug_event_json(
+    event_id: int,
+    part: str = Query("event"),
+    _: None = Depends(require_admin),
+):
+    if part not in {"event", "api"}:
+        raise HTTPException(400, "part must be 'event' or 'api'")
+    event = _debug_event_by_id(event_id)
+    if part == "api":
+        if "api_response" not in event:
+            raise HTTPException(404, "This debug event has no API response")
+        payload = event["api_response"]
+    else:
+        payload = dict(event)
+        if payload.get("image"):
+            payload["image"] = "[image omitted; use debug event detail image link]"
+    return JSONResponse(payload)
 
 
 @app.get("/api/admin/debug-image/{filename}")
