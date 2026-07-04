@@ -1,4 +1,4 @@
-﻿"""
+"""
 Experiment Server — FastAPI Application
 =======================================
 Orchestrates the entire experiment flow:
@@ -44,9 +44,7 @@ from .evaluator import (
 )
 from .pages import router as pages_router
 
-# ── App setup ──────────────────────────────────────────────────────
-
-ROOT_DIR = Path(__file__).resolve().parent.parent  # project root (one level above app/)
+ROOT_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT_DIR / "static"
 
 app = FastAPI(title="Co-Writing Emotion AI Study")
@@ -54,7 +52,6 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(pages_router)
 app.include_router(auth_router)
 
-# Initialize components
 db_session = init_db(str(ROOT_DIR / "data" / "experiment.db"))
 expression_engine = ExpressionEngine()
 ai_client = AIClient()
@@ -67,9 +64,8 @@ if EVALUATOR_API_KEY:
         base_url=EVALUATOR_BASE_URL,
     )
 
-# Active WebSocket connections: participant_id → websocket
 active_connections: dict[str, WebSocket] = {}
-# Active strategy selectors: participant_id → StrategySelector
+
 selectors: dict[str, StrategySelector] = {}
 debug_events = deque(maxlen=300)
 DEBUG_LOG_PATH = ROOT_DIR / "data" / "debug_events.jsonl"
@@ -79,14 +75,12 @@ DEBUG_LINE_CHUNK_BYTES = 64 * 1024
 DEBUG_MAX_SCAN_LINES = 5000
 debug_lock = threading.Lock()
 
-FIFTEEN_MINUTES = 15 * 60  # seconds
-
+FIFTEEN_MINUTES = 15 * 60
 
 def _frame_bytes(image_base64: str) -> int:
     value = image_base64.split(",", 1)[-1]
     padding = value.count("=")
     return max(0, int(len(value) * 3 / 4) - padding)
-
 
 def _debug_image(image_base64: str) -> Optional[str]:
     if not image_base64:
@@ -106,7 +100,6 @@ def _debug_image(image_base64: str) -> Optional[str]:
     except Exception:
         return None
 
-
 def _debug_image_cache() -> dict:
     if not DEBUG_IMAGE_DIR.exists():
         return {"count": 0, "bytes": 0, "kb": 0.0}
@@ -117,7 +110,6 @@ def _debug_image_cache() -> dict:
         "bytes": total,
         "kb": round(total / 1024, 1),
     }
-
 
 def _clear_debug_images() -> int:
     if not DEBUG_IMAGE_DIR.exists():
@@ -131,7 +123,6 @@ def _clear_debug_images() -> int:
             except OSError:
                 pass
     return deleted
-
 
 async def _ai_status(provider: str) -> dict:
     if provider == "deepseek":
@@ -213,7 +204,6 @@ async def _ai_status(provider: str) -> dict:
         })
         return payload
 
-
 def _read_debug_state() -> dict:
     if not DEBUG_STATE_PATH.exists():
         return {}
@@ -224,22 +214,18 @@ def _read_debug_state() -> dict:
     except (OSError, json.JSONDecodeError):
         return {}
 
-
 def _write_debug_state(enabled: bool):
     DEBUG_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(DEBUG_STATE_PATH, "w", encoding="utf-8") as f:
         json.dump({"enabled": enabled}, f)
 
-
 debug_mode = bool(_read_debug_state().get("enabled", False))
-
 
 def _pyfeat_base_url() -> str:
     value = PYFEAT_API_URL.rstrip("/")
     if value.endswith("/detect"):
         return value[:-7]
     return value
-
 
 async def _pyfeat_health() -> dict:
     started = time.perf_counter()
@@ -265,7 +251,6 @@ async def _pyfeat_health() -> dict:
             "error": str(exc),
         }
 
-
 def _push_debug(event: dict) -> dict:
     DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with debug_lock:
@@ -282,7 +267,6 @@ def _push_debug(event: dict) -> dict:
     debug_events.append(payload)
     return payload
 
-
 def _debug_event_summary(event: dict) -> dict:
     return {
         key: value
@@ -292,7 +276,6 @@ def _debug_event_summary(event: dict) -> dict:
         "has_api_response": "api_response" in event,
         "has_image": bool(event.get("image")),
     }
-
 
 def _debug_event_matches(event: dict, participant_id: str = "", session_id: str = "", kind: str = "", q: str = "") -> bool:
     participant_id = participant_id.strip().lower()
@@ -307,7 +290,6 @@ def _debug_event_matches(event: dict, participant_id: str = "", session_id: str 
     if q and q not in json.dumps(event, ensure_ascii=False).lower():
         return False
     return True
-
 
 def _iter_debug_log_reverse(before: Optional[int] = None):
     if not DEBUG_LOG_PATH.exists():
@@ -351,7 +333,6 @@ def _iter_debug_log_reverse(before: Optional[int] = None):
                 if isinstance(event, dict):
                     event.setdefault("id", line_offset)
                     yield line_offset, event
-
 
 def _debug_page(
     limit: int = 80,
@@ -397,7 +378,6 @@ def _debug_page(
         "scanned": len(memory_rows),
     }
 
-
 def _debug_event_by_id(event_id: int) -> dict:
     if not DEBUG_LOG_PATH.exists():
         for event in debug_events:
@@ -421,7 +401,6 @@ def _debug_event_by_id(event_id: int) -> dict:
     event.setdefault("id", event_id)
     return event
 
-
 def _debug_tail(limit: int = 300) -> list[dict]:
     if not DEBUG_LOG_PATH.exists():
         return list(debug_events)
@@ -433,7 +412,6 @@ def _debug_tail(limit: int = 300) -> list[dict]:
             except json.JSONDecodeError:
                 pass
     return list(rows)
-
 
 def _api_error_payload(err: Exception) -> dict:
     payload = {
@@ -452,30 +430,21 @@ def _api_error_payload(err: Exception) -> dict:
         payload["url"] = str(err.request.url)
     return payload
 
-
-# ── Startup / Shutdown ─────────────────────────────────────────────
-
 @app.on_event("startup")
 async def startup():
     expression_engine.start()
     print("ExpressionEngine started.")
-
 
 @app.on_event("shutdown")
 async def shutdown():
     db_session.close()
     expression_engine.stop()
 
-
 @app.get("/api/model-health")
 async def model_health():
     return await _pyfeat_health()
 
-
-# ── Participant API ────────────────────────────────────────────────
-
 GROUPS = ["A", "B", "C", "D"]
-
 
 def _generate_participant_id() -> tuple[str, str]:
     """Auto-generate sequential participant ID and balanced order group.
@@ -494,7 +463,6 @@ def _generate_participant_id() -> tuple[str, str]:
     order_group = GROUPS[(n - 1) % 4]
     return f"P{n:03d}", order_group
 
-
 @app.post("/api/session/start")
 async def start_session(
     language: str = Form("zh"),
@@ -502,11 +470,9 @@ async def start_session(
     """Create a new participant (auto-generated ID + balanced group) and session."""
     participant_id, order_group = _generate_participant_id()
 
-    # Create participant
     p = Participant(id=participant_id, order_group=order_group, language=language)
     db_session.add(p)
 
-    # Determine the single assigned task from order group.
     assigned_condition = "text-only" if order_group in ("A", "B") else "affect-aware"
     assigned_scenario = "A" if order_group in ("A", "C") else "B"
 
@@ -520,7 +486,6 @@ async def start_session(
     db_session.add(session)
     db_session.commit()
 
-    # Initialize strategy selector
     selectors[participant_id] = StrategySelector()
 
     return {
@@ -532,7 +497,6 @@ async def start_session(
         "time_limit_s": FIFTEEN_MINUTES,
     }
 
-
 @app.post("/api/session/next")
 async def next_session(
     participant_id: str = Form(...),
@@ -540,14 +504,12 @@ async def next_session(
     """Deprecated: the experiment now uses one assigned writing task."""
     raise HTTPException(410, "This experiment now uses a single task session.")
 
-
 PASS_THRESHOLD = int(os.getenv("PASS_THRESHOLD", "20"))
-
 
 @app.post("/api/evaluate-draft")
 async def evaluate_draft(draft_text: str = Form(...)):
     """Full hybrid evaluation. Returns score, signals, matched markers, and LLM flags."""
-    # Hard fail check
+
     hard_fail_reason = check_hard_fail(draft_text)
     if hard_fail_reason:
         return {
@@ -561,11 +523,9 @@ async def evaluate_draft(draft_text: str = Form(...)):
             "llm_flags": [],
         }
 
-    # Layer 1: Deterministic
     det_result = deterministic_score(draft_text)
     markers_info = get_matched_markers(draft_text)
 
-    # Human-readable signal mapping
     SIGNAL_LABELS = {
         "low_burstiness":       ("句长变化",       "句子长度过于均匀，口语通常有长有短。试试把一些句子打断或合并。"),
         "formulaic_markers":    ("AI套话检测",     "检测到 AI 常用短语。删掉这些套话，用你自己的语言改写。"),
@@ -587,7 +547,6 @@ async def evaluate_draft(draft_text: str = Form(...)):
             "suggestion": suggestion,
         })
 
-    # Layer 2: LLM heuristic (async, with 30s timeout)
     llm_flags = []
     if not eval_ai_client:
         _push_debug({
@@ -648,9 +607,8 @@ async def evaluate_draft(draft_text: str = Form(...)):
                 "api_response": api_response,
                 "message": f"draft evaluation LLM error: {type(eval_err).__name__}",
             })
-            llm_flags = []  # graceful degradation
+            llm_flags = []
 
-    # Composite score
     llm_score = sum(25 for f in llm_flags if f["flagged"]) if llm_flags else 0
     composite = 0.6 * det_result.score + 0.4 * llm_score if llm_flags else det_result.score
     score = round(composite)
@@ -672,7 +630,6 @@ async def evaluate_draft(draft_text: str = Form(...)):
         "llm_score": llm_score,
         "det_score": det_result.score,
     }
-
 
 @app.post("/api/session/complete")
 async def complete_session(
@@ -701,12 +658,10 @@ async def complete_session(
     session.completed = True
     db_session.commit()
 
-    # Fire post-hoc evaluation in background
     if eval_ai_client and final_email.strip():
         asyncio.create_task(_run_posthoc_evaluation(session_id, final_email))
 
     return {"ok": True, "session_id": session_id}
-
 
 async def _detect_frame(participant_id: str, image_base64: str) -> AUFrame:
     return await asyncio.to_thread(expression_engine.process_frame, image_base64, participant_id)
@@ -715,14 +670,14 @@ async def _run_posthoc_evaluation(session_id: int, final_email: str):
     """Background task: run full hybrid evaluator and store results."""
     try:
         result = await evaluate_email(eval_ai_client, final_email)
-        # Use a fresh DB session (background task, not thread-safe to share)
+
         from .database import init_db as _init_bg_db
         bg_db = _init_bg_db(str(ROOT_DIR / "data" / "experiment.db"))
         from .database import Evaluation as Eval
-        # Store deterministic pass
+
         bg_db.add(Eval(session_id=session_id, run_number=0, layer="deterministic",
                         score=result.deterministic_score, evaluator_model="py-feat+regex"))
-        # Store 3 LLM heuristic runs placeholder (actual runs stored by evaluator)
+
         bg_db.add(Eval(session_id=session_id, run_number=0, layer="hybrid_composite",
                         score=result.composite_score,
                         evaluator_model=EVALUATOR_MODEL,
@@ -738,15 +693,14 @@ async def _run_posthoc_evaluation(session_id: int, final_email: str):
     except Exception as e:
         print(f"[eval] Session {session_id} failed: {e}")
 
-
 @app.post("/api/questionnaire")
 async def submit_questionnaire(
     session_id: int = Form(...),
-    # PSU-AI (4 items)
+
     q1: int = Form(...), q2: int = Form(...), q3: int = Form(...), q4: int = Form(...),
-    # UES-SF Reward Factor (3 items)
+
     q5: int = Form(...), q6: int = Form(...), q7: int = Form(...),
-    # UES-SF Perceived Usability (3 items, reverse-scored)
+
     q8: int = Form(...), q9: int = Form(...), q10: int = Form(...),
 ):
     """Submit post-task questionnaire."""
@@ -759,7 +713,6 @@ async def submit_questionnaire(
     db_session.merge(q)
     db_session.commit()
     return {"ok": True}
-
 
 @app.get("/api/session/sync/{session_id}")
 async def sync_session_chat(
@@ -794,7 +747,6 @@ async def sync_session_chat(
         "task_index": session.condition_order,
     }
 
-
 @app.post("/api/baseline-calibrate")
 async def baseline_calibrate(participant_id: str = Form(...)):
     """Calibrate baseline using server-side buffered frames from WebSocket."""
@@ -802,7 +754,6 @@ async def baseline_calibrate(participant_id: str = Form(...)):
     if baseline is None:
         raise HTTPException(400, "No baseline frames collected. Ensure baseline recording completed.")
 
-    # Store in participant record
     p = db_session.query(Participant).get(participant_id)
     if p:
         p.baseline_au1 = baseline.au1_mean
@@ -818,7 +769,6 @@ async def baseline_calibrate(participant_id: str = Form(...)):
         "frame_count": baseline.frame_count,
         "artifact_count": baseline.artifact_count,
     }
-
 
 @app.post("/api/pre-survey")
 async def submit_pre_survey(
@@ -858,7 +808,6 @@ async def submit_pre_survey(
         db_session.rollback()
         raise HTTPException(400, f"Failed to save pre-task survey: {e}")
     return {"ok": True}
-
 
 @app.post("/api/post-survey")
 async def submit_post_survey(
@@ -908,7 +857,6 @@ async def submit_post_survey(
         raise HTTPException(400, f"Failed to save post-task survey: {e}")
     return {"ok": True}
 
-
 @app.post("/api/debrief")
 async def debrief(
     participant_id: str = Form(...),
@@ -916,7 +864,7 @@ async def debrief(
     comments: str = Form(""),
 ):
     """Store debrief responses."""
-    # Minimal — just log to a JSON file for now
+
     log_path = ROOT_DIR / "data" / "debrief.jsonl"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "a", encoding="utf-8") as f:
@@ -927,9 +875,6 @@ async def debrief(
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }, ensure_ascii=False) + "\n")
     return {"ok": True}
-
-
-# ── Video upload ───────────────────────────────────────────────────
 
 @app.post("/api/video-chunk")
 async def upload_video_chunk(
@@ -944,9 +889,6 @@ async def upload_video_chunk(
     chunk_path = video_dir / f"{session_id}_{chunk_index:04d}.webm"
     chunk_path.write_bytes(await chunk.read())
     return {"ok": True}
-
-
-# ── Admin API ──────────────────────────────────────────────────────
 
 @app.get("/api/admin/sessions")
 async def admin_sessions(_: None = Depends(require_admin)):
@@ -970,7 +912,6 @@ async def admin_sessions(_: None = Depends(require_admin)):
         for s in sessions
     ]
 
-
 @app.get("/api/admin/chat-logs/{session_id}")
 async def admin_chat_logs(session_id: int, _: None = Depends(require_admin)):
     """Return chat logs for a specific session."""
@@ -993,7 +934,6 @@ async def admin_chat_logs(session_id: int, _: None = Depends(require_admin)):
         for log in logs
     ]
 
-
 @app.get("/api/admin/expression/{session_id}")
 async def admin_expression(session_id: int, _: None = Depends(require_admin)):
     """Return expression timeline for a session."""
@@ -1013,9 +953,6 @@ async def admin_expression(session_id: int, _: None = Depends(require_admin)):
         for f in frames
     ]
 
-
-# ── Admin: Baseline data ─────────────────────────────────────────
-
 @app.get("/api/admin/participants/{participant_id}/baseline")
 async def admin_baseline(participant_id: str, _: None = Depends(require_admin)):
     """Return baseline AU data for a participant."""
@@ -1034,9 +971,6 @@ async def admin_baseline(participant_id: str, _: None = Depends(require_admin)):
         "artifact_count": p.baseline_artifact_count,
     }
 
-
-# ── Admin: Delete session ───────────────────────────────────────
-
 @app.delete("/api/admin/sessions/{session_id}")
 async def admin_delete_session(session_id: int, _: None = Depends(require_admin)):
     """Delete a session and all its related data."""
@@ -1044,7 +978,6 @@ async def admin_delete_session(session_id: int, _: None = Depends(require_admin)
     if not session:
         raise HTTPException(404, "Session not found")
 
-    # Delete in dependency order
     db_session.query(Evaluation).filter(Evaluation.session_id == session_id).delete()
     db_session.query(Questionnaire).filter(Questionnaire.session_id == session_id).delete()
     db_session.query(ExpressionFrame).filter(ExpressionFrame.session_id == session_id).delete()
@@ -1052,9 +985,6 @@ async def admin_delete_session(session_id: int, _: None = Depends(require_admin)
     db_session.delete(session)
     db_session.commit()
     return {"ok": True, "deleted_session_id": session_id}
-
-
-# ── Admin: Export session ────────────────────────────────────────
 
 @app.get("/api/admin/sessions/{session_id}/export")
 async def admin_export_session(session_id: int, _: None = Depends(require_admin)):
@@ -1160,9 +1090,6 @@ async def admin_export_session(session_id: int, _: None = Depends(require_admin)
         ],
     }
 
-
-# ── Admin: Expression stats ──────────────────────────────────────
-
 @app.get("/api/admin/expression/{session_id}/stats")
 async def admin_expression_stats(session_id: int, _: None = Depends(require_admin)):
     """Return aggregated expression statistics for a session."""
@@ -1191,11 +1118,10 @@ async def admin_expression_stats(session_id: int, _: None = Depends(require_admi
     au7_vals = [f.au7 for f in frames]
     au1_vals = [f.au1 for f in frames]
 
-    # Count frames where AU >= 2 (trigger threshold)
     au4_triggers = sum(1 for v in au4_vals if v >= 2)
     au12_triggers = sum(1 for v in au12_vals if v >= 2)
     au7_triggers = sum(1 for v in au7_vals if v >= 2)
-    au1_triggers = sum(1 for v in au1_vals if v >= 1.5)  # lower threshold for AU1 (hesitation)
+    au1_triggers = sum(1 for v in au1_vals if v >= 1.5)
 
     return {
         "session_id": session_id,
@@ -1240,9 +1166,6 @@ async def admin_expression_stats(session_id: int, _: None = Depends(require_admi
         ],
     }
 
-
-# ── Admin: Face detection status (for participant page polling) ──
-
 @app.get("/api/admin/face-status/{participant_id}")
 async def admin_face_status(participant_id: str, _: None = Depends(require_admin)):
     """Return current face detection status for a participant."""
@@ -1273,7 +1196,6 @@ async def admin_face_status(participant_id: str, _: None = Depends(require_admin
         },
     }
 
-
 @app.get("/api/admin/debug")
 async def admin_debug(
     limit: int = Query(80, ge=1, le=200),
@@ -1297,11 +1219,9 @@ async def admin_debug(
         **page,
     }
 
-
 @app.get("/api/admin/debug-event/{event_id}")
 async def admin_debug_event(event_id: int, _: None = Depends(require_admin)):
     return _debug_event_by_id(event_id)
-
 
 @app.get("/api/admin/debug-event/{event_id}/json")
 async def admin_debug_event_json(
@@ -1322,7 +1242,6 @@ async def admin_debug_event_json(
             payload["image"] = "[image omitted; use debug event detail image link]"
     return JSONResponse(payload)
 
-
 @app.get("/api/admin/debug-image/{filename}")
 async def admin_debug_image(filename: str, _: None = Depends(require_admin)):
     if Path(filename).name != filename:
@@ -1332,11 +1251,9 @@ async def admin_debug_image(filename: str, _: None = Depends(require_admin)):
         raise HTTPException(404, "Debug image not found")
     return FileResponse(path)
 
-
 @app.get("/api/admin/debug-cache")
 async def admin_debug_cache(_: None = Depends(require_admin)):
     return _debug_image_cache()
-
 
 @app.post("/api/admin/debug-clear")
 async def admin_debug_clear(_: None = Depends(require_admin)):
@@ -1354,7 +1271,6 @@ async def admin_debug_clear(_: None = Depends(require_admin)):
         "cache": _debug_image_cache(),
     }
 
-
 @app.post("/api/admin/debug-mode")
 async def admin_debug_mode(enabled: bool = Form(...), _: None = Depends(require_admin)):
     global debug_mode
@@ -1370,11 +1286,9 @@ async def admin_debug_mode(enabled: bool = Form(...), _: None = Depends(require_
         "event": event,
     }
 
-
 @app.get("/api/admin/debug-health")
 async def admin_debug_health(_: None = Depends(require_admin)):
     return await _pyfeat_health()
-
 
 @app.post("/api/admin/debug-detect")
 async def admin_debug_detect(file: UploadFile = File(...), _: None = Depends(require_admin)):
@@ -1412,13 +1326,9 @@ async def admin_debug_detect(file: UploadFile = File(...), _: None = Depends(req
             "error": str(exc),
         }
 
-
 @app.get("/api/admin/debug-ai/{provider}")
 async def admin_debug_ai(provider: str, _: None = Depends(require_admin)):
     return await _ai_status(provider)
-
-
-# ── WebSocket ──────────────────────────────────────────────────────
 
 @app.websocket("/ws/{participant_id}")
 async def websocket_endpoint(websocket: WebSocket, participant_id: str):
@@ -1426,12 +1336,11 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
     await websocket.accept()
     active_connections[participant_id] = websocket
 
-    # Per-participant state
     chat_history: list[ChatMessage] = []
     turn_counter: int = 0
     revision_counter: int = 0
     session_start = time.time()
-    last_chat_time = time.time()  # for idle detection (Offer strategy)
+    last_chat_time = time.time()
     current_session_id: Optional[int] = None
     baseline_count: int = 0
     total_frames: int = 0
@@ -1493,7 +1402,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     }, ensure_ascii=False))
 
                 elif msg_type == "baseline_frame":
-                    # During baseline recording — buffer server-side
+
                     frame_b64 = msg.get("frame", "")
                     started = time.perf_counter()
                     vector = await asyncio.to_thread(
@@ -1529,7 +1438,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         }))
 
                 elif msg_type == "expression_frame":
-                    # Regular expression frame during task
+
                     frame_b64 = msg.get("frame", "")
                     started = time.perf_counter()
                     au_frame = await _detect_frame(participant_id, frame_b64)
@@ -1543,7 +1452,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         no_face_prompt_sent = False
                     else:
                         unreliable_frames += 1
-                        # Prompt on ANY unreliability: no face, covered face, or bad head pose
+
                         if not no_face_prompt_sent:
                             reason = "请面对摄像头。"
                             if au_frame and au_frame.face_detected and not au_frame.reliable:
@@ -1556,7 +1465,6 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             }))
                             no_face_prompt_sent = True
 
-                    # Send face status back to participant (persistent binary indicator)
                     await websocket.send_text(json.dumps({
                         "type": "face_status",
                         "face_detected": au_frame.face_detected if au_frame else False,
@@ -1599,7 +1507,6 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             "event": debug_event,
                         }))
 
-                    # Batch DB insert (commit every ~10 frames)
                     if current_session_id and au_frame:
                         db_session.add(ExpressionFrame(
                             session_id=current_session_id,
@@ -1616,7 +1523,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             db_session.commit()
 
                 elif msg_type == "chat":
-                    # User sent a chat message
+
                     user_text = msg.get("text", "")
                     condition = msg.get("condition", "text-only")
                     email_language = msg.get("language", "zh")
@@ -1634,7 +1541,6 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         idle_before_typing=idle_time,
                     )
 
-                    # Strategy selection (affect-aware only)
                     strategy: Optional[Strategy] = None
                     escalate_level: int = 0
                     strategy_name: Optional[str] = None
@@ -1677,7 +1583,6 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         ))
                         db_session.commit()
 
-                    # Call AI
                     ai_started = time.perf_counter()
                     try:
                         ai_task = asyncio.create_task(ai_client.chat(
@@ -1745,13 +1650,11 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             if email_language == "zh"
                             else "Sorry, I'm temporarily unavailable. Please try again in a moment."
                         )
-                        strategy_name = None  # Don't record a strategy for a failed call
+                        strategy_name = None
 
-                    # Detect revisions
                     if "[DRAFT_START]" in ai_response_text:
                         revision_counter += 1
 
-                    # Store chat logs (user=T*2-1, ai=T*2)
                     if current_session_id:
                         db_session.add(ChatLog(
                             session_id=current_session_id,
@@ -1763,11 +1666,9 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         ))
                         db_session.commit()
 
-                    # Update chat history
                     chat_history.append(ChatMessage(role="user", content=user_text))
                     chat_history.append(ChatMessage(role="ai", content=ai_response_text))
 
-                    # Calculate elapsed time
                     elapsed = time.time() - session_start
 
                     await safe_send({
@@ -1781,15 +1682,15 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     })
 
             except WebSocketDisconnect:
-                raise  # re-raise to outer handler
+                raise
             except json.JSONDecodeError:
-                # Malformed message — log and continue
+
                 import sys
                 print(f"[ws] Bad JSON from {participant_id}", file=sys.stderr)
             except Exception as inner_err:
                 import sys
                 print(f"[ws] Unexpected error for {participant_id}: {inner_err}", file=sys.stderr)
-                # Try to notify the client, but don't crash if the send itself fails
+
                 try:
                     await websocket.send_text(json.dumps({
                         "type": "error",
@@ -1801,16 +1702,12 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
     except WebSocketDisconnect:
         pass
     finally:
-        # Flush any remaining uncommitted expression frames
+
         try:
             db_session.commit()
         except Exception:
             pass
         active_connections.pop(participant_id, None)
-        # Don't remove selector — may be needed for second task
-
-
-# ── Run ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
