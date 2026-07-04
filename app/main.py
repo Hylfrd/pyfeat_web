@@ -14,6 +14,7 @@ import base64
 import json
 import os
 import secrets
+import threading
 import time
 import httpx
 from collections import deque
@@ -21,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, UploadFile, File, Request, Response, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, UploadFile, File, Request, Response, Depends, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 
@@ -61,9 +62,12 @@ if EVALUATOR_API_KEY:
 active_connections: dict[str, WebSocket] = {}
 # Active strategy selectors: participant_id → StrategySelector
 selectors: dict[str, StrategySelector] = {}
-debug_mode = False
 debug_events = deque(maxlen=300)
 DEBUG_LOG_PATH = ROOT_DIR / "data" / "debug_events.jsonl"
+DEBUG_STATE_PATH = ROOT_DIR / "data" / "debug_state.json"
+DEBUG_LINE_CHUNK_BYTES = 64 * 1024
+DEBUG_MAX_SCAN_LINES = 5000
+debug_lock = threading.Lock()
 ADMIN_COOKIE = "admin_token"
 
 FIFTEEN_MINUTES = 15 * 60  # seconds
@@ -112,6 +116,26 @@ def _debug_image(image_base64: str) -> Optional[str]:
     return None
 
 
+def _read_debug_state() -> dict:
+    if not DEBUG_STATE_PATH.exists():
+        return {}
+    try:
+        with open(DEBUG_STATE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_debug_state(enabled: bool):
+    DEBUG_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(DEBUG_STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"enabled": enabled}, f)
+
+
+debug_mode = bool(_read_debug_state().get("enabled", False))
+
+
 def _pyfeat_base_url() -> str:
     value = PYFEAT_API_URL.rstrip("/")
     if value.endswith("/detect"):
@@ -145,15 +169,156 @@ async def _pyfeat_health() -> dict:
 
 
 def _push_debug(event: dict) -> dict:
-    payload = {
-        "ts": time.strftime("%H:%M:%S", time.localtime()),
-        **event,
-    }
-    debug_events.append(payload)
     DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    with debug_lock:
+        with open(DEBUG_LOG_PATH, "ab") as f:
+            f.seek(0, os.SEEK_END)
+            event_id = f.tell()
+            payload = {
+                "id": event_id,
+                "ts": time.strftime("%H:%M:%S", time.localtime()),
+                **event,
+            }
+            line = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+            f.write(line)
+    debug_events.append(payload)
     return payload
+
+
+def _debug_event_summary(event: dict) -> dict:
+    return {
+        key: value
+        for key, value in event.items()
+        if key not in ("api_response", "image")
+    } | {
+        "has_api_response": "api_response" in event,
+        "has_image": bool(event.get("image")),
+    }
+
+
+def _debug_event_matches(event: dict, participant_id: str = "", session_id: str = "", kind: str = "", q: str = "") -> bool:
+    if participant_id and event.get("participant_id") != participant_id:
+        return False
+    if session_id and str(event.get("session_id", "")) != session_id:
+        return False
+    if kind and event.get("kind") != kind:
+        return False
+    if q and q not in json.dumps(event, ensure_ascii=False).lower():
+        return False
+    return True
+
+
+def _iter_debug_log_reverse(before: Optional[int] = None):
+    if not DEBUG_LOG_PATH.exists():
+        return
+
+    file_size = DEBUG_LOG_PATH.stat().st_size
+    end = file_size if before is None else max(0, min(before, file_size))
+    pos = end
+    buffer = b""
+
+    with open(DEBUG_LOG_PATH, "rb") as f:
+        while pos > 0:
+            read_size = min(DEBUG_LINE_CHUNK_BYTES, pos)
+            pos -= read_size
+            f.seek(pos)
+            data = f.read(read_size) + buffer
+            parts = data.split(b"\n")
+
+            if pos > 0:
+                buffer = parts[0]
+                complete = parts[1:]
+                offset = pos + len(buffer) + 1
+            else:
+                buffer = b""
+                complete = parts
+                offset = 0
+
+            rows = []
+            for line in complete:
+                line_offset = offset
+                offset += len(line) + 1
+                line = line.rstrip(b"\r")
+                if line.strip():
+                    rows.append((line_offset, line))
+
+            for line_offset, line in reversed(rows):
+                try:
+                    event = json.loads(line.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if isinstance(event, dict):
+                    event.setdefault("id", line_offset)
+                    yield line_offset, event
+
+
+def _debug_page(
+    limit: int = 80,
+    before: Optional[int] = None,
+    participant_id: str = "",
+    session_id: str = "",
+    kind: str = "",
+    q: str = "",
+) -> dict:
+    limit = max(1, min(limit, 200))
+    rows = []
+    scanned = 0
+    next_before = None
+    q = q.lower().strip()
+
+    for offset, event in _iter_debug_log_reverse(before):
+        scanned += 1
+        next_before = offset
+        if _debug_event_matches(event, participant_id, session_id, kind, q):
+            rows.append(_debug_event_summary(event))
+            if len(rows) >= limit:
+                break
+        if scanned >= DEBUG_MAX_SCAN_LINES:
+            break
+
+    if rows or DEBUG_LOG_PATH.exists():
+        return {
+            "events": rows,
+            "next_before": next_before if next_before and next_before > 0 else None,
+            "has_more": bool(next_before and next_before > 0),
+            "scanned": scanned,
+        }
+
+    memory_rows = [
+        _debug_event_summary(event)
+        for event in reversed(debug_events)
+        if _debug_event_matches(event, participant_id, session_id, kind, q)
+    ][:limit]
+    return {
+        "events": memory_rows,
+        "next_before": None,
+        "has_more": False,
+        "scanned": len(memory_rows),
+    }
+
+
+def _debug_event_by_id(event_id: int) -> dict:
+    if not DEBUG_LOG_PATH.exists():
+        for event in debug_events:
+            if event.get("id") == event_id:
+                return event
+        raise HTTPException(404, "Debug event not found")
+
+    try:
+        with open(DEBUG_LOG_PATH, "rb") as f:
+            f.seek(event_id)
+            line = f.readline()
+    except OSError:
+        raise HTTPException(404, "Debug event not found")
+
+    try:
+        event = json.loads(line.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(404, "Debug event not found")
+    if not isinstance(event, dict):
+        raise HTTPException(404, "Debug event not found")
+    event.setdefault("id", event_id)
+    return event
 
 
 def _debug_tail(limit: int = 300) -> list[dict]:
@@ -1048,17 +1213,39 @@ async def admin_face_status(participant_id: str, _: None = Depends(require_admin
 
 
 @app.get("/api/admin/debug")
-async def admin_debug(_: None = Depends(require_admin)):
+async def admin_debug(
+    limit: int = Query(80, ge=1, le=200),
+    before: Optional[int] = Query(None, ge=0),
+    participant_id: str = "",
+    session_id: str = "",
+    kind: str = "",
+    q: str = "",
+    _: None = Depends(require_admin),
+):
+    page = _debug_page(
+        limit=limit,
+        before=before,
+        participant_id=participant_id,
+        session_id=session_id,
+        kind=kind,
+        q=q,
+    )
     return {
         "enabled": debug_mode,
-        "events": _debug_tail(),
+        **page,
     }
+
+
+@app.get("/api/admin/debug-event/{event_id}")
+async def admin_debug_event(event_id: int, _: None = Depends(require_admin)):
+    return _debug_event_by_id(event_id)
 
 
 @app.post("/api/admin/debug-mode")
 async def admin_debug_mode(enabled: bool = Form(...), _: None = Depends(require_admin)):
     global debug_mode
     debug_mode = enabled
+    _write_debug_state(debug_mode)
     event = _push_debug({
         "kind": "debug",
         "message": f"debug mode {'enabled' if enabled else 'disabled'}",

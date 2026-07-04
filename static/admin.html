@@ -186,6 +186,8 @@ button.danger:hover{background:#dc2626;color:#fff}
   padding:9px 12px;font-family:inherit;font-size:.78em;
 }
 .debug-tools input:focus,.debug-tools select:focus{outline:none;border-color:#6366f1}
+.debug-meta{display:flex;gap:14px;align-items:center;flex-wrap:wrap;color:#64748b;font-size:.74em;margin:0 0 10px}
+.debug-pager{display:flex;justify-content:center;padding:12px;border-top:1px solid #334155;background:#0f172a}
 .debug-box{
   border:1px solid #334155;border-radius:10px;background:#0f172a;padding:12px;margin-bottom:14px;
 }
@@ -300,8 +302,14 @@ button.danger:hover{background:#dc2626;color:#fff}
 const $=id=>document.getElementById(id);
 let sessions=[],activeSid=null,sessionCache={};
 let debugEvents=[];
+let debugBefore=null;
+let debugHasMore=false;
+let debugEnabled=false;
+let debugLoading=false;
+let debugFilterTimer=null;
 let activeTab='debug';
 let refreshTimer=null;
+const DEBUG_LIMIT=80;
 
 function showAuth(message=''){
   $('auth-overlay').classList.remove('hidden');
@@ -365,6 +373,7 @@ async function refresh(){
   sessions=await r.json();
   renderStats();
   renderList();
+  if(activeTab==='debug')await loadDebugPage({reset:true,silent:true});
   if(activeTab!=='debug'&&activeSid)await loadSession(activeSid,true);
 }
 async function renderStats(){
@@ -602,6 +611,185 @@ function renderDebugRows(){
 }
 
 // ── Overview ──
+async function renderDebug(){
+  $('detail').innerHTML=`
+    <div class="action-bar">
+      <button id="debug-toggle" class="primary" onclick="setDebugMode(!debugEnabled)">开启日志记录</button>
+      <button onclick="reloadDebug()">刷新</button>
+    </div>
+    <div class="detail-section">
+      <h3>日志</h3>
+      <p style="color:#94a3b8;font-size:.82em;line-height:1.7">
+        查看服务器到 PyFeat API 的耗时、图片大小、面部检测状态和完整返回。
+      </p>
+    </div>
+    <div class="debug-box">
+      <h4>手动检测</h4>
+      <div class="action-bar" style="margin-bottom:0">
+        <button onclick="checkDebugHealth()">检测模型状态</button>
+        <input id="debug-upload" type="file" accept="image/*" style="max-width:260px">
+        <button onclick="uploadDebugImage()">上传图片检测</button>
+      </div>
+      <pre id="debug-result">等待操作</pre>
+    </div>
+    <div class="debug-tools">
+      <input id="debug-search" type="text" placeholder="搜索 participant / session / message / API JSON..." oninput="scheduleDebugReload()">
+      <input id="debug-participant" type="text" placeholder="参与者" oninput="scheduleDebugReload()">
+      <input id="debug-session" type="text" placeholder="Session" oninput="scheduleDebugReload()">
+      <select id="debug-kind" onchange="reloadDebug()">
+        <option value="">全部类型</option>
+        <option value="expression">expression</option>
+        <option value="baseline">baseline</option>
+        <option value="strategy">strategy</option>
+        <option value="ai">ai</option>
+        <option value="eval">eval</option>
+        <option value="debug">debug</option>
+      </select>
+    </div>
+    <div class="debug-meta">
+      <span id="debug-count">已加载 0 条</span>
+      <span id="debug-status">等待刷新</span>
+      <span>自动刷新：10 秒</span>
+    </div>
+    <div style="max-height:560px;overflow:auto;border:1px solid #334155;border-radius:10px">
+      <table class="frame-table">
+        <thead><tr><th>时间</th><th>类型</th><th>参与者</th><th>Session</th><th>KB</th><th>ms</th><th>Face</th><th>Reliable</th><th>信息</th><th>详情</th></tr></thead>
+        <tbody id="debug-rows"></tbody>
+      </table>
+      <div class="debug-pager">
+        <button id="debug-more" onclick="loadMoreDebug()">加载更早日志</button>
+      </div>
+    </div>
+  `;
+  await loadDebugPage({reset:true});
+}
+
+function debugParams(before=null){
+  const params=new URLSearchParams();
+  params.set('limit',String(DEBUG_LIMIT));
+  if(before!==null&&before!==undefined)params.set('before',String(before));
+  const q=$('debug-search')?.value.trim();
+  const participant=$('debug-participant')?.value.trim();
+  const sid=$('debug-session')?.value.trim();
+  const kind=$('debug-kind')?.value;
+  if(q)params.set('q',q);
+  if(participant)params.set('participant_id',participant);
+  if(sid)params.set('session_id',sid);
+  if(kind)params.set('kind',kind);
+  return params;
+}
+
+function scheduleDebugReload(){
+  clearTimeout(debugFilterTimer);
+  debugFilterTimer=setTimeout(()=>reloadDebug(),350);
+}
+
+async function reloadDebug(){
+  await loadDebugPage({reset:true});
+}
+
+async function loadMoreDebug(){
+  if(!debugHasMore||debugBefore===null)return;
+  await loadDebugPage({reset:false,before:debugBefore});
+}
+
+async function loadDebugPage({reset=false,before=null,silent=false}={}){
+  if(debugLoading||!$('debug-rows'))return;
+  debugLoading=true;
+  if(!silent&&$('debug-status'))$('debug-status').textContent='加载中...';
+  try{
+    const params=debugParams(reset?null:before);
+    const r=await adminFetch(`/api/admin/debug?${params.toString()}`);
+    const data=await r.json();
+    debugEnabled=!!data.enabled;
+    debugBefore=data.next_before??null;
+    debugHasMore=!!data.has_more;
+    const events=data.events||[];
+    debugEvents=reset?events:debugEvents.concat(events);
+    updateDebugControls(data);
+    renderDebugRows();
+  }finally{
+    debugLoading=false;
+  }
+}
+
+function updateDebugControls(data={}){
+  const btn=$('debug-toggle');
+  if(btn){
+    btn.className=debugEnabled?'danger':'primary';
+    btn.textContent=debugEnabled?'关闭日志记录':'开启日志记录';
+  }
+  if($('debug-count'))$('debug-count').textContent=`已加载 ${debugEvents.length} 条`;
+  if($('debug-status'))$('debug-status').textContent=`已刷新，扫描 ${data.scanned??0} 行`;
+  if($('debug-more')){
+    $('debug-more').disabled=!debugHasMore;
+    $('debug-more').textContent=debugHasMore?'加载更早日志':'没有更早日志';
+  }
+}
+
+function renderDebugRows(){
+  const rows=debugEvents.map(e=>{
+    const kb=e.bytes?Math.round(e.bytes/1024*10)/10:'';
+    return `
+      <tr>
+        <td>${escHtml(e.ts||'')}</td>
+        <td>${escHtml(e.kind||'')}</td>
+        <td>${escHtml(e.participant_id||'')}</td>
+        <td>${e.session_id??''}</td>
+        <td>${kb}</td>
+        <td>${e.elapsed_ms??''}</td>
+        <td>${e.face_detected?'yes':'no'}</td>
+        <td>${e.reliable?'yes':'no'}</td>
+        <td>${escHtml(e.message||'')}</td>
+        <td>
+          <details class="debug-details" ontoggle="loadDebugDetail(this,${Number(e.id??0)})">
+            <summary>展开</summary>
+            <div class="debug-detail-body">加载详情中...</div>
+          </details>
+        </td>
+      </tr>`;
+  }).join('');
+  $('debug-rows').innerHTML=rows||'<tr><td colspan="10" style="text-align:center;color:#64748b;padding:24px">没有匹配的日志</td></tr>';
+}
+
+async function loadDebugDetail(el,eventId){
+  if(!el.open||el.dataset.loaded==='1')return;
+  const body=el.querySelector('.debug-detail-body');
+  try{
+    const r=await adminFetch(`/api/admin/debug-event/${eventId}`);
+    const e=await r.json();
+    body.innerHTML=renderDebugDetail(e);
+    el.dataset.loaded='1';
+  }catch(err){
+    body.textContent='详情加载失败';
+  }
+}
+
+function renderDebugDetail(e){
+  const kb=e.bytes?Math.round(e.bytes/1024*10)/10:'';
+  const api=e.api_response===undefined?null:e.api_response;
+  const apiJson=api===null?'No API response recorded':JSON.stringify(api,null,2);
+  const eventJson=JSON.stringify({...e,image:e.image?'[image omitted from event json]':undefined},null,2);
+  const image=e.image?`
+    <div class="debug-face">
+      <img src="${escAttr(e.image)}" alt="captured frame">
+      <div>
+        <div style="color:#94a3b8;line-height:1.6">
+          Captured frame sent to PyFeat.<br>
+          Payload: ${kb||0} KB · Time: ${e.elapsed_ms??''} ms
+        </div>
+        <a href="${escAttr(e.image)}" download="debug-${escAttr(e.participant_id||'unknown')}-${escAttr(e.session_id??'none')}-${escAttr(e.ts||e.id)}.jpg">下载图片</a>
+      </div>
+    </div>`:'<div style="color:#64748b;margin-top:8px">这个事件没有图片。</div>';
+  return `
+    ${image}
+    <pre>${escHtml(apiJson)}</pre>
+    <details class="debug-details" style="margin-top:8px">
+      <summary>完整日志事件</summary>
+      <pre>${escHtml(eventJson)}</pre>
+    </details>`;
+}
+
 function renderOverview(exp,st){
   const s=exp.session;
   const p=exp.participant||{};
