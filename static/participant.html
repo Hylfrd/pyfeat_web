@@ -11,6 +11,7 @@ body{
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   background:#f1f5f9;color:#0f172a;min-height:100vh;
   display:flex;flex-direction:column;align-items:center;
+  padding-bottom:72px;
 }
 .hidden{display:none!important}
 
@@ -22,12 +23,12 @@ label{display:block;font-weight:600;margin:16px 0 6px;font-size:.78em;color:#475
 input[type=text],input[type=password],select{
   width:100%;padding:13px 16px;border:1px solid #e2e8f0;border-radius:14px;
   font-size:1em;background:#f8fafc;color:#0f172a;transition:all .18s;
-  font-family:inherit;
+  font-family:inherit;line-height:1.5;
 }
 input:focus,select:focus{outline:none;border-color:#6366f1;background:#fff;box-shadow:0 0 0 4px rgba(99,102,241,.1)}
 
 /* ── Buttons ── */
-button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;border:none;cursor:pointer;transition:all .18s;font-family:inherit}
+button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;border:none;cursor:pointer;transition:all .18s;font-family:inherit;line-height:1.5}
 .btn-primary{background:#4f46e5;color:#fff;width:100%}
 .btn-primary:hover{background:#4338ca;transform:translateY(-1px);box-shadow:0 4px 12px rgba(79,70,229,.3)}
 .btn-primary:disabled{background:#cbd5e1;color:#94a3b8;cursor:default;transform:none;box-shadow:none}
@@ -35,6 +36,19 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
 .btn-outline:hover{background:#eef2ff}
 .btn-green{background:#059669;color:#fff;width:100%}
 .btn-green:hover{background:#047857;transform:translateY(-1px);box-shadow:0 4px 12px rgba(5,150,105,.3)}
+
+/* ── Site Footer ── */
+.site-footer{
+  position:fixed;left:0;right:0;bottom:0;z-index:90;
+  min-height:48px;padding:10px 16px;
+  display:flex;align-items:center;justify-content:center;
+  border-top:1px solid #e2e8f0;background:rgba(248,250,252,.96);
+  color:#64748b;font-size:.84em;line-height:1.6;text-align:center;
+  backdrop-filter:blur(10px);
+}
+.site-footer a{color:inherit;text-decoration:none;text-underline-offset:3px}
+.site-footer a:hover{color:#4f46e5;text-decoration:underline}
+.site-footer .sep{margin:0 10px;color:#cbd5e1}
 
 /* ── View Container ── */
 .view{
@@ -302,6 +316,7 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
   .view{padding:0 12px;margin:20px auto}
   .card{padding:24px 20px}
   #eval-modal{padding:24px 20px}
+  .site-footer{font-size:.78em;min-height:44px;padding:8px 12px}
 }
 </style>
 </head>
@@ -323,6 +338,12 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
 
 <!-- ═══ Toast container ═══ -->
 <div id="toast-container"></div>
+
+<footer class="site-footer">
+  <span>Developed by Hylfrd</span>
+  <span class="sep">|</span>
+  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">备案信息</a>
+</footer>
 
 <!-- ═══════════════════════════════════════════════ -->
 <!-- SETUP VIEW                                     -->
