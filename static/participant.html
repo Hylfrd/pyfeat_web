@@ -977,6 +977,12 @@ function startAiSyncPolling(){
 function stopAiSyncPolling(){
   if(aiSyncTimer){clearInterval(aiSyncTimer);aiSyncTimer=null}
 }
+function closeWS(){
+  if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING)){
+    try{ws.close(1000,'task complete')}catch(e){}
+  }
+  ws=null;
+}
 async function resumeProgress(saved){
   participantId=saved.participantId;
   orderGroup=saved.orderGroup;
@@ -991,10 +997,6 @@ async function resumeProgress(saved){
   taskStartTime=saved.taskStartTime||Date.now();
   chatTranscript=Array.isArray(saved.chatTranscript)?saved.chatTranscript:[];
   restoreFormValues(saved.forms||{});
-  connectWS().catch(err=>{
-    console.error('Resume websocket failed:',err);
-    scheduleReconnect();
-  });
   let cameraReady=true;
   if(['pre-survey-view','baseline-view','task-view'].includes(currentStage)){
     try{await startWebcam();}catch(err){cameraReady=false;toast('无法访问摄像头。请允许摄像头权限并确保没有其他程序占用摄像头。',6000);}
@@ -1020,6 +1022,7 @@ async function resumeProgress(saved){
     }
     lastExpressionSentAt=Date.now();
     captureState='';
+    try{await connectWS();}catch(err){console.error('Resume websocket failed:',err);scheduleReconnect();}
     startExpressionCapture();
     timerInterval=setInterval(updateTimer,1000);
   }
@@ -1107,6 +1110,13 @@ let baselineSendComplete = false;
 async function startBaseline(){
   if(!await checkModelReady())return;
   setStage('baseline-view');
+  try{
+    await connectWS();
+  }catch(err){
+    toast('无法连接到服务器，请刷新页面重试。', 0);
+    console.error('Baseline websocket failed:', err);
+    return;
+  }
   baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false;
   baselineInterval=setInterval(()=>{
     if(baselineDone) return;
@@ -1413,6 +1423,8 @@ async function doFinalSubmit(isTimeout){
   finalSubmitting=true;
   clearInterval(timerInterval);clearInterval(expressionInterval);
   pauseTaskCapture();
+  stopAiSyncPolling();
+  closeWS();
   const draftText=$('draft-text').textContent||'';
   const f=new FormData();
   f.append('session_id',currentSessionId);
