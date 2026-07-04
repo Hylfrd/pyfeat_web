@@ -1029,8 +1029,8 @@ function initProgressRecovery(){
   const saved=readProgress();
   if(!saved||!saved.participantId)return;
   if(saved.completed){
-    if(confirm('检测到这个浏览器已经完成过实验。是否重新开始？'))clearProgress();
-    else showView('complete-view');
+    currentStage='complete-view';
+    showView('complete-view');
     return;
   }
   if(confirm('检测到未完成的实验进度。是否继续上次实验？')){
