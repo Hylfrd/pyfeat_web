@@ -711,6 +711,7 @@ document.querySelectorAll('.likert-line').forEach(row=>{
 function connectWS(){
   return new Promise((resolve, reject) => {
     if(ws&&ws.readyState===WebSocket.OPEN){resolve();return;}
+    let settled=false;
     const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${wsProtocol}//${location.host}/ws/${participantId}`);
     ws.onopen = () => {
@@ -718,16 +719,21 @@ function connectWS(){
       reconnectAttempts=0;
       if(currentSessionId)ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
       if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
+      settled=true;
       resolve();
     };
     ws.onerror = (err) => {
       console.error('[WS] Connection error:', err);
-      reject(new Error('WebSocket connection failed'));
+      if(!settled){
+        settled=true;
+        reject(new Error('WebSocket connection failed'));
+      }
     };
     ws.onclose = (e) => {
       console.log('[WS] Closed:', e.code, e.reason);
-      isAiWaiting=false;
-      removeThinking();
+      if(isAiWaiting){
+        updateThinking('连接中断，正在恢复...');
+      }
       if(e.code!==1000)scheduleReconnect();
     };
     ws.onmessage = e => {
@@ -779,7 +785,10 @@ function connectWS(){
     setTimeout(() => {
       if(ws.readyState !== WebSocket.OPEN) {
         try{ws.close();}catch(e){}
-        reject(new Error('WebSocket connection timeout'));
+        if(!settled){
+          settled=true;
+          reject(new Error('WebSocket connection timeout'));
+        }
       }
     }, 15000);
   });
@@ -911,6 +920,8 @@ function applyChatSync(msg){
       $('draft-text').textContent=draft;
       $('draft-panel').classList.remove('hidden');
     }
+  }else if(isAiWaiting){
+    showThinking();
   }
   writeProgress();
 }
@@ -1131,6 +1142,11 @@ $('chat-form').addEventListener('submit',e=>{
   e.preventDefault();
   const input=$('user-input'),text=input.value.trim();
   if(!text)return;
+  if(!ws||ws.readyState!==WebSocket.OPEN){
+    toast('连接正在恢复，请稍后再发送。',3000);
+    scheduleReconnect();
+    return;
+  }
   appendChat('user',text);
   isAiWaiting=true;
   showThinking();
@@ -1156,12 +1172,12 @@ function showThinking(){
   updateThinking();
   thinkingTimer=setInterval(updateThinking,1000);
 }
-function updateThinking(){
+function updateThinking(prefix='思考中...'){
   if(!thinkingEl)showThinking();
   const label=thinkingEl&&(thinkingEl.querySelector('.thinking-label')||thinkingEl.querySelector('.bubble div:last-child'));
   if(label){
     const seconds=Math.max(0,Math.floor((Date.now()-thinkingStartedAt)/1000));
-    label.textContent=`思考中... ${seconds}s`;
+    label.textContent=`${prefix} ${seconds}s`;
   }
 }
 function removeThinking(){

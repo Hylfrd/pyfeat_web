@@ -1459,6 +1459,18 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
     total_frames: int = 0
     unreliable_frames: int = 0
     no_face_prompt_sent: bool = False
+    socket_alive: bool = True
+
+    async def safe_send(payload: dict) -> bool:
+        nonlocal socket_alive
+        if not socket_alive:
+            return False
+        try:
+            await websocket.send_text(json.dumps(payload, ensure_ascii=False))
+            return True
+        except (WebSocketDisconnect, RuntimeError):
+            socket_alive = False
+            return False
 
     try:
         while True:
@@ -1676,6 +1688,17 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             "message": f"strategy checks turn {turn_counter}: {strategy_name or 'none'}",
                         })
 
+                    if current_session_id:
+                        db_session.add(ChatLog(
+                            session_id=current_session_id,
+                            seq=turn_counter * 2 - 1,
+                            role="user",
+                            content=user_text,
+                            timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                            expression_label=expression_engine.get_expression_label(participant_id),
+                        ))
+                        db_session.commit()
+
                     # Call AI
                     ai_started = time.perf_counter()
                     try:
@@ -1691,10 +1714,10 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             try:
                                 await asyncio.wait_for(asyncio.shield(ai_task), timeout=10.0)
                             except asyncio.TimeoutError:
-                                await websocket.send_text(json.dumps({
+                                await safe_send({
                                     "type": "ai_wait",
                                     "elapsed_ms": round((time.perf_counter() - ai_started) * 1000, 1),
-                                }))
+                                })
                         ai_response_text = ai_task.result()
                         ai_elapsed_ms = round((time.perf_counter() - ai_started) * 1000, 1)
                         if debug_mode:
@@ -1754,14 +1777,6 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     if current_session_id:
                         db_session.add(ChatLog(
                             session_id=current_session_id,
-                            seq=turn_counter * 2 - 1,
-                            role="user",
-                            content=user_text,
-                            timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                            expression_label=expression_engine.get_expression_label(participant_id),
-                        ))
-                        db_session.add(ChatLog(
-                            session_id=current_session_id,
                             seq=turn_counter * 2,
                             role="ai",
                             content=ai_response_text,
@@ -1777,7 +1792,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     # Calculate elapsed time
                     elapsed = time.time() - session_start
 
-                    await websocket.send_text(json.dumps({
+                    await safe_send({
                         "type": "ai_response",
                         "text": ai_response_text,
                         "turn": turn_counter,
@@ -1785,7 +1800,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         "strategy": strategy_name,
                         "elapsed_s": round(elapsed, 1),
                         "time_remaining_s": max(0, FIFTEEN_MINUTES - int(elapsed)),
-                    }, ensure_ascii=False))
+                    })
 
             except WebSocketDisconnect:
                 raise  # re-raise to outer handler
