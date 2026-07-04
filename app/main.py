@@ -10,38 +10,33 @@ Orchestrates the entire experiment flow:
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import os
-import secrets
-import threading
 import time
-import httpx
-from collections import deque
 from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, UploadFile, File, Depends, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, UploadFile, File
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
 
-from .auth import require_admin, router as auth_router
+from .auth import router as auth_router
 from .database import (
     init_db, Participant, Session, ChatLog, ExpressionFrame,
     Questionnaire, Evaluation, PreTaskSurvey, PostTaskSurvey,
 )
-from .expression import AUFrame, ExpressionEngine, BaselineResult, PYFEAT_API_URL, PYFEAT_API_TIMEOUT
+from .expression import AUFrame, ExpressionEngine, BaselineResult
 from .strategy import StrategySelector, UserTurn, Strategy
 from .ai_client import (
     AIClient, ChatMessage,
-    WRITING_API_KEY, WRITING_BASE_URL, WRITING_MODEL,
     EVALUATOR_API_KEY, EVALUATOR_BASE_URL, EVALUATOR_MODEL,
 )
 from .evaluator import (
     deterministic_score, evaluate_email, get_matched_markers,
     check_hard_fail, llm_heuristic_single,
 )
+from . import debug_log
+from .admin import create_admin_router
 from .pages import router as pages_router
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -64,371 +59,13 @@ if EVALUATOR_API_KEY:
         base_url=EVALUATOR_BASE_URL,
     )
 
+app.include_router(create_admin_router(db_session, expression_engine))
+
 active_connections: dict[str, WebSocket] = {}
 
 selectors: dict[str, StrategySelector] = {}
-debug_events = deque(maxlen=300)
-DEBUG_LOG_PATH = ROOT_DIR / "data" / "debug_events.jsonl"
-DEBUG_STATE_PATH = ROOT_DIR / "data" / "debug_state.json"
-DEBUG_IMAGE_DIR = ROOT_DIR / "data" / "debug_images"
-DEBUG_LINE_CHUNK_BYTES = 64 * 1024
-DEBUG_MAX_SCAN_LINES = 5000
-debug_lock = threading.Lock()
 
 FIFTEEN_MINUTES = 15 * 60
-
-def _frame_bytes(image_base64: str) -> int:
-    value = image_base64.split(",", 1)[-1]
-    padding = value.count("=")
-    return max(0, int(len(value) * 3 / 4) - padding)
-
-def _debug_image(image_base64: str) -> Optional[str]:
-    if not image_base64:
-        return None
-    try:
-        header, payload = image_base64.split(",", 1) if "," in image_base64 else ("", image_base64)
-        ext = "jpg"
-        if "png" in header.lower():
-            ext = "png"
-        elif "webp" in header.lower():
-            ext = "webp"
-        image_bytes = base64.b64decode(payload)
-        DEBUG_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-        filename = f"{int(time.time() * 1000)}-{secrets.token_hex(4)}.{ext}"
-        (DEBUG_IMAGE_DIR / filename).write_bytes(image_bytes)
-        return f"/api/admin/debug-image/{filename}"
-    except Exception:
-        return None
-
-def _debug_image_cache() -> dict:
-    if not DEBUG_IMAGE_DIR.exists():
-        return {"count": 0, "bytes": 0, "kb": 0.0}
-    files = [p for p in DEBUG_IMAGE_DIR.iterdir() if p.is_file()]
-    total = sum(p.stat().st_size for p in files)
-    return {
-        "count": len(files),
-        "bytes": total,
-        "kb": round(total / 1024, 1),
-    }
-
-def _clear_debug_images() -> int:
-    if not DEBUG_IMAGE_DIR.exists():
-        return 0
-    deleted = 0
-    for path in DEBUG_IMAGE_DIR.iterdir():
-        if path.is_file():
-            try:
-                path.unlink()
-                deleted += 1
-            except OSError:
-                pass
-    return deleted
-
-async def _ai_status(provider: str) -> dict:
-    if provider == "deepseek":
-        api_key = WRITING_API_KEY
-        base_url = WRITING_BASE_URL.rstrip("/")
-        model = WRITING_MODEL
-        body = {
-            "model": model,
-            "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
-            "reasoning_effort": "high",
-            "thinking": {"type": "enabled"},
-        }
-    elif provider == "kimi":
-        api_key = EVALUATOR_API_KEY
-        base_url = EVALUATOR_BASE_URL.rstrip("/")
-        model = EVALUATOR_MODEL
-        body = {
-            "model": model,
-            "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
-            "thinking": {"type": "disabled"},
-        }
-    else:
-        raise HTTPException(404, "Unknown AI provider")
-
-    if not api_key:
-        return {
-            "ok": False,
-            "provider": provider,
-            "model": model,
-            "base_url": base_url,
-            "error": "missing_api_key",
-        }
-
-    started = time.perf_counter()
-    url = f"{base_url}/chat/completions"
-    try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.post(
-                url,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-            )
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-        data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
-        content = ""
-        if isinstance(data, dict):
-            choices = data.get("choices") or []
-            if choices:
-                content = ((choices[0].get("message") or {}).get("content") or "")[:500]
-        if not response.is_success:
-            return {
-                "ok": False,
-                "provider": provider,
-                "model": model,
-                "base_url": base_url,
-                "status_code": response.status_code,
-                "elapsed_ms": elapsed_ms,
-                "body": response.text[:1000],
-            }
-        return {
-            "ok": True,
-            "provider": provider,
-            "model": model,
-            "base_url": base_url,
-            "elapsed_ms": elapsed_ms,
-            "content": content,
-            "usage": data.get("usage") if isinstance(data, dict) else None,
-        }
-    except Exception as exc:
-        payload = _api_error_payload(exc)
-        payload.update({
-            "provider": provider,
-            "model": model,
-            "base_url": base_url,
-            "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
-        })
-        return payload
-
-def _read_debug_state() -> dict:
-    if not DEBUG_STATE_PATH.exists():
-        return {}
-    try:
-        with open(DEBUG_STATE_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-def _write_debug_state(enabled: bool):
-    DEBUG_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(DEBUG_STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump({"enabled": enabled}, f)
-
-debug_mode = bool(_read_debug_state().get("enabled", False))
-
-def _pyfeat_base_url() -> str:
-    value = PYFEAT_API_URL.rstrip("/")
-    if value.endswith("/detect"):
-        return value[:-7]
-    return value
-
-async def _pyfeat_health() -> dict:
-    started = time.perf_counter()
-    url = _pyfeat_base_url() + "/health"
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(url)
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-        body = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
-        return {
-            "ok": response.is_success,
-            "url": url,
-            "status_code": response.status_code,
-            "elapsed_ms": elapsed_ms,
-            "body": body,
-        }
-    except Exception as exc:
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-        return {
-            "ok": False,
-            "url": url,
-            "elapsed_ms": elapsed_ms,
-            "error": str(exc),
-        }
-
-def _push_debug(event: dict) -> dict:
-    DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with debug_lock:
-        with open(DEBUG_LOG_PATH, "ab") as f:
-            f.seek(0, os.SEEK_END)
-            event_id = f.tell()
-            payload = {
-                "id": event_id,
-                "ts": time.strftime("%H:%M:%S", time.localtime()),
-                **event,
-            }
-            line = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
-            f.write(line)
-    debug_events.append(payload)
-    return payload
-
-def _debug_event_summary(event: dict) -> dict:
-    return {
-        key: value
-        for key, value in event.items()
-        if key not in ("api_response", "image")
-    } | {
-        "has_api_response": "api_response" in event,
-        "has_image": bool(event.get("image")),
-    }
-
-def _debug_event_matches(event: dict, participant_id: str = "", session_id: str = "", kind: str = "", q: str = "") -> bool:
-    participant_id = participant_id.strip().lower()
-    session_id = session_id.strip().lstrip("#").lower()
-    kind = kind.strip()
-    if participant_id and participant_id not in str(event.get("participant_id", "")).lower():
-        return False
-    if session_id and session_id not in str(event.get("session_id", "")).lower():
-        return False
-    if kind and event.get("kind") != kind:
-        return False
-    if q and q not in json.dumps(event, ensure_ascii=False).lower():
-        return False
-    return True
-
-def _iter_debug_log_reverse(before: Optional[int] = None):
-    if not DEBUG_LOG_PATH.exists():
-        return
-
-    file_size = DEBUG_LOG_PATH.stat().st_size
-    end = file_size if before is None else max(0, min(before, file_size))
-    pos = end
-    buffer = b""
-
-    with open(DEBUG_LOG_PATH, "rb") as f:
-        while pos > 0:
-            read_size = min(DEBUG_LINE_CHUNK_BYTES, pos)
-            pos -= read_size
-            f.seek(pos)
-            data = f.read(read_size) + buffer
-            parts = data.split(b"\n")
-
-            if pos > 0:
-                buffer = parts[0]
-                complete = parts[1:]
-                offset = pos + len(buffer) + 1
-            else:
-                buffer = b""
-                complete = parts
-                offset = 0
-
-            rows = []
-            for line in complete:
-                line_offset = offset
-                offset += len(line) + 1
-                line = line.rstrip(b"\r")
-                if line.strip():
-                    rows.append((line_offset, line))
-
-            for line_offset, line in reversed(rows):
-                try:
-                    event = json.loads(line.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    continue
-                if isinstance(event, dict):
-                    event.setdefault("id", line_offset)
-                    yield line_offset, event
-
-def _debug_page(
-    limit: int = 80,
-    before: Optional[int] = None,
-    participant_id: str = "",
-    session_id: str = "",
-    kind: str = "",
-    q: str = "",
-) -> dict:
-    limit = max(1, min(limit, 200))
-    rows = []
-    scanned = 0
-    next_before = None
-    q = q.lower().strip()
-
-    for offset, event in _iter_debug_log_reverse(before):
-        scanned += 1
-        next_before = offset
-        if _debug_event_matches(event, participant_id, session_id, kind, q):
-            rows.append(_debug_event_summary(event))
-            if len(rows) >= limit:
-                break
-        if scanned >= DEBUG_MAX_SCAN_LINES:
-            break
-
-    if rows or DEBUG_LOG_PATH.exists():
-        return {
-            "events": rows,
-            "next_before": next_before if next_before and next_before > 0 else None,
-            "has_more": bool(next_before and next_before > 0),
-            "scanned": scanned,
-        }
-
-    memory_rows = [
-        _debug_event_summary(event)
-        for event in reversed(debug_events)
-        if _debug_event_matches(event, participant_id, session_id, kind, q)
-    ][:limit]
-    return {
-        "events": memory_rows,
-        "next_before": None,
-        "has_more": False,
-        "scanned": len(memory_rows),
-    }
-
-def _debug_event_by_id(event_id: int) -> dict:
-    if not DEBUG_LOG_PATH.exists():
-        for event in debug_events:
-            if event.get("id") == event_id:
-                return event
-        raise HTTPException(404, "Debug event not found")
-
-    try:
-        with open(DEBUG_LOG_PATH, "rb") as f:
-            f.seek(event_id)
-            line = f.readline()
-    except OSError:
-        raise HTTPException(404, "Debug event not found")
-
-    try:
-        event = json.loads(line.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        raise HTTPException(404, "Debug event not found")
-    if not isinstance(event, dict):
-        raise HTTPException(404, "Debug event not found")
-    event.setdefault("id", event_id)
-    return event
-
-def _debug_tail(limit: int = 300) -> list[dict]:
-    if not DEBUG_LOG_PATH.exists():
-        return list(debug_events)
-    rows = deque(maxlen=limit)
-    with open(DEBUG_LOG_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
-                pass
-    return list(rows)
-
-def _api_error_payload(err: Exception) -> dict:
-    payload = {
-        "ok": False,
-        "error_type": type(err).__name__,
-        "error": str(err)[:1000],
-    }
-    if isinstance(err, httpx.HTTPStatusError):
-        response = err.response
-        payload.update({
-            "status_code": response.status_code,
-            "url": str(response.request.url),
-            "body": response.text[:2000],
-        })
-    elif isinstance(err, httpx.RequestError) and err.request:
-        payload["url"] = str(err.request.url)
-    return payload
 
 @app.on_event("startup")
 async def startup():
@@ -442,7 +79,7 @@ async def shutdown():
 
 @app.get("/api/model-health")
 async def model_health():
-    return await _pyfeat_health()
+    return await debug_log._pyfeat_health()
 
 GROUPS = ["A", "B", "C", "D"]
 
@@ -549,7 +186,7 @@ async def evaluate_draft(draft_text: str = Form(...)):
 
     llm_flags = []
     if not eval_ai_client:
-        _push_debug({
+        debug_log._push_debug({
             "kind": "eval",
             "api_response": {
                 "ok": False,
@@ -580,7 +217,7 @@ async def evaluate_draft(draft_text: str = Form(...)):
                     "flagged": flagged,
                     "note": note,
                 })
-            _push_debug({
+            debug_log._push_debug({
                 "kind": "eval",
                 "elapsed_ms": eval_elapsed_ms,
                 "api_response": {
@@ -595,13 +232,13 @@ async def evaluate_draft(draft_text: str = Form(...)):
             })
         except (asyncio.TimeoutError, Exception) as eval_err:
             eval_elapsed_ms = round((time.perf_counter() - eval_started) * 1000, 1)
-            api_response = _api_error_payload(eval_err)
+            api_response = debug_log._api_error_payload(eval_err)
             api_response.update({
                 "model": eval_ai_client.model,
                 "base_url": eval_ai_client.base_url,
                 "draft_chars": len(draft_text),
             })
-            _push_debug({
+            debug_log._push_debug({
                 "kind": "eval",
                 "elapsed_ms": eval_elapsed_ms,
                 "api_response": api_response,
@@ -890,446 +527,6 @@ async def upload_video_chunk(
     chunk_path.write_bytes(await chunk.read())
     return {"ok": True}
 
-@app.get("/api/admin/sessions")
-async def admin_sessions(_: None = Depends(require_admin)):
-    """Return all sessions for the dashboard."""
-    sessions = db_session.query(Session).order_by(Session.id.desc()).all()
-    return [
-        {
-            "id": s.id,
-            "participant_id": s.participant_id,
-            "condition": s.condition,
-            "task_scenario": s.task_scenario,
-            "condition_order": s.condition_order,
-            "completed": s.completed,
-            "completion_type": s.completion_type,
-            "total_turns": s.total_turns,
-            "total_revisions": s.total_revisions,
-            "duration_ms": s.duration_ms,
-            "frame_loss_ratio": round(s.frame_loss_ratio, 3),
-            "excluded": s.excluded_by_frame_loss,
-        }
-        for s in sessions
-    ]
-
-@app.get("/api/admin/chat-logs/{session_id}")
-async def admin_chat_logs(session_id: int, _: None = Depends(require_admin)):
-    """Return chat logs for a specific session."""
-    logs = (
-        db_session.query(ChatLog)
-        .filter(ChatLog.session_id == session_id)
-        .order_by(ChatLog.seq)
-        .all()
-    )
-    return [
-        {
-            "seq": log.seq,
-            "role": log.role,
-            "content": log.content,
-            "timestamp": log.timestamp,
-            "expression_label": log.expression_label,
-            "strategy_applied": log.strategy_applied,
-            "is_hidden": log.is_hidden,
-        }
-        for log in logs
-    ]
-
-@app.get("/api/admin/expression/{session_id}")
-async def admin_expression(session_id: int, _: None = Depends(require_admin)):
-    """Return expression timeline for a session."""
-    frames = (
-        db_session.query(ExpressionFrame)
-        .filter(ExpressionFrame.session_id == session_id)
-        .order_by(ExpressionFrame.timestamp)
-        .all()
-    )
-    return [
-        {
-            "timestamp": f.timestamp,
-            "au1": f.au1, "au4": f.au4, "au7": f.au7, "au12": f.au12,
-            "reliable": f.reliable,
-            "head_yaw": f.head_yaw, "head_pitch": f.head_pitch,
-        }
-        for f in frames
-    ]
-
-@app.get("/api/admin/participants/{participant_id}/baseline")
-async def admin_baseline(participant_id: str, _: None = Depends(require_admin)):
-    """Return baseline AU data for a participant."""
-    p = db_session.query(Participant).get(participant_id)
-    if not p:
-        raise HTTPException(404, "Participant not found")
-    return {
-        "participant_id": p.id,
-        "order_group": p.order_group,
-        "language": p.language,
-        "baseline_au1": p.baseline_au1,
-        "baseline_au4": p.baseline_au4,
-        "baseline_au7": p.baseline_au7,
-        "baseline_au12": p.baseline_au12,
-        "frame_count": p.baseline_frame_count,
-        "artifact_count": p.baseline_artifact_count,
-    }
-
-@app.delete("/api/admin/sessions/{session_id}")
-async def admin_delete_session(session_id: int, _: None = Depends(require_admin)):
-    """Delete a session and all its related data."""
-    session = db_session.query(Session).get(session_id)
-    if not session:
-        raise HTTPException(404, "Session not found")
-
-    db_session.query(Evaluation).filter(Evaluation.session_id == session_id).delete()
-    db_session.query(Questionnaire).filter(Questionnaire.session_id == session_id).delete()
-    db_session.query(ExpressionFrame).filter(ExpressionFrame.session_id == session_id).delete()
-    db_session.query(ChatLog).filter(ChatLog.session_id == session_id).delete()
-    db_session.delete(session)
-    db_session.commit()
-    return {"ok": True, "deleted_session_id": session_id}
-
-@app.get("/api/admin/sessions/{session_id}/export")
-async def admin_export_session(session_id: int, _: None = Depends(require_admin)):
-    """Export a single session as JSON including chat, expression, questionnaire, evaluations."""
-    session = db_session.query(Session).get(session_id)
-    if not session:
-        raise HTTPException(404, "Session not found")
-
-    participant = db_session.query(Participant).get(session.participant_id)
-
-    chat_logs = (
-        db_session.query(ChatLog)
-        .filter(ChatLog.session_id == session_id)
-        .order_by(ChatLog.seq)
-        .all()
-    )
-    expression_frames = (
-        db_session.query(ExpressionFrame)
-        .filter(ExpressionFrame.session_id == session_id)
-        .order_by(ExpressionFrame.timestamp)
-        .all()
-    )
-    questionnaire = (
-        db_session.query(Questionnaire)
-        .filter(Questionnaire.session_id == session_id)
-        .first()
-    )
-    evaluations = (
-        db_session.query(Evaluation)
-        .filter(Evaluation.session_id == session_id)
-        .all()
-    )
-
-    return {
-        "session": {
-            "id": session.id,
-            "participant_id": session.participant_id,
-            "task_scenario": session.task_scenario,
-            "condition": session.condition,
-            "condition_order": session.condition_order,
-            "start_time": session.start_time,
-            "end_time": session.end_time,
-            "duration_ms": session.duration_ms,
-            "completion_type": session.completion_type,
-            "final_email": session.final_email,
-            "total_turns": session.total_turns,
-            "total_revisions": session.total_revisions,
-            "total_frames": session.total_frames,
-            "unreliable_frames": session.unreliable_frames,
-            "frame_loss_ratio": session.frame_loss_ratio,
-            "excluded_by_frame_loss": session.excluded_by_frame_loss,
-        },
-        "participant": {
-            "id": participant.id if participant else None,
-            "order_group": participant.order_group if participant else None,
-            "baseline_au1": participant.baseline_au1 if participant else None,
-            "baseline_au4": participant.baseline_au4 if participant else None,
-            "baseline_au7": participant.baseline_au7 if participant else None,
-            "baseline_au12": participant.baseline_au12 if participant else None,
-            "baseline_frame_count": participant.baseline_frame_count if participant else None,
-        } if participant else None,
-        "chat_logs": [
-            {
-                "seq": log.seq,
-                "role": log.role,
-                "content": log.content,
-                "timestamp": log.timestamp,
-                "expression_label": log.expression_label,
-                "strategy_applied": log.strategy_applied,
-            }
-            for log in chat_logs
-        ],
-        "expression_frames": [
-            {
-                "timestamp": f.timestamp,
-                "au1": f.au1, "au4": f.au4, "au7": f.au7, "au12": f.au12,
-                "head_yaw": f.head_yaw, "head_pitch": f.head_pitch, "head_roll": f.head_roll,
-                "face_detected": f.face_detected, "reliable": f.reliable,
-            }
-            for f in expression_frames
-        ],
-        "questionnaire": {
-            "q1": questionnaire.q1_understood,
-            "q2": questionnaire.q2_same_page,
-            "q3": questionnaire.q3_aware,
-            "q4": questionnaire.q4_connected,
-            "q5": questionnaire.q5_rewarding,
-            "q6": questionnaire.q6_interested,
-            "q7": questionnaire.q7_worthwhile,
-            "q8": questionnaire.q8_frustrated,
-            "q9": questionnaire.q9_confusing,
-            "q10": questionnaire.q10_taxing,
-        } if questionnaire else None,
-        "evaluations": [
-            {
-                "run_number": e.run_number,
-                "layer": e.layer,
-                "score": e.score,
-                "evaluator_model": e.evaluator_model,
-                "details_json": e.details_json,
-            }
-            for e in evaluations
-        ],
-    }
-
-@app.get("/api/admin/expression/{session_id}/stats")
-async def admin_expression_stats(session_id: int, _: None = Depends(require_admin)):
-    """Return aggregated expression statistics for a session."""
-    frames = (
-        db_session.query(ExpressionFrame)
-        .filter(ExpressionFrame.session_id == session_id)
-        .order_by(ExpressionFrame.timestamp)
-        .all()
-    )
-    if not frames:
-        return {"session_id": session_id, "total_frames": 0}
-
-    total = len(frames)
-    reliable = sum(1 for f in frames if f.reliable)
-    face_detected = sum(1 for f in frames if f.face_detected)
-    face_lost = total - face_detected
-
-    def _mean(values):
-        return sum(values) / len(values) if values else 0.0
-
-    def _pct(part):
-        return round(part / total * 100, 1) if total else 0.0
-
-    au4_vals = [f.au4 for f in frames]
-    au12_vals = [f.au12 for f in frames]
-    au7_vals = [f.au7 for f in frames]
-    au1_vals = [f.au1 for f in frames]
-
-    au4_triggers = sum(1 for v in au4_vals if v >= 2)
-    au12_triggers = sum(1 for v in au12_vals if v >= 2)
-    au7_triggers = sum(1 for v in au7_vals if v >= 2)
-    au1_triggers = sum(1 for v in au1_vals if v >= 1.5)
-
-    return {
-        "session_id": session_id,
-        "total_frames": total,
-        "reliable_frames": reliable,
-        "unreliable_frames": total - reliable,
-        "reliable_pct": _pct(reliable),
-        "face_detected_frames": face_detected,
-        "face_lost_frames": face_lost,
-        "face_lost_pct": _pct(face_lost),
-        "means": {
-            "au1": round(_mean(au1_vals), 3),
-            "au4": round(_mean(au4_vals), 3),
-            "au7": round(_mean(au7_vals), 3),
-            "au12": round(_mean(au12_vals), 3),
-        },
-        "max": {
-            "au1": round(max(au1_vals), 3),
-            "au4": round(max(au4_vals), 3),
-            "au7": round(max(au7_vals), 3),
-            "au12": round(max(au12_vals), 3),
-        },
-        "triggers_above_2": {
-            "au1": au1_triggers,
-            "au4": au4_triggers,
-            "au7": au7_triggers,
-            "au12": au12_triggers,
-        },
-        "frames": [
-            {
-                "t": round(f.timestamp - frames[0].timestamp, 1),
-                "au1": round(f.au1, 2),
-                "au4": round(f.au4, 2),
-                "au7": round(f.au7, 2),
-                "au12": round(f.au12, 2),
-                "yaw": round(f.head_yaw, 1),
-                "pitch": round(f.head_pitch, 1),
-                "face": f.face_detected,
-                "ok": f.reliable,
-            }
-            for f in frames
-        ],
-    }
-
-@app.get("/api/admin/face-status/{participant_id}")
-async def admin_face_status(participant_id: str, _: None = Depends(require_admin)):
-    """Return current face detection status for a participant."""
-    frames = expression_engine.get_recent_frames(participant_id, 3)
-    if not frames:
-        return {
-            "participant_id": participant_id,
-            "face_detected": False,
-            "reliable": False,
-            "message": "no_data",
-            "latest_aus": None,
-        }
-    latest = frames[-1]
-    return {
-        "participant_id": participant_id,
-        "face_detected": latest.face_detected,
-        "reliable": latest.reliable,
-        "message": "ok" if (latest.face_detected and latest.reliable) else (
-            "pose" if latest.face_detected else "no_face"
-        ),
-        "latest_aus": {
-            "au1": round(latest.au1, 2),
-            "au4": round(latest.au4, 2),
-            "au7": round(latest.au7, 2),
-            "au12": round(latest.au12, 2),
-            "head_yaw": round(latest.head_yaw, 1),
-            "head_pitch": round(latest.head_pitch, 1),
-        },
-    }
-
-@app.get("/api/admin/debug")
-async def admin_debug(
-    limit: int = Query(80, ge=1, le=200),
-    before: Optional[int] = Query(None, ge=0),
-    participant_id: str = "",
-    session_id: str = "",
-    kind: str = "",
-    q: str = "",
-    _: None = Depends(require_admin),
-):
-    page = _debug_page(
-        limit=limit,
-        before=before,
-        participant_id=participant_id,
-        session_id=session_id,
-        kind=kind,
-        q=q,
-    )
-    return {
-        "enabled": debug_mode,
-        **page,
-    }
-
-@app.get("/api/admin/debug-event/{event_id}")
-async def admin_debug_event(event_id: int, _: None = Depends(require_admin)):
-    return _debug_event_by_id(event_id)
-
-@app.get("/api/admin/debug-event/{event_id}/json")
-async def admin_debug_event_json(
-    event_id: int,
-    part: str = Query("event"),
-    _: None = Depends(require_admin),
-):
-    if part not in {"event", "api"}:
-        raise HTTPException(400, "part must be 'event' or 'api'")
-    event = _debug_event_by_id(event_id)
-    if part == "api":
-        if "api_response" not in event:
-            raise HTTPException(404, "This debug event has no API response")
-        payload = event["api_response"]
-    else:
-        payload = dict(event)
-        if payload.get("image"):
-            payload["image"] = "[image omitted; use debug event detail image link]"
-    return JSONResponse(payload)
-
-@app.get("/api/admin/debug-image/{filename}")
-async def admin_debug_image(filename: str, _: None = Depends(require_admin)):
-    if Path(filename).name != filename:
-        raise HTTPException(404, "Debug image not found")
-    path = DEBUG_IMAGE_DIR / filename
-    if not path.exists() or not path.is_file():
-        raise HTTPException(404, "Debug image not found")
-    return FileResponse(path)
-
-@app.get("/api/admin/debug-cache")
-async def admin_debug_cache(_: None = Depends(require_admin)):
-    return _debug_image_cache()
-
-@app.post("/api/admin/debug-clear")
-async def admin_debug_clear(_: None = Depends(require_admin)):
-    with debug_lock:
-        debug_events.clear()
-        try:
-            if DEBUG_LOG_PATH.exists():
-                DEBUG_LOG_PATH.unlink()
-        except OSError as exc:
-            raise HTTPException(500, f"Failed to clear debug log: {exc}") from exc
-    deleted_images = _clear_debug_images()
-    return {
-        "ok": True,
-        "deleted_images": deleted_images,
-        "cache": _debug_image_cache(),
-    }
-
-@app.post("/api/admin/debug-mode")
-async def admin_debug_mode(enabled: bool = Form(...), _: None = Depends(require_admin)):
-    global debug_mode
-    debug_mode = enabled
-    _write_debug_state(debug_mode)
-    event = _push_debug({
-        "kind": "debug",
-        "message": f"debug mode {'enabled' if enabled else 'disabled'}",
-    })
-    return {
-        "ok": True,
-        "enabled": debug_mode,
-        "event": event,
-    }
-
-@app.get("/api/admin/debug-health")
-async def admin_debug_health(_: None = Depends(require_admin)):
-    return await _pyfeat_health()
-
-@app.post("/api/admin/debug-detect")
-async def admin_debug_detect(file: UploadFile = File(...), _: None = Depends(require_admin)):
-    started = time.perf_counter()
-    image_bytes = await file.read()
-    image_b64 = base64.b64encode(image_bytes).decode("ascii")
-    content_type = file.content_type or "image/jpeg"
-    url = _pyfeat_base_url() + "/detect"
-    payload = {
-        "image": f"data:{content_type};base64,{image_b64}",
-        "participant_id": "__debug_upload__",
-    }
-    try:
-        async with httpx.AsyncClient(timeout=PYFEAT_API_TIMEOUT) as client:
-            response = await client.post(url, json=payload)
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-        body = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
-        return {
-            "ok": response.is_success,
-            "url": url,
-            "status_code": response.status_code,
-            "filename": file.filename,
-            "bytes": len(image_bytes),
-            "elapsed_ms": elapsed_ms,
-            "body": body,
-        }
-    except Exception as exc:
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-        return {
-            "ok": False,
-            "url": url,
-            "filename": file.filename,
-            "bytes": len(image_bytes),
-            "elapsed_ms": elapsed_ms,
-            "error": str(exc),
-        }
-
-@app.get("/api/admin/debug-ai/{provider}")
-async def admin_debug_ai(provider: str, _: None = Depends(require_admin)):
-    return await _ai_status(provider)
-
 @app.websocket("/ws/{participant_id}")
 async def websocket_endpoint(websocket: WebSocket, participant_id: str):
     """Main WebSocket for participant communication."""
@@ -1414,16 +611,16 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     if vector is not None:
                         baseline_count += 1
                     debug_event = None
-                    if debug_mode:
-                        debug_event = _push_debug({
+                    if debug_log.is_enabled():
+                        debug_event = debug_log._push_debug({
                             "kind": "baseline",
                             "participant_id": participant_id,
                             "session_id": current_session_id,
-                            "bytes": _frame_bytes(frame_b64),
+                            "bytes": debug_log._frame_bytes(frame_b64),
                             "elapsed_ms": elapsed_ms,
                             "face_detected": vector is not None,
                             "reliable": vector is not None,
-                            "image": _debug_image(frame_b64),
+                            "image": debug_log._debug_image(frame_b64),
                             "api_response": expression_engine.get_last_api_response(),
                             "message": f"baseline frame {baseline_count}: {elapsed_ms} ms",
                         })
@@ -1470,7 +667,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                         "face_detected": au_frame.face_detected if au_frame else False,
                         "reliable": au_frame.reliable if au_frame else False,
                     }))
-                    if debug_mode:
+                    if debug_log.is_enabled():
                         api_response = expression_engine.get_last_api_response()
                         selector = selectors.get(participant_id)
                         if selector:
@@ -1490,15 +687,15 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                                 api_response = {**api_response, **trigger_checks}
                             else:
                                 api_response = {"raw": api_response, **trigger_checks}
-                        debug_event = _push_debug({
+                        debug_event = debug_log._push_debug({
                             "kind": "expression",
                             "participant_id": participant_id,
                             "session_id": current_session_id,
-                            "bytes": _frame_bytes(frame_b64),
+                            "bytes": debug_log._frame_bytes(frame_b64),
                             "elapsed_ms": elapsed_ms,
                             "face_detected": au_frame.face_detected if au_frame else False,
                             "reliable": au_frame.reliable if au_frame else False,
-                            "image": _debug_image(frame_b64),
+                            "image": debug_log._debug_image(frame_b64),
                             "api_response": api_response,
                             "message": f"expression frame {total_frames}: {elapsed_ms} ms",
                         })
@@ -1556,13 +753,13 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             strategy_name = strategy.value if strategy else None
                             trigger_checks = selector.get_trigger_checks()
 
-                    if debug_mode and trigger_checks:
+                    if debug_log.is_enabled() and trigger_checks:
                         api_response = expression_engine.get_last_api_response()
                         if isinstance(api_response, dict):
                             api_response = {**api_response, **trigger_checks}
                         else:
                             api_response = {"raw": api_response, **trigger_checks}
-                        _push_debug({
+                        debug_log._push_debug({
                             "kind": "strategy",
                             "participant_id": participant_id,
                             "session_id": current_session_id,
@@ -1603,8 +800,8 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                                 })
                         ai_response_text = ai_task.result()
                         ai_elapsed_ms = round((time.perf_counter() - ai_started) * 1000, 1)
-                        if debug_mode:
-                            _push_debug({
+                        if debug_log.is_enabled():
+                            debug_log._push_debug({
                                 "kind": "ai",
                                 "participant_id": participant_id,
                                 "session_id": current_session_id,
@@ -1626,7 +823,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                     except Exception as api_err:
                         import sys
                         ai_elapsed_ms = round((time.perf_counter() - ai_started) * 1000, 1)
-                        api_response = _api_error_payload(api_err)
+                        api_response = debug_log._api_error_payload(api_err)
                         api_response.update({
                             "model": ai_client.model,
                             "base_url": ai_client.base_url,
@@ -1636,7 +833,7 @@ async def websocket_endpoint(websocket: WebSocket, participant_id: str):
                             "prompt_chars": len(user_text),
                             "history_messages": len(chat_history),
                         })
-                        _push_debug({
+                        debug_log._push_debug({
                             "kind": "ai",
                             "participant_id": participant_id,
                             "session_id": current_session_id,
