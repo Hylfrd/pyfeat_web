@@ -1,12 +1,3 @@
-"""
-Experiment Server — FastAPI Application
-=======================================
-Orchestrates the entire experiment flow:
-  - WebSocket: expression frames, chat messages
-  - REST: session lifecycle, questionnaires
-  - Integrates: expression.py, strategy.py, ai_client.py, database.py, evaluator.py
-"""
-
 from __future__ import annotations
 
 import os
@@ -25,6 +16,7 @@ from .ai_client import (
 )
 from . import debug_log
 from .admin import create_admin_router
+from .evaluation import create_evaluation_router
 from .experiment import create_experiment_router
 from .pages import router as pages_router
 from .websocket import create_websocket_router
@@ -50,6 +42,7 @@ if EVALUATOR_API_KEY:
     )
 
 app.include_router(create_admin_router(db_session, expression_engine))
+app.include_router(create_evaluation_router(eval_ai_client))
 
 selectors: dict[str, StrategySelector] = {}
 app.include_router(create_experiment_router(ROOT_DIR, db_session, expression_engine, selectors, eval_ai_client))
