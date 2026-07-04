@@ -925,12 +925,14 @@ function renderTaskMeta(){
 function applyChatSync(msg){
   const messages=Array.isArray(msg.messages)?msg.messages:[];
   if(currentStage!=='task-view'||messages.length<chatTranscript.length)return;
+  const incoming=messages.map(m=>({role:m.role,text:m.text||''}));
+  const changed=incoming.length!==chatTranscript.length||incoming.some((m,i)=>m.role!==chatTranscript[i]?.role||m.text!==chatTranscript[i]?.text);
   if(msg.session_id)currentSessionId=msg.session_id;
   if(msg.condition)currentCondition=msg.condition;
   if(msg.scenario)currentScenario=msg.scenario;
   renderTaskMeta();
-  chatTranscript=messages.map(m=>({role:m.role,text:m.text||''}));
-  renderRestoredChat();
+  chatTranscript=incoming;
+  if(changed)renderRestoredChat();
   if(msg.turn!==undefined){
     turnCounter=msg.turn;
     $('turn-num').textContent=turnCounter;
@@ -950,7 +952,7 @@ function applyChatSync(msg){
       $('draft-panel').classList.remove('hidden');
     }
   }else if(isAiWaiting){
-    showThinking();
+    ensureThinking();
   }
   writeProgress();
 }
@@ -1249,7 +1251,10 @@ $('chat-form').addEventListener('submit',e=>{
   input.value='';input.disabled=true;$('submit-email').disabled=true;
 });
 function showThinking(){
-  removeThinking();
+  if(thinkingEl){
+    updateThinking();
+    return;
+  }
   thinkingStartedAt=Date.now();
   const area=$('chat-area');
   if(area.querySelector('.empty-state'))area.innerHTML='';
@@ -1267,8 +1272,15 @@ function showThinking(){
   updateThinking();
   thinkingTimer=setInterval(updateThinking,1000);
 }
+function ensureThinking(){
+  if(thinkingEl)updateThinking();
+  else showThinking();
+}
 function updateThinking(prefix='思考中...'){
-  if(!thinkingEl)showThinking();
+  if(!thinkingEl){
+    showThinking();
+    return;
+  }
   const label=thinkingEl&&(thinkingEl.querySelector('.thinking-label')||thinkingEl.querySelector('.bubble div:last-child'));
   if(label){
     const seconds=Math.max(0,Math.floor((Date.now()-thinkingStartedAt)/1000));
