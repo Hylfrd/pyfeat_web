@@ -6,17 +6,15 @@
 <title>Experimenter Dashboard — Co-Writing Study</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--site-footer-height:48px}
 body{
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   background:#0f172a;color:#e2e8f0;height:100vh;overflow:hidden;display:flex;
-  padding-bottom:var(--site-footer-height);
 }
 
 /* ── Sidebar ── */
 #sidebar{
   width:380px;min-width:380px;background:#1e293b;border-right:1px solid #334155;
-  display:flex;flex-direction:column;height:calc(100vh - var(--site-footer-height));
+  display:flex;flex-direction:column;height:100vh;
 }
 #sidebar .head{
   padding:20px;border-bottom:1px solid #334155;flex-shrink:0;
@@ -75,7 +73,7 @@ body{
 
 /* ── Main Panel ── */
 #main{
-  flex:1;display:flex;flex-direction:column;height:calc(100vh - var(--site-footer-height));overflow:hidden;
+  flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;
 }
 #main .empty-state{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -231,17 +229,6 @@ button.danger:hover{background:#dc2626;color:#fff}
 }
 .debug-face a{display:inline-block;margin-top:8px;color:#818cf8;text-decoration:none;font-weight:700}
 
-/* Site footer */
-.site-footer{
-  position:fixed;left:0;right:0;bottom:0;z-index:90;
-  min-height:var(--site-footer-height);padding:10px 16px;
-  display:flex;align-items:center;justify-content:center;
-  border-top:1px solid #334155;background:#0f172a;
-  color:#94a3b8;font-size:.78em;line-height:1.6;text-align:center;
-}
-.site-footer a{color:inherit;text-decoration:none;text-underline-offset:3px}
-.site-footer a:hover{color:#c4b5fd;text-decoration:underline}
-.site-footer .sep{margin:0 10px;color:#475569}
 @media(max-width:900px){
   .debug-tools{grid-template-columns:1fr}
   .debug-face{grid-template-columns:1fr}
@@ -331,12 +318,6 @@ button.danger:hover{background:#dc2626;color:#fff}
   <div class="modal"></div>
 </div>
 <div id="toast-container"></div>
-
-<footer class="site-footer">
-  <span>Developed by Hylfrd</span>
-  <span class="sep">|</span>
-  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2025433394号-1</a>
-</footer>
 
 <script>
 const $=id=>document.getElementById(id);
