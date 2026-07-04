@@ -32,7 +32,11 @@ from .database import (
 )
 from .expression import AUFrame, ExpressionEngine, BaselineResult, PYFEAT_API_URL, PYFEAT_API_TIMEOUT
 from .strategy import StrategySelector, UserTurn, Strategy
-from .ai_client import AIClient, ChatMessage, EVALUATOR_API_KEY, EVALUATOR_BASE_URL, EVALUATOR_MODEL
+from .ai_client import (
+    AIClient, ChatMessage,
+    WRITING_API_KEY, WRITING_BASE_URL, WRITING_MODEL,
+    EVALUATOR_API_KEY, EVALUATOR_BASE_URL, EVALUATOR_MODEL,
+)
 from .evaluator import (
     deterministic_score, evaluate_email, get_matched_markers,
     check_hard_fail, llm_heuristic_single,
@@ -65,6 +69,7 @@ selectors: dict[str, StrategySelector] = {}
 debug_events = deque(maxlen=300)
 DEBUG_LOG_PATH = ROOT_DIR / "data" / "debug_events.jsonl"
 DEBUG_STATE_PATH = ROOT_DIR / "data" / "debug_state.json"
+DEBUG_IMAGE_DIR = ROOT_DIR / "data" / "debug_images"
 DEBUG_LINE_CHUNK_BYTES = 64 * 1024
 DEBUG_MAX_SCAN_LINES = 5000
 debug_lock = threading.Lock()
@@ -113,7 +118,129 @@ def _frame_bytes(image_base64: str) -> int:
 
 
 def _debug_image(image_base64: str) -> Optional[str]:
-    return None
+    if not image_base64:
+        return None
+    try:
+        header, payload = image_base64.split(",", 1) if "," in image_base64 else ("", image_base64)
+        ext = "jpg"
+        if "png" in header.lower():
+            ext = "png"
+        elif "webp" in header.lower():
+            ext = "webp"
+        image_bytes = base64.b64decode(payload)
+        DEBUG_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+        filename = f"{int(time.time() * 1000)}-{secrets.token_hex(4)}.{ext}"
+        (DEBUG_IMAGE_DIR / filename).write_bytes(image_bytes)
+        return f"/api/admin/debug-image/{filename}"
+    except Exception:
+        return None
+
+
+def _debug_image_cache() -> dict:
+    if not DEBUG_IMAGE_DIR.exists():
+        return {"count": 0, "bytes": 0, "kb": 0.0}
+    files = [p for p in DEBUG_IMAGE_DIR.iterdir() if p.is_file()]
+    total = sum(p.stat().st_size for p in files)
+    return {
+        "count": len(files),
+        "bytes": total,
+        "kb": round(total / 1024, 1),
+    }
+
+
+def _clear_debug_images() -> int:
+    if not DEBUG_IMAGE_DIR.exists():
+        return 0
+    deleted = 0
+    for path in DEBUG_IMAGE_DIR.iterdir():
+        if path.is_file():
+            try:
+                path.unlink()
+                deleted += 1
+            except OSError:
+                pass
+    return deleted
+
+
+async def _ai_status(provider: str) -> dict:
+    if provider == "deepseek":
+        api_key = WRITING_API_KEY
+        base_url = WRITING_BASE_URL.rstrip("/")
+        model = WRITING_MODEL
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
+            "reasoning_effort": "high",
+            "thinking": {"type": "enabled"},
+        }
+    elif provider == "kimi":
+        api_key = EVALUATOR_API_KEY
+        base_url = EVALUATOR_BASE_URL.rstrip("/")
+        model = EVALUATOR_MODEL
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
+            "thinking": {"type": "disabled"},
+        }
+    else:
+        raise HTTPException(404, "Unknown AI provider")
+
+    if not api_key:
+        return {
+            "ok": False,
+            "provider": provider,
+            "model": model,
+            "base_url": base_url,
+            "error": "missing_api_key",
+        }
+
+    started = time.perf_counter()
+    url = f"{base_url}/chat/completions"
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=body,
+            )
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+        data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+        content = ""
+        if isinstance(data, dict):
+            choices = data.get("choices") or []
+            if choices:
+                content = ((choices[0].get("message") or {}).get("content") or "")[:500]
+        if not response.is_success:
+            return {
+                "ok": False,
+                "provider": provider,
+                "model": model,
+                "base_url": base_url,
+                "status_code": response.status_code,
+                "elapsed_ms": elapsed_ms,
+                "body": response.text[:1000],
+            }
+        return {
+            "ok": True,
+            "provider": provider,
+            "model": model,
+            "base_url": base_url,
+            "elapsed_ms": elapsed_ms,
+            "content": content,
+            "usage": data.get("usage") if isinstance(data, dict) else None,
+        }
+    except Exception as exc:
+        payload = _api_error_payload(exc)
+        payload.update({
+            "provider": provider,
+            "model": model,
+            "base_url": base_url,
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
+        })
+        return payload
 
 
 def _read_debug_state() -> dict:
@@ -1241,6 +1368,38 @@ async def admin_debug_event(event_id: int, _: None = Depends(require_admin)):
     return _debug_event_by_id(event_id)
 
 
+@app.get("/api/admin/debug-image/{filename}")
+async def admin_debug_image(filename: str, _: None = Depends(require_admin)):
+    if Path(filename).name != filename:
+        raise HTTPException(404, "Debug image not found")
+    path = DEBUG_IMAGE_DIR / filename
+    if not path.exists() or not path.is_file():
+        raise HTTPException(404, "Debug image not found")
+    return FileResponse(path)
+
+
+@app.get("/api/admin/debug-cache")
+async def admin_debug_cache(_: None = Depends(require_admin)):
+    return _debug_image_cache()
+
+
+@app.post("/api/admin/debug-clear")
+async def admin_debug_clear(_: None = Depends(require_admin)):
+    with debug_lock:
+        debug_events.clear()
+        try:
+            if DEBUG_LOG_PATH.exists():
+                DEBUG_LOG_PATH.unlink()
+        except OSError as exc:
+            raise HTTPException(500, f"Failed to clear debug log: {exc}") from exc
+    deleted_images = _clear_debug_images()
+    return {
+        "ok": True,
+        "deleted_images": deleted_images,
+        "cache": _debug_image_cache(),
+    }
+
+
 @app.post("/api/admin/debug-mode")
 async def admin_debug_mode(enabled: bool = Form(...), _: None = Depends(require_admin)):
     global debug_mode
@@ -1297,6 +1456,11 @@ async def admin_debug_detect(file: UploadFile = File(...), _: None = Depends(req
             "elapsed_ms": elapsed_ms,
             "error": str(exc),
         }
+
+
+@app.get("/api/admin/debug-ai/{provider}")
+async def admin_debug_ai(provider: str, _: None = Depends(require_admin)):
+    return await _ai_status(provider)
 
 
 # ── WebSocket ──────────────────────────────────────────────────────
