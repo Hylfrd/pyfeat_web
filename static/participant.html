@@ -585,18 +585,6 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
   </div>
 </div>
 
-<!-- BREAK VIEW                                     -->
-<div id="break-view" class="view hidden">
-  <div class="card" style="text-align:center">
-    <div class="check-icon">
-      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-    </div>
-    <h1>第一个任务完成！</h1>
-    <p class="subtitle">休息一下，准备好后点击下方开始第二个任务。</p>
-    <button id="start-task2" class="btn-primary">开始第二个任务</button>
-  </div>
-</div>
-
 <!-- ═══════════════════════════════════════════════ -->
 <!-- COMPLETE VIEW                                  -->
 <!-- ═══════════════════════════════════════════════ -->
@@ -607,14 +595,6 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
     </div>
     <h1>实验完成</h1>
     <p class="subtitle">感谢您的参与！</p>
-    <div style="text-align:left;margin-top:20px">
-      <label for="debrief-guess">在实验过程中，您觉得两个版本有什么不同？（可选）</label>
-      <input id="debrief-guess" type="text" placeholder="您的猜测...">
-      <label for="debrief-comments">其他想说的？（可选）</label>
-      <input id="debrief-comments" type="text" placeholder="...">
-      <button id="debrief-submit" class="btn-primary" style="margin-top:12px">提交反馈</button>
-      <p id="debrief-done" class="hidden" style="text-align:center;color:#059669;margin-top:12px;font-weight:600">✓ 已记录，谢谢！</p>
-    </div>
   </div>
 </div>
 
@@ -624,7 +604,7 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
 <script>
 // ── DOM refs ──
 const $ = id => document.getElementById(id);
-const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','break-view','complete-view'];
+const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view'];
 function showView(id){views.forEach(v=>$(v).classList.add('hidden'));$(id).classList.remove('hidden')}
 function setStage(id){currentStage=id;showView(id);writeProgress()}
 const STORAGE_KEY='hmcl-helper-progress-v1';
@@ -650,7 +630,7 @@ function writeProgress(extra={}){
     currentSessionId:currentSessionId||previous.currentSessionId,
     currentCondition:currentCondition||previous.currentCondition,
     currentScenario:currentScenario||previous.currentScenario,
-    isTask1,currentStage,turnCounter,revisionCounter,taskStartTime,
+    currentStage,turnCounter,revisionCounter,taskStartTime,
     draftText:currentDraft||previous.draftText||'',
     chatTranscript:chatTranscript.length?chatTranscript:(previous.chatTranscript||[]),
     forms,
@@ -706,7 +686,6 @@ let currentSessionId, currentCondition, currentScenario;
 let turnCounter = 0, revisionCounter = 0, taskStartTime = 0;
 let timerInterval, expressionInterval, baselineInterval;
 let mediaRecorder, webcamStream, chunkIndex = 0;
-let isTask1 = true;
 let isAiWaiting = false;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
@@ -894,7 +873,7 @@ function renderRestoredChat(){
   for(const msg of chatTranscript)appendChat(msg.role,msg.text,false);
 }
 function renderTaskMeta(){
-  $('task-label').textContent=isTask1?'任务 1':'任务 2';
+  $('task-label').textContent='写作任务';
   if(currentCondition){
     $('condition-badge').textContent=currentCondition==='affect-aware'?'情感感知 AI':'纯文本 AI';
     $('condition-badge').style.background=currentCondition==='affect-aware'?'#e0e7ff':'#f1f5f9';
@@ -912,7 +891,6 @@ function applyChatSync(msg){
   if(msg.session_id)currentSessionId=msg.session_id;
   if(msg.condition)currentCondition=msg.condition;
   if(msg.scenario)currentScenario=msg.scenario;
-  if(msg.task_index)isTask1=msg.task_index===1;
   renderTaskMeta();
   chatTranscript=messages.map(m=>({role:m.role,text:m.text||''}));
   renderRestoredChat();
@@ -943,8 +921,8 @@ async function resumeProgress(saved){
   currentSessionId=saved.currentSessionId;
   currentCondition=saved.currentCondition;
   currentScenario=saved.currentScenario;
-  isTask1=saved.isTask1!==false;
   currentStage=saved.currentStage||'setup-view';
+  if(currentStage==='break-view')currentStage='complete-view';
   turnCounter=saved.turnCounter||0;
   revisionCounter=saved.revisionCounter||0;
   taskStartTime=saved.taskStartTime||Date.now();
@@ -1062,27 +1040,20 @@ async function finishBaseline(){
 
 // ── Task ──
 async function startTask(){
-  if(!isTask1 || !currentSessionId){
-    const endpoint=isTask1?'/api/session/start':'/api/session/next';
+  if(!currentSessionId){
     const f=new FormData();
-    if(isTask1){
-      f.append('language',language);
-    } else {
-      f.append('participant_id',participantId);
-    }
-    const r=await fetch(endpoint,{method:'POST',body:f});
+    f.append('language',language);
+    const r=await fetch('/api/session/start',{method:'POST',body:f});
     const d=await r.json();
-    if(isTask1){
-      participantId=d.participant_id;
-      orderGroup=d.order_group;
-    }
+    participantId=d.participant_id;
+    orderGroup=d.order_group;
     currentSessionId=d.session_id;currentCondition=d.condition;currentScenario=d.scenario;
   }
   if(!webcamLive())await startWebcam();
   ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
 
   // Update UI
-  $('task-label').textContent=isTask1?'任务 1':'任务 2';
+  $('task-label').textContent='写作任务';
   $('condition-badge').textContent=currentCondition==='affect-aware'?'情感感知 AI':'纯文本 AI';
   $('condition-badge').style.background=currentCondition==='affect-aware'?'#e0e7ff':'#f1f5f9';
   $('condition-badge').style.color=currentCondition==='affect-aware'?'#4f46e5':'#64748b';
@@ -1331,23 +1302,8 @@ $('q-form').addEventListener('submit',async e=>{
     f.append(`q${i}`,v);
   }
   await fetch('/api/questionnaire',{method:'POST',body:f});
-  if(isTask1){setStage('post-survey-view')}else{setStage('complete-view');writeProgress({completed:true})}
+  setStage('post-survey-view');
 });
-
-// ── Task 2 ──
-$('start-task2').addEventListener('click',()=>{isTask1=false;writeProgress();startTask()});
-
-// ── Debrief ──
-$('debrief-submit').addEventListener('click',async()=>{
-  const f=new FormData();
-  f.append('participant_id',participantId);
-  f.append('guessed_purpose',$('debrief-guess').value);
-  f.append('comments',$('debrief-comments').value);
-  await fetch('/api/debrief',{method:'POST',body:f});
-  $('debrief-submit').classList.add('hidden');$('debrief-done').classList.remove('hidden');
-  writeProgress({completed:true});
-});
-
 
 // ── Pre-Survey Submit ──
 document.getElementById('pre-survey-form').addEventListener('submit', async e => {
@@ -1422,7 +1378,8 @@ document.getElementById('post-survey-form').addEventListener('submit', async e =
     toast('Failed to save post-survey: ' + err.message, 5000);
     return;
   }
-  if (isTask1) { setStage('break-view'); } else { setStage('complete-view');writeProgress({completed:true}); }
+  setStage('complete-view');
+  writeProgress({completed:true});
 });
 
 // ── Setup ──

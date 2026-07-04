@@ -575,21 +575,21 @@ def _generate_participant_id() -> tuple[str, str]:
 async def start_session(
     language: str = Form("zh"),
 ):
-    """Create a new participant (auto-generated ID + balanced group) and first session."""
+    """Create a new participant (auto-generated ID + balanced group) and session."""
     participant_id, order_group = _generate_participant_id()
 
     # Create participant
     p = Participant(id=participant_id, order_group=order_group, language=language)
     db_session.add(p)
 
-    # Determine first task from order group
-    first_condition = "text-only" if order_group in ("A", "B") else "affect-aware"
-    first_scenario = "A" if order_group in ("A", "C") else "B"
+    # Determine the single assigned task from order group.
+    assigned_condition = "text-only" if order_group in ("A", "B") else "affect-aware"
+    assigned_scenario = "A" if order_group in ("A", "C") else "B"
 
     session = Session(
         participant_id=participant_id,
-        task_scenario=first_scenario,
-        condition=first_condition,
+        task_scenario=assigned_scenario,
+        condition=assigned_condition,
         condition_order=1,
         start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     )
@@ -603,8 +603,8 @@ async def start_session(
         "participant_id": participant_id,
         "order_group": order_group,
         "session_id": session.id,
-        "condition": first_condition,
-        "scenario": first_scenario,
+        "condition": assigned_condition,
+        "scenario": assigned_scenario,
         "time_limit_s": FIFTEEN_MINUTES,
     }
 
@@ -613,31 +613,8 @@ async def start_session(
 async def next_session(
     participant_id: str = Form(...),
 ):
-    """Start the second task (after completing the first)."""
-    p = db_session.query(Participant).get(participant_id)
-    if not p:
-        raise HTTPException(404, "Participant not found")
-
-    # Determine second task from order group
-    second_condition = "affect-aware" if p.order_group in ("A", "B") else "text-only"
-    second_scenario = "B" if p.order_group in ("A", "C") else "A"
-
-    session = Session(
-        participant_id=participant_id,
-        task_scenario=second_scenario,
-        condition=second_condition,
-        condition_order=2,
-        start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    )
-    db_session.add(session)
-    db_session.commit()
-
-    return {
-        "session_id": session.id,
-        "condition": second_condition,
-        "scenario": second_scenario,
-        "time_limit_s": FIFTEEN_MINUTES,
-    }
+    """Deprecated: the experiment now uses one assigned writing task."""
+    raise HTTPException(410, "This experiment now uses a single task session.")
 
 
 PASS_THRESHOLD = int(os.getenv("PASS_THRESHOLD", "20"))
