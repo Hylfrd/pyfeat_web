@@ -687,6 +687,7 @@ let ws, participantId, orderGroup, language;
 let currentSessionId, currentCondition, currentScenario;
 let turnCounter = 0, revisionCounter = 0, taskStartTime = 0;
 let timerInterval, expressionInterval, expressionWatchdogInterval, baselineInterval;
+let aiSyncTimer = null;
 let mediaRecorder, webcamStream, chunkIndex = 0;
 let isAiWaiting = false;
 let reconnectTimer = null;
@@ -739,6 +740,7 @@ function connectWS(){
       if(currentStage==='task-view')setCapturePaused('连接恢复中',true);
       if(isAiWaiting){
         updateThinking('连接中断，正在恢复...');
+        startAiSyncPolling();
       }
       if(e.code!==1000)scheduleReconnect();
     };
@@ -755,6 +757,7 @@ function connectWS(){
       }
       if(msg.type==='ai_response'){
         isAiWaiting=false;
+        stopAiSyncPolling();
         removeThinking();
         appendChat('ai',msg.text);
         $('turn-num').textContent=msg.turn;
@@ -939,6 +942,7 @@ function applyChatSync(msg){
   const last=chatTranscript[chatTranscript.length-1];
   if(last&&last.role==='ai'){
     isAiWaiting=false;
+    stopAiSyncPolling();
     removeThinking();
     const draft=parseDraft(last.text);
     if(draft){
@@ -949,6 +953,27 @@ function applyChatSync(msg){
     showThinking();
   }
   writeProgress();
+}
+
+async function fetchChatSync(){
+  if(!participantId||!currentSessionId||currentStage!=='task-view')return;
+  try{
+    const params=new URLSearchParams({participant_id:participantId});
+    const r=await fetch(`/api/session/sync/${currentSessionId}?${params.toString()}`,{cache:'no-store'});
+    if(!r.ok)return;
+    const data=await r.json();
+    applyChatSync(data);
+  }catch(err){
+    console.warn('[sync] chat sync failed',err);
+  }
+}
+function startAiSyncPolling(){
+  if(aiSyncTimer)return;
+  fetchChatSync();
+  aiSyncTimer=setInterval(fetchChatSync,3000);
+}
+function stopAiSyncPolling(){
+  if(aiSyncTimer){clearInterval(aiSyncTimer);aiSyncTimer=null}
 }
 async function resumeProgress(saved){
   participantId=saved.participantId;
@@ -985,6 +1010,12 @@ async function resumeProgress(saved){
     renderRestoredChat();
     $('turn-num').textContent=turnCounter;
     $('rev-num').textContent=revisionCounter;
+    const last=chatTranscript[chatTranscript.length-1];
+    if(last&&last.role==='user'){
+      isAiWaiting=true;
+      showThinking();
+      startAiSyncPolling();
+    }
     lastExpressionSentAt=Date.now();
     captureState='';
     startExpressionCapture();
@@ -1213,6 +1244,7 @@ $('chat-form').addEventListener('submit',e=>{
   appendChat('user',text);
   isAiWaiting=true;
   showThinking();
+  startAiSyncPolling();
   ws.send(JSON.stringify({type:'chat',text,condition:currentCondition,language}));
   input.value='';input.disabled=true;$('submit-email').disabled=true;
 });

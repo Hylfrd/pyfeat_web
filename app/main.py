@@ -837,6 +837,40 @@ async def submit_questionnaire(
     return {"ok": True}
 
 
+@app.get("/api/session/sync/{session_id}")
+async def sync_session_chat(
+    session_id: int,
+    participant_id: str,
+):
+    """Return the current chat state for participant-side recovery."""
+    session = db_session.query(Session).get(session_id)
+    if not session or session.participant_id != participant_id:
+        raise HTTPException(404, "Session not found")
+    logs = (
+        db_session.query(ChatLog)
+        .filter(ChatLog.session_id == session_id)
+        .order_by(ChatLog.seq)
+        .all()
+    )
+    return {
+        "type": "chat_sync",
+        "messages": [
+            {"role": log.role, "text": log.content}
+            for log in logs
+            if log.role in ("user", "ai")
+        ],
+        "turn": sum(1 for log in logs if log.role == "user"),
+        "revision": sum(
+            1 for log in logs
+            if log.role == "ai" and "[DRAFT_START]" in log.content
+        ),
+        "session_id": session.id,
+        "condition": session.condition,
+        "scenario": session.task_scenario,
+        "task_index": session.condition_order,
+    }
+
+
 @app.post("/api/baseline-calibrate")
 async def baseline_calibrate(participant_id: str = Form(...)):
     """Calibrate baseline using server-side buffered frames from WebSocket."""
