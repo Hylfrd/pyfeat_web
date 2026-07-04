@@ -254,26 +254,31 @@ def create_experiment_router(
         sess = db_session.query(Session).filter(Session.id == session_id).first()
         if not sess:
             raise HTTPException(400, "Session not found.")
-        s = PostTaskSurvey(
-            session_id=session_id,
-            u1_understood_needs=u1, u2_aware_difficulty=u2, u3_matched_intent=u3,
-            u4_noticed_stuck=u4, u5_aligned_thoughts=u5,
-            s1_felt_supported=s1, s2_useful_guidance=s2, s3_reduced_effort=s3,
-            s4_concrete_suggestions=s4, s5_efficient=s5,
-            sp1_socially_responsive=sp1, sp2_active_partner=sp2, sp3_socially_engaging=sp3,
-            cp1_ai_with_me=cp1, cp2_ai_aware_of_me=cp2, cp3_mutual_awareness=cp3,
-            r1_acknowledged_difficulty=r1, r2_signaled_uncertainty=r2,
-            r3_helped_differently=r3, r4_repair_supportive=r4,
-            r5_acknowledgement_appropriate=r5,
-            e1_support_matched_awareness=e1, e2_met_expectations=e2,
-            e3_more_aware_than_helpful=e3, e4_disappointed=e4, e5_raised_expectations=e5,
-            f1_frustrated=f1, f2_smooth=f2, f3_satisfied_draft=f3,
-            f4_satisfied_overall=f4, f5_future_use=f5,
-            m1_responded_to_emotion=m1, m2_webcam_adapted=m2, m3_changed_strategy=m3,
-            m4_suspected_adaptation=m4, m5_open_response=m5,
-        )
+        values = {
+            "u1_understood_needs": u1, "u2_aware_difficulty": u2, "u3_matched_intent": u3,
+            "u4_noticed_stuck": u4, "u5_aligned_thoughts": u5,
+            "s1_felt_supported": s1, "s2_useful_guidance": s2, "s3_reduced_effort": s3,
+            "s4_concrete_suggestions": s4, "s5_efficient": s5,
+            "sp1_socially_responsive": sp1, "sp2_active_partner": sp2, "sp3_socially_engaging": sp3,
+            "cp1_ai_with_me": cp1, "cp2_ai_aware_of_me": cp2, "cp3_mutual_awareness": cp3,
+            "r1_acknowledged_difficulty": r1, "r2_signaled_uncertainty": r2,
+            "r3_helped_differently": r3, "r4_repair_supportive": r4,
+            "r5_acknowledgement_appropriate": r5,
+            "e1_support_matched_awareness": e1, "e2_met_expectations": e2,
+            "e3_more_aware_than_helpful": e3, "e4_disappointed": e4, "e5_raised_expectations": e5,
+            "f1_frustrated": f1, "f2_smooth": f2, "f3_satisfied_draft": f3,
+            "f4_satisfied_overall": f4, "f5_future_use": f5,
+            "m1_responded_to_emotion": m1, "m2_webcam_adapted": m2, "m3_changed_strategy": m3,
+            "m4_suspected_adaptation": m4, "m5_open_response": m5,
+        }
+        s = db_session.query(PostTaskSurvey).filter(PostTaskSurvey.session_id == session_id).first()
+        if s:
+            for key, value in values.items():
+                setattr(s, key, value)
+        else:
+            s = PostTaskSurvey(session_id=session_id, **values)
+            db_session.add(s)
         try:
-            db_session.merge(s)
             db_session.commit()
         except Exception as e:
             db_session.rollback()
