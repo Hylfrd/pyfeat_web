@@ -48,6 +48,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent  # project root (one level abo
 STATIC_DIR = ROOT_DIR / "static"
 
 app = FastAPI(title="Co-Writing Emotion AI Study")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Initialize components
 db_session = init_db(str(ROOT_DIR / "data" / "experiment.db"))
