@@ -1040,8 +1040,9 @@ function initProgressRecovery(){
   const saved=readProgress();
   if(!saved||!saved.participantId)return;
   if(saved.completed){
-    currentStage='complete-view';
-    showView('complete-view');
+    clearProgress();
+    currentStage='setup-view';
+    showView('setup-view');
     return;
   }
   if(confirm('检测到未完成的实验进度。是否继续上次实验？')){
