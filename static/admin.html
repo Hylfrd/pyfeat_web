@@ -529,7 +529,7 @@ function updatePyfeatStatus(data={}){
   if(!el)return;
   el.className='debug-status-card '+(data.ok?'ok':'err');
   const ms=data.elapsed_ms!==undefined?` · ${data.elapsed_ms} ms`:'';
-  el.textContent=data.ok?`PyFeat 正常${ms}`:`PyFeat 异常${ms}`;
+  el.textContent=data.ok?`PyFeat 正常${ms}`:`模型离线${ms}`;
   el.title=JSON.stringify(data,null,2);
 }
 
