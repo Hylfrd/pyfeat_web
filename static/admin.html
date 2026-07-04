@@ -218,6 +218,9 @@ button.danger:hover{background:#dc2626;color:#fff}
   margin-top:8px;max-height:260px;overflow:auto;background:#020617;border:1px solid #334155;
   border-radius:8px;padding:10px;color:#cbd5e1;font-size:.82em;line-height:1.5;white-space:pre-wrap;
 }
+.debug-expand{border:0;background:transparent;color:#818cf8;padding:0;font-weight:700;cursor:pointer}
+.debug-detail-row td{background:#0b1220;padding:0 16px 16px}
+.debug-detail-body{border-top:1px solid #334155;padding-top:12px}
 .debug-face{
   margin-top:10px;display:grid;grid-template-columns:160px 1fr;gap:12px;align-items:start;
 }
@@ -323,6 +326,8 @@ let debugBefore=null;
 let debugHasMore=false;
 let debugEnabled=false;
 let debugLoading=false;
+let debugDetailCache=new Map();
+let debugExpandedIds=new Set();
 let debugFilterTimer=null;
 let debugPollTimer=null;
 let debugHealthTimer=null;
@@ -553,6 +558,8 @@ async function renderDebug(){
   debugEvents=[];
   debugBefore=null;
   debugHasMore=false;
+  debugDetailCache.clear();
+  debugExpandedIds.clear();
   debugAutoFollow=true;
   $('detail').innerHTML=`
     <div class="debug-console-bar">
@@ -643,6 +650,8 @@ async function loadDebugPage({reset=false,before=null,live=false,silent=false}={
       debugBefore=data.next_before??null;
       debugHasMore=!!data.has_more;
       debugEvents=events;
+      debugDetailCache.clear();
+      debugExpandedIds.clear();
     }else if(live){
       const incomingIds=new Set(events.map(e=>String(e.id)));
       debugEvents=events.concat(debugEvents.filter(e=>!incomingIds.has(String(e.id))));
@@ -676,6 +685,9 @@ function renderDebugRows(){
   const keepTop=debugAutoFollow&&scroll;
   const rows=debugEvents.map(e=>{
     const kb=e.bytes?Math.round(e.bytes/1024*10)/10:'';
+    const id=String(e.id??'');
+    const expanded=debugExpandedIds.has(id);
+    const detail=debugDetailCache.get(id);
     return `
       <tr>
         <td>${escHtml(e.ts||'')}</td>
@@ -688,29 +700,40 @@ function renderDebugRows(){
         <td>${e.reliable?'yes':'no'}</td>
         <td>${escHtml(e.message||'')}</td>
         <td>
-          <details class="debug-details" ontoggle="loadDebugDetail(this,${Number(e.id??0)})">
-            <summary>展开</summary>
-            <div class="debug-detail-body">加载详情中...</div>
-          </details>
+          <button class="debug-expand" onclick="toggleDebugDetail(event,${Number(e.id??0)})">${expanded?'收起':'展开'}</button>
         </td>
-      </tr>`;
+      </tr>
+      ${expanded?`<tr class="debug-detail-row"><td colspan="10"><div class="debug-detail-body">${detail||'加载详情中...'}</div></td></tr>`:''}`;
   }).join('');
   $('debug-rows').innerHTML=rows||'<tr><td colspan="10" style="text-align:center;color:#64748b;padding:24px">没有匹配的日志</td></tr>';
   if(keepTop)scroll.scrollTop=0;
 }
 
-async function loadDebugDetail(el,eventId){
+async function toggleDebugDetail(ev,eventId){
+  ev.preventDefault();
+  ev.stopPropagation();
   stopDebugFollow();
-  if(!el.open||el.dataset.loaded==='1')return;
-  const body=el.querySelector('.debug-detail-body');
+  const id=String(eventId);
+  if(debugExpandedIds.has(id)){
+    debugExpandedIds.delete(id);
+    renderDebugRows();
+    return;
+  }
+  debugExpandedIds.add(id);
+  renderDebugRows();
+  if(!debugDetailCache.has(id))await loadDebugDetail(eventId);
+}
+
+async function loadDebugDetail(eventId){
+  const id=String(eventId);
   try{
     const r=await adminFetch(`/api/admin/debug-event/${eventId}`);
     const e=await r.json();
-    body.innerHTML=renderDebugDetail(e);
-    el.dataset.loaded='1';
+    debugDetailCache.set(id,renderDebugDetail(e));
   }catch(err){
-    body.textContent='详情加载失败';
+    debugDetailCache.set(id,'详情加载失败');
   }
+  renderDebugRows();
 }
 
 function renderDebugDetail(e){
@@ -791,6 +814,8 @@ async function clearDebugLogs(){
   debugEvents=[];
   debugBefore=null;
   debugHasMore=false;
+  debugDetailCache.clear();
+  debugExpandedIds.clear();
   renderDebugRows();
   updateDebugControls();
   await refreshDebugCache();
