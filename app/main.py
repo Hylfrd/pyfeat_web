@@ -13,6 +13,7 @@ import asyncio
 import base64
 import json
 import os
+import secrets
 import time
 import httpx
 from collections import deque
@@ -20,7 +21,7 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, UploadFile, File, Request, Response, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 
@@ -63,8 +64,42 @@ selectors: dict[str, StrategySelector] = {}
 debug_mode = False
 debug_events = deque(maxlen=300)
 DEBUG_LOG_PATH = ROOT_DIR / "data" / "debug_events.jsonl"
+ADMIN_COOKIE = "admin_token"
 
 FIFTEEN_MINUTES = 15 * 60  # seconds
+
+
+def _env_value(key: str) -> str:
+    value = os.getenv(key)
+    if value:
+        return value.strip().strip('"').strip("'")
+    env_path = ROOT_DIR / ".env"
+    if not env_path.exists():
+        return ""
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            raw = line.strip()
+            if not raw or raw.startswith("#") or "=" not in raw:
+                continue
+            name, item = raw.split("=", 1)
+            if name.strip() == key:
+                return item.strip().strip('"').strip("'")
+    return ""
+
+
+def _admin_token() -> str:
+    return _env_value("TOKEN")
+
+
+def _admin_allowed(request: Request) -> bool:
+    token = _admin_token()
+    sent = request.cookies.get(ADMIN_COOKIE, "")
+    return bool(token) and secrets.compare_digest(sent, token)
+
+
+def require_admin(request: Request):
+    if not _admin_allowed(request):
+        raise HTTPException(status_code=401, detail="Admin token required")
 
 
 def _frame_bytes(image_base64: str) -> int:
@@ -186,6 +221,34 @@ async def admin_page():
         "Pragma": "no-cache",
         "Expires": "0",
     })
+
+
+@app.get("/api/admin/auth")
+async def admin_auth(_: None = Depends(require_admin)):
+    return {"ok": True}
+
+
+@app.post("/api/admin/login")
+async def admin_login(request: Request, response: Response, token: str = Form(...)):
+    expected = _admin_token()
+    if not expected:
+        raise HTTPException(status_code=503, detail="Admin token is not configured")
+    if not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    response.set_cookie(
+        ADMIN_COOKIE,
+        token,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+    )
+    return {"ok": True}
+
+
+@app.post("/api/admin/logout")
+async def admin_logout(response: Response):
+    response.delete_cookie(ADMIN_COOKIE)
+    return {"ok": True}
 
 
 @app.get("/api/model-health")
@@ -659,7 +722,7 @@ async def upload_video_chunk(
 # ── Admin API ──────────────────────────────────────────────────────
 
 @app.get("/api/admin/sessions")
-async def admin_sessions():
+async def admin_sessions(_: None = Depends(require_admin)):
     """Return all sessions for the dashboard."""
     sessions = db_session.query(Session).order_by(Session.id.desc()).all()
     return [
@@ -682,7 +745,7 @@ async def admin_sessions():
 
 
 @app.get("/api/admin/chat-logs/{session_id}")
-async def admin_chat_logs(session_id: int):
+async def admin_chat_logs(session_id: int, _: None = Depends(require_admin)):
     """Return chat logs for a specific session."""
     logs = (
         db_session.query(ChatLog)
@@ -705,7 +768,7 @@ async def admin_chat_logs(session_id: int):
 
 
 @app.get("/api/admin/expression/{session_id}")
-async def admin_expression(session_id: int):
+async def admin_expression(session_id: int, _: None = Depends(require_admin)):
     """Return expression timeline for a session."""
     frames = (
         db_session.query(ExpressionFrame)
@@ -727,7 +790,7 @@ async def admin_expression(session_id: int):
 # ── Admin: Baseline data ─────────────────────────────────────────
 
 @app.get("/api/admin/participants/{participant_id}/baseline")
-async def admin_baseline(participant_id: str):
+async def admin_baseline(participant_id: str, _: None = Depends(require_admin)):
     """Return baseline AU data for a participant."""
     p = db_session.query(Participant).get(participant_id)
     if not p:
@@ -748,7 +811,7 @@ async def admin_baseline(participant_id: str):
 # ── Admin: Delete session ───────────────────────────────────────
 
 @app.delete("/api/admin/sessions/{session_id}")
-async def admin_delete_session(session_id: int):
+async def admin_delete_session(session_id: int, _: None = Depends(require_admin)):
     """Delete a session and all its related data."""
     session = db_session.query(Session).get(session_id)
     if not session:
@@ -767,7 +830,7 @@ async def admin_delete_session(session_id: int):
 # ── Admin: Export session ────────────────────────────────────────
 
 @app.get("/api/admin/sessions/{session_id}/export")
-async def admin_export_session(session_id: int):
+async def admin_export_session(session_id: int, _: None = Depends(require_admin)):
     """Export a single session as JSON including chat, expression, questionnaire, evaluations."""
     session = db_session.query(Session).get(session_id)
     if not session:
@@ -874,7 +937,7 @@ async def admin_export_session(session_id: int):
 # ── Admin: Expression stats ──────────────────────────────────────
 
 @app.get("/api/admin/expression/{session_id}/stats")
-async def admin_expression_stats(session_id: int):
+async def admin_expression_stats(session_id: int, _: None = Depends(require_admin)):
     """Return aggregated expression statistics for a session."""
     frames = (
         db_session.query(ExpressionFrame)
@@ -954,7 +1017,7 @@ async def admin_expression_stats(session_id: int):
 # ── Admin: Face detection status (for participant page polling) ──
 
 @app.get("/api/admin/face-status/{participant_id}")
-async def admin_face_status(participant_id: str):
+async def admin_face_status(participant_id: str, _: None = Depends(require_admin)):
     """Return current face detection status for a participant."""
     frames = expression_engine.get_recent_frames(participant_id, 3)
     if not frames:
@@ -985,7 +1048,7 @@ async def admin_face_status(participant_id: str):
 
 
 @app.get("/api/admin/debug")
-async def admin_debug():
+async def admin_debug(_: None = Depends(require_admin)):
     return {
         "enabled": debug_mode,
         "events": _debug_tail(),
@@ -993,7 +1056,7 @@ async def admin_debug():
 
 
 @app.post("/api/admin/debug-mode")
-async def admin_debug_mode(enabled: bool = Form(...)):
+async def admin_debug_mode(enabled: bool = Form(...), _: None = Depends(require_admin)):
     global debug_mode
     debug_mode = enabled
     event = _push_debug({
@@ -1008,12 +1071,12 @@ async def admin_debug_mode(enabled: bool = Form(...)):
 
 
 @app.get("/api/admin/debug-health")
-async def admin_debug_health():
+async def admin_debug_health(_: None = Depends(require_admin)):
     return await _pyfeat_health()
 
 
 @app.post("/api/admin/debug-detect")
-async def admin_debug_detect(file: UploadFile = File(...)):
+async def admin_debug_detect(file: UploadFile = File(...), _: None = Depends(require_admin)):
     started = time.perf_counter()
     image_bytes = await file.read()
     image_b64 = base64.b64encode(image_bytes).decode("ascii")

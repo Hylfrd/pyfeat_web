@@ -124,6 +124,25 @@ button.primary:hover{background:#4338ca}
 button.danger{background:transparent;border-color:#dc2626;color:#dc2626}
 button.danger:hover{background:#dc2626;color:#fff}
 
+.auth-overlay{
+  position:fixed;inset:0;z-index:500;background:#0f172a;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.auth-overlay.hidden{display:none}
+.auth-card{
+  width:min(420px,100%);background:#1e293b;border:1px solid #334155;border-radius:14px;
+  padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.35);
+}
+.auth-card h2{font-size:1.2em;margin-bottom:8px;color:#f8fafc}
+.auth-card p{font-size:.78em;color:#94a3b8;line-height:1.6;margin-bottom:16px}
+.auth-card input{
+  width:100%;background:#0f172a;border:1px solid #334155;border-radius:10px;
+  color:#e2e8f0;padding:12px 14px;font:inherit;margin-bottom:12px;
+}
+.auth-card input:focus{outline:none;border-color:#6366f1}
+.auth-card button{width:100%;justify-content:center}
+.auth-error{min-height:18px;margin-top:10px;color:#fca5a5;font-size:.78em}
+
 /* Expression strip */
 .au-strip{display:flex;gap:1px;flex-wrap:wrap;margin:12px 0}
 .au-strip .cell{width:5px;height:24px;border-radius:1px;opacity:.85;cursor:pointer}
@@ -227,6 +246,16 @@ button.danger:hover{background:#dc2626;color:#fff}
 </head>
 <body>
 
+<div id="auth-overlay" class="auth-overlay">
+  <form id="auth-form" class="auth-card">
+    <h2>Admin Token</h2>
+    <p>请输入后台 token 进入实验管理页面。</p>
+    <input id="auth-token" type="password" autocomplete="current-password" placeholder="Token">
+    <button class="primary" type="submit">进入后台</button>
+    <div id="auth-error" class="auth-error"></div>
+  </form>
+</div>
+
 <!-- ═══ Sidebar ═══ -->
 <div id="sidebar">
   <div class="head">
@@ -272,10 +301,67 @@ const $=id=>document.getElementById(id);
 let sessions=[],activeSid=null,sessionCache={};
 let debugEvents=[];
 let activeTab='debug';
+let refreshTimer=null;
+
+function showAuth(message=''){
+  $('auth-overlay').classList.remove('hidden');
+  $('auth-error').textContent=message;
+  setTimeout(()=>$('auth-token')?.focus(),0);
+  if(refreshTimer){
+    clearInterval(refreshTimer);
+    refreshTimer=null;
+  }
+}
+
+function hideAuth(){
+  $('auth-overlay').classList.add('hidden');
+  $('auth-error').textContent='';
+  if(!refreshTimer)refreshTimer=setInterval(refresh,10000);
+}
+
+async function adminFetch(url,opts={}){
+  const r=await fetch(url,{...opts,credentials:'same-origin'});
+  if(r.status===401){
+    showAuth('Token 已失效，请重新输入。');
+    throw new Error('unauthorized');
+  }
+  return r;
+}
+
+$('auth-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const token=$('auth-token').value.trim();
+  if(!token){
+    $('auth-error').textContent='请输入 token。';
+    return;
+  }
+  const body=new URLSearchParams();
+  body.set('token',token);
+  const r=await fetch('/api/admin/login',{method:'POST',body,credentials:'same-origin'});
+  if(!r.ok){
+    $('auth-error').textContent='Token 不正确或服务器未配置 TOKEN。';
+    return;
+  }
+  $('auth-token').value='';
+  hideAuth();
+  await refresh();
+  renderActiveTab();
+});
+
+async function initAuth(){
+  const r=await fetch('/api/admin/auth',{credentials:'same-origin'});
+  if(!r.ok){
+    showAuth();
+    return;
+  }
+  hideAuth();
+  await refresh();
+  renderActiveTab();
+}
 
 // ── Fetch & render ──
 async function refresh(){
-  const r=await fetch('/api/admin/sessions');
+  const r=await adminFetch('/api/admin/sessions');
   sessions=await r.json();
   renderStats();
   renderList();
@@ -337,8 +423,8 @@ async function loadSession(sid,silent=false){
 
   // Fetch data
   const [exportR,statsR]=await Promise.all([
-    fetch(`/api/admin/sessions/${sid}/export`),
-    fetch(`/api/admin/expression/${sid}/stats`)
+    adminFetch(`/api/admin/sessions/${sid}/export`),
+    adminFetch(`/api/admin/expression/${sid}/stats`)
   ]);
   const exp=await exportR.json();
   const st=await statsR.json();
@@ -379,7 +465,7 @@ function renderActiveTab(){
 async function setDebugMode(enabled){
   const body=new URLSearchParams();
   body.set('enabled', enabled ? 'true' : 'false');
-  const r=await fetch('/api/admin/debug-mode',{method:'POST',body});
+  const r=await adminFetch('/api/admin/debug-mode',{method:'POST',body});
   if(!r.ok){
     toast('日志开关更新失败','err');
     return;
@@ -388,7 +474,7 @@ async function setDebugMode(enabled){
 }
 
 async function renderDebug(){
-  const r=await fetch('/api/admin/debug');
+  const r=await adminFetch('/api/admin/debug');
   const data=await r.json();
   debugEvents=(data.events||[]).slice().reverse();
   const participants=[...new Set(debugEvents.map(e=>e.participant_id).filter(Boolean))].sort();
@@ -443,7 +529,7 @@ async function renderDebug(){
 
 async function checkDebugHealth(){
   $('debug-result').textContent='检测中...';
-  const r=await fetch('/api/admin/debug-health');
+  const r=await adminFetch('/api/admin/debug-health');
   $('debug-result').textContent=JSON.stringify(await r.json(),null,2);
 }
 
@@ -456,7 +542,7 @@ async function uploadDebugImage(){
   $('debug-result').textContent='上传并检测中...';
   const body=new FormData();
   body.append('file',file);
-  const r=await fetch('/api/admin/debug-detect',{method:'POST',body});
+  const r=await adminFetch('/api/admin/debug-detect',{method:'POST',body});
   $('debug-result').textContent=JSON.stringify(await r.json(),null,2);
 }
 
@@ -735,7 +821,7 @@ function downloadJSON(data,filename){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
 }
 async function exportSession(sid){
-  const r=await fetch(`/api/admin/sessions/${sid}/export`);
+  const r=await adminFetch(`/api/admin/sessions/${sid}/export`);
   const data=await r.json();
   downloadJSON(data,`session_${sid}_${data.session.participant_id}.json`);
   toast('导出 JSON 完成','ok');
@@ -753,7 +839,7 @@ function exportSessionCSV(sid){
   toast('导出 CSV 完成','ok');
 }
 async function exportExpressionCSV(sid){
-  const r=await fetch(`/api/admin/expression/${sid}/stats`);
+  const r=await adminFetch(`/api/admin/expression/${sid}/stats`);
   const st=await r.json();
   const frames=st.frames||[];
   let csv='time_s,au1,au4,au7,au12,head_yaw,head_pitch,face_detected,reliable\n';
@@ -781,7 +867,7 @@ function confirmDelete(sid,pid){
 }
 function closeModal(){$('modal-overlay').classList.add('hidden')}
 async function doDelete(sid){
-  const r=await fetch(`/api/admin/sessions/${sid}`,{method:'DELETE'});
+  const r=await adminFetch(`/api/admin/sessions/${sid}`,{method:'DELETE'});
   if(r.ok){
     closeModal();
     activeSid=null;
@@ -807,8 +893,7 @@ function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function escAttr(s){return escHtml(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
 // ── Init ──
-refresh().then(()=>renderActiveTab());
-setInterval(refresh,10000);
+initAuth();
 </script>
 </body>
 </html>
