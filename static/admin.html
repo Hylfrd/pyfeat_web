@@ -347,7 +347,7 @@ $('auth-form').addEventListener('submit',async e=>{
   body.set('token',token);
   const r=await fetch('/api/admin/login',{method:'POST',body,credentials:'same-origin'});
   if(!r.ok){
-    $('auth-error').textContent='Token 不正确或服务器未配置 TOKEN。';
+    $('auth-error').textContent='Token错误';
     return;
   }
   $('auth-token').value='';
