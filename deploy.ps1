@@ -16,6 +16,7 @@ $ErrLog = Join-Path $LogDir "web.err.log"
 $Port = 8020
 $PyFeatApiUrl = "http://100.93.165.44:8055"
 $PyFeatApiTimeout = "10"
+$StartedPid = $null
 
 function Ensure-Directories {
     New-Item -ItemType Directory -Force -Path $Root, $LogDir | Out-Null
@@ -33,9 +34,41 @@ function Install-Dependencies {
 function Start-AppProcess {
     Ensure-Directories
     Set-Location $Root
+    if (!(Test-Path $PythonExe)) {
+        throw "Python executable not found: $PythonExe"
+    }
     $env:PYFEAT_API_URL = $PyFeatApiUrl
     $env:PYFEAT_API_TIMEOUT = $PyFeatApiTimeout
     & $PythonExe -m uvicorn app.main:app --host 127.0.0.1 --port $Port --ws-ping-interval 20 --ws-ping-timeout 180 >> $OutLog 2>> $ErrLog
+}
+
+function Start-AppDetached {
+    Ensure-Directories
+    Set-Location $Root
+    if (!(Test-Path $PythonExe)) {
+        throw "Python executable not found: $PythonExe"
+    }
+
+    $env:PYFEAT_API_URL = $PyFeatApiUrl
+    $env:PYFEAT_API_TIMEOUT = $PyFeatApiTimeout
+
+    $args = @(
+        "-m", "uvicorn", "app.main:app",
+        "--host", "127.0.0.1",
+        "--port", "$Port",
+        "--ws-ping-interval", "20",
+        "--ws-ping-timeout", "180"
+    )
+    $process = Start-Process `
+        -FilePath $PythonExe `
+        -ArgumentList $args `
+        -WorkingDirectory $Root `
+        -RedirectStandardOutput $OutLog `
+        -RedirectStandardError $ErrLog `
+        -WindowStyle Hidden `
+        -PassThru
+    $script:StartedPid = $process.Id
+    Write-Output "Started app process PID $($process.Id)"
 }
 
 function Remove-LegacyScripts {
@@ -70,6 +103,7 @@ function Register-AppTask {
 
 function Stop-App {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
     $lines = netstat -ano | Select-String ":$Port"
     foreach ($line in $lines) {
         $parts = $line.ToString().Trim() -split "\s+"
@@ -102,6 +136,10 @@ function Wait-Healthy {
     netstat -ano | Select-String ":$Port" | Write-Output
     Write-Output "Scheduled task:"
     Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Output
+    if ($script:StartedPid) {
+        Write-Output "Started process:"
+        Get-Process -Id $script:StartedPid -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Output
+    }
     Write-Output "stdout log:"
     if (Test-Path $OutLog) {
         Get-Content $OutLog -Tail 120 | Write-Output
@@ -121,9 +159,9 @@ if ($RunServer) {
 Ensure-Directories
 Remove-LegacyScripts
 Install-Dependencies
-Register-AppTask
 Stop-App
 Start-Sleep -Seconds 1
 Reset-Logs
-Start-ScheduledTask -TaskName $TaskName
+Start-AppDetached
+Register-AppTask
 Wait-Healthy
