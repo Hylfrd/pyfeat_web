@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import APIRouter
+from fastapi.responses import FileResponse
+
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = ROOT_DIR / "static"
+NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+router = APIRouter()
+
+
+@router.get("/")
+async def participant_page():
+    """Serve participant HTML."""
+    return FileResponse(STATIC_DIR / "participant.html", headers=NO_STORE_HEADERS)
+
+
+@router.get("/admin")
+async def admin_page():
+    """Serve experimenter dashboard."""
+    return FileResponse(STATIC_DIR / "admin.html", headers=NO_STORE_HEADERS)

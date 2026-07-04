@@ -22,10 +22,11 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, UploadFile, File, Request, Response, Depends, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, UploadFile, File, Depends, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
+from .auth import require_admin, router as auth_router
 from .database import (
     init_db, Participant, Session, ChatLog, ExpressionFrame,
     Questionnaire, Evaluation, PreTaskSurvey, PostTaskSurvey,
@@ -41,6 +42,7 @@ from .evaluator import (
     deterministic_score, evaluate_email, get_matched_markers,
     check_hard_fail, llm_heuristic_single,
 )
+from .pages import router as pages_router
 
 # ── App setup ──────────────────────────────────────────────────────
 
@@ -49,6 +51,8 @@ STATIC_DIR = ROOT_DIR / "static"
 
 app = FastAPI(title="Co-Writing Emotion AI Study")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.include_router(pages_router)
+app.include_router(auth_router)
 
 # Initialize components
 db_session = init_db(str(ROOT_DIR / "data" / "experiment.db"))
@@ -74,42 +78,8 @@ DEBUG_IMAGE_DIR = ROOT_DIR / "data" / "debug_images"
 DEBUG_LINE_CHUNK_BYTES = 64 * 1024
 DEBUG_MAX_SCAN_LINES = 5000
 debug_lock = threading.Lock()
-ADMIN_COOKIE = "admin_token"
 
 FIFTEEN_MINUTES = 15 * 60  # seconds
-
-
-def _env_value(key: str) -> str:
-    value = os.getenv(key)
-    if value:
-        return value.strip().strip('"').strip("'")
-    env_path = ROOT_DIR / ".env"
-    if not env_path.exists():
-        return ""
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            raw = line.strip()
-            if not raw or raw.startswith("#") or "=" not in raw:
-                continue
-            name, item = raw.split("=", 1)
-            if name.strip() == key:
-                return item.strip().strip('"').strip("'")
-    return ""
-
-
-def _admin_token() -> str:
-    return _env_value("TOKEN")
-
-
-def _admin_allowed(request: Request) -> bool:
-    token = _admin_token()
-    sent = request.cookies.get(ADMIN_COOKIE, "")
-    return bool(token) and secrets.compare_digest(sent, token)
-
-
-def require_admin(request: Request):
-    if not _admin_allowed(request):
-        raise HTTPException(status_code=401, detail="Admin token required")
 
 
 def _frame_bytes(image_base64: str) -> int:
@@ -495,56 +465,6 @@ async def startup():
 async def shutdown():
     db_session.close()
     expression_engine.stop()
-
-
-# ── Pages ──────────────────────────────────────────────────────────
-
-@app.get("/")
-async def participant_page():
-    """Serve participant HTML."""
-    return FileResponse(STATIC_DIR / "participant.html", headers={
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        "Pragma": "no-cache",
-        "Expires": "0",
-    })
-
-
-@app.get("/admin")
-async def admin_page():
-    """Serve experimenter dashboard."""
-    return FileResponse(STATIC_DIR / "admin.html", headers={
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        "Pragma": "no-cache",
-        "Expires": "0",
-    })
-
-
-@app.get("/api/admin/auth")
-async def admin_auth(_: None = Depends(require_admin)):
-    return {"ok": True}
-
-
-@app.post("/api/admin/login")
-async def admin_login(request: Request, response: Response, token: str = Form(...)):
-    expected = _admin_token()
-    if not expected:
-        raise HTTPException(status_code=503, detail="Admin token is not configured")
-    if not secrets.compare_digest(token, expected):
-        raise HTTPException(status_code=401, detail="Invalid admin token")
-    response.set_cookie(
-        ADMIN_COOKIE,
-        token,
-        httponly=True,
-        secure=request.url.scheme == "https",
-        samesite="lax",
-    )
-    return {"ok": True}
-
-
-@app.post("/api/admin/logout")
-async def admin_logout(response: Response):
-    response.delete_cookie(ADMIN_COOKIE)
-    return {"ok": True}
 
 
 @app.get("/api/model-health")
