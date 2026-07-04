@@ -41,3 +41,6 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+
+# Local handoff notes
+docs/background.md
