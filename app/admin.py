@@ -108,7 +108,7 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
         if not session:
             raise HTTPException(404, "Session not found")
         if is_session_active(session_id):
-            raise HTTPException(409, "Session is active. Stop the participant page or wait before deleting it.")
+            raise HTTPException(409, "用户正在实验中")
 
         db_session.query(Evaluation).filter(Evaluation.session_id == session_id).delete()
         db_session.query(Questionnaire).filter(Questionnaire.session_id == session_id).delete()

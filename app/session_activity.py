@@ -75,4 +75,5 @@ def get_session_activity(session_id: int) -> dict:
 
 
 def is_session_active(session_id: int) -> bool:
-    return bool(get_session_activity(session_id).get("active"))
+    activity = get_session_activity(session_id)
+    return bool(activity.get("active") and activity.get("connected"))

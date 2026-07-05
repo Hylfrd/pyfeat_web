@@ -813,7 +813,7 @@ async function doDelete(sid){
     toast('已删除','ok');
     refresh();
   }else{
-    let message='删除失败';
+    let message=r.status===409?'用户正在实验中':'删除失败';
     try{
       const data=await r.json();
       if(data.detail)message=data.detail;
