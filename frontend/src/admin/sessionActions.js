@@ -56,9 +56,9 @@ export function createSessionActions({adminFetch, toast, getSessionCache, onDele
     if(r.ok){
       closeModal();
       onDeleted();
-      toast('???','ok');
+      toast('Session 已删除','ok');
     }else{
-      let message=r.status===409?'???????':'????';
+      let message=r.status===409?'用户正在实验中':'删除失败';
       try{
         const data=await r.json();
         if(data.detail)message=data.detail;

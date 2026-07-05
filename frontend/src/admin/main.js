@@ -24,8 +24,11 @@ function initTheme() {
 }
 
 function showAuth(message = '') {
-  $('auth-overlay').classList.remove('hidden');
-  $('auth-error').textContent = message;
+  const overlay = $('auth-overlay');
+  const error = $('auth-error');
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  if (error) error.textContent = message;
   setTimeout(() => $('auth-token')?.focus(), 0);
   if (refreshTimer) {
     clearInterval(refreshTimer);
@@ -34,8 +37,10 @@ function showAuth(message = '') {
 }
 
 function hideAuth() {
-  $('auth-overlay').classList.add('hidden');
-  $('auth-error').textContent = '';
+  const overlay = $('auth-overlay');
+  const error = $('auth-error');
+  overlay?.classList.add('hidden');
+  if (error) error.textContent = '';
   if (!refreshTimer) refreshTimer = setInterval(refresh, 10000);
 }
 
@@ -43,27 +48,34 @@ async function adminFetch(url, opts = {}) {
   const r = await fetch(url, { ...opts, credentials: 'same-origin' });
   if (r.status === 401) {
     showAuth('Token 已失效，请重新输入。');
+    toast('Token 已失效，请重新登录', 'err');
     throw new Error('unauthorized');
   }
   return r;
 }
 
-$('auth-form').addEventListener('submit', async (e) => {
+const authForm = $('auth-form');
+authForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const token = $('auth-token').value.trim();
+  const tokenInput = $('auth-token');
+  const error = $('auth-error');
+  const token = tokenInput?.value.trim() || '';
   if (!token) {
-    $('auth-error').textContent = '请输入 token。';
+    if (error) error.textContent = '请输入 token。';
+    toast('请输入 token', 'err');
     return;
   }
   const body = new URLSearchParams();
   body.set('token', token);
   const r = await fetch('/api/admin/login', { method: 'POST', body, credentials: 'same-origin' });
   if (!r.ok) {
-    $('auth-error').textContent = 'Token 错误';
+    if (error) error.textContent = 'Token 错误';
+    toast('Token 错误', 'err');
     return;
   }
-  $('auth-token').value = '';
+  if (tokenInput) tokenInput.value = '';
   hideAuth();
+  toast('登录成功', 'ok');
   await refresh();
   renderActiveTab();
 });
@@ -80,11 +92,26 @@ async function initAuth() {
 }
 
 function toast(msg, type = 'ok') {
+  const container = $('toast-container');
+  if (!container) return;
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.textContent = msg;
-  $('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+  container.appendChild(el);
+
+  requestAnimationFrame(() => {
+    el.style.maxHeight = `${el.scrollHeight}px`;
+  });
+
+  setTimeout(() => {
+    el.style.maxHeight = `${el.scrollHeight}px`;
+    el.classList.add('leaving');
+    requestAnimationFrame(() => {
+      el.style.maxHeight = '0px';
+    });
+    el.addEventListener('transitionend', () => el.remove(), { once: true });
+    setTimeout(() => el.remove(), 500);
+  }, 3000);
 }
 
 const debugConsole = createDebugConsole({ adminFetch, toast });
@@ -113,7 +140,9 @@ async function refresh() {
 async function renderStats() {
   const done = sessions.filter((s) => s.completed);
   const excl = sessions.filter((s) => s.excluded);
-  $('stats-row').innerHTML = `
+  const statsRow = $('stats-row');
+  if (!statsRow) return;
+  statsRow.innerHTML = `
     <div class="stat"><div class="val green">${done.length}</div><div class="lbl">已完成</div></div>
     <div class="stat"><div class="val indigo">${sessions.length}</div><div class="lbl">总计</div></div>
     <div class="stat"><div class="val amber">${excl.length}</div><div class="lbl">已排除</div></div>
@@ -174,7 +203,8 @@ function renderList() {
     </button>`;
   }).join('');
 
-  $('session-list').innerHTML = html || '<div class="empty">无匹配的 Session</div>';
+  const list = $('session-list');
+  if (list) list.innerHTML = html || '<div class="empty">无匹配的 Session</div>';
 }
 
 async function selectSession(sid) {
@@ -185,7 +215,7 @@ async function selectSession(sid) {
 }
 
 async function loadSession(sid, silent = false) {
-  if (!silent) $('detail').innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
+  if (!silent && $('detail')) $('detail').innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
 
   const [exportR, statsR] = await Promise.all([
     adminFetch(`/api/admin/sessions/${sid}/export`),
@@ -199,7 +229,7 @@ async function loadSession(sid, silent = false) {
   renderActiveTab();
 }
 
-$('tabs').addEventListener('click', (e) => {
+$('tabs')?.addEventListener('click', (e) => {
   if (e.target.tagName !== 'BUTTON') return;
   activeTab = e.target.dataset.tab;
   setActiveTab(activeTab);
@@ -207,7 +237,7 @@ $('tabs').addEventListener('click', (e) => {
 });
 
 function setActiveTab(tab) {
-  $('tabs').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  $('tabs')?.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
 }
 
 function renderActiveTab() {
@@ -218,7 +248,7 @@ function renderActiveTab() {
   }
   debugConsole.stopTimers();
   if (!exp) {
-    $('detail').innerHTML = '<div class="empty-state"><div class="icon">→</div><p>从左侧选择一个 Session 查看详情</p></div>';
+    if ($('detail')) $('detail').innerHTML = '<div class="empty-state"><div class="icon">→</div><p>从左侧选择一个 Session 查看详情</p></div>';
     return;
   }
   if (activeTab === 'overview') renderOverview(exp, st);

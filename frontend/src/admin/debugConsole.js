@@ -33,6 +33,7 @@ export function createDebugConsole({adminFetch, toast}){
     debugEnabled=!!data.enabled;
     updateDebugControls();
     await loadDebugPage({live:true,silent:true});
+    toast(debugEnabled?'日志记录已开启':'日志记录已关闭','ok');
   }
 
   async function checkDebugHealth(){
@@ -82,7 +83,9 @@ export function createDebugConsole({adminFetch, toast}){
     debugDetailCache.clear();
     debugExpandedIds.clear();
     debugAutoFollow=true;
-    $('detail').innerHTML=`
+    const detail=$('detail');
+    if(!detail)return;
+    detail.innerHTML=`
       <div class="debug-console-bar">
         <button id="debug-toggle" class="primary" data-action="toggle-debug">开启日志记录</button>
         <div id="pyfeat-status" class="debug-status-card">PyFeat 检测中...</div>
@@ -250,7 +253,8 @@ export function createDebugConsole({adminFetch, toast}){
         </tr>
         ${expanded?`<tr class="debug-detail-row"><td colspan="10"><div class="debug-detail-body">${detail||'加载详情中...'}</div></td></tr>`:''}`;
     }).join('');
-    $('debug-rows').innerHTML=rows||'<tr><td colspan="10" style="text-align:center;color:#64748b;padding:24px">没有匹配的日志</td></tr>';
+    const tableBody=$('debug-rows');
+    if(tableBody)tableBody.innerHTML=rows||'<tr><td colspan="10" style="text-align:center;color:#64748b;padding:24px">没有匹配的日志</td></tr>';
     if(keepTop)scroll.scrollTop=0;
   }
 
@@ -358,6 +362,10 @@ export function createDebugConsole({adminFetch, toast}){
     stopDebugFollow();
     setDebugOutput('正在清空日志和图片缓存...');
     const r=await adminFetch('/api/admin/debug-clear',{method:'POST'});
+    if(!r.ok){
+      toast('清空当前日志失败','err');
+      return;
+    }
     const data=await r.json();
     debugEvents=[];
     debugBefore=null;
@@ -368,6 +376,7 @@ export function createDebugConsole({adminFetch, toast}){
     updateDebugControls();
     await refreshDebugCache();
     setDebugOutput(JSON.stringify(data,null,2));
+    toast('当前日志已清空','ok');
   }
 
   async function testAIStatus(provider){

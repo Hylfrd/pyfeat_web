@@ -1,5 +1,18 @@
 import { $, escapeAttr as escAttr, escapeHtml as escHtml } from '../shared/dom.js';
 
+function frameReliable(frame){
+  return !!(frame?.ok ?? frame?.reliable);
+}
+
+function frameFace(frame){
+  return !!(frame?.face ?? frame?.face_detected);
+}
+
+function writeDetail(html){
+  const detail=$('detail');
+  if(detail)detail.innerHTML=html;
+}
+
 export function renderOverview(exp,st){
   const s=exp.session;
   const p=exp.participant||{};
@@ -55,9 +68,11 @@ export function renderOverview(exp,st){
     </div>`;
     html+=`<div class="au-strip">`;
     for(const f of st.frames){
-      const cls=f.ok?'':'lost';
-      const color=f.ok?(f.face?'#22c55e':'#ef4444'):'#64748b';
-      html+=`<div class="cell ${cls}" style="background:${color}" title="t=${f.t}s AU4:${f.au4} AU12:${f.au12} ${f.ok?'✅':'⚠️'}"></div>`;
+      const reliable=frameReliable(f);
+      const face=frameFace(f);
+      const cls=face&&reliable?'':'lost';
+      const color=!face?'#ef4444':(reliable?'#22c55e':'#64748b');
+      html+=`<div class="cell ${cls}" style="background:${color}" title="t=${f.t}s AU4:${f.au4} AU12:${f.au12} ${face&&reliable?'✅':'⚠️'}"></div>`;
     }
     html+=`</div></div>`;
   }
@@ -102,7 +117,7 @@ export function renderOverview(exp,st){
     html+=`</div>`;
   }
 
-  $('detail').innerHTML=html;
+  writeDetail(html);
 }
 
 // ── Chat ──
@@ -125,7 +140,7 @@ export function renderChat(exp){
     </div>`;
   }
   if(!logs.length)html+='<div class="loading">暂无对话记录</div>';
-  $('detail').innerHTML=html;
+  writeDetail(html);
 }
 
 // ── Expression ──
@@ -146,14 +161,17 @@ export function renderExpression(exp,st){
   </div>`;
   html+=`<div class="au-strip">`;
   for(const f of frames){
+    const reliable=frameReliable(f);
+    const face=frameFace(f);
     let tone='neutral';
-    if(!f.ok)tone='lost';
+    if(!face)tone='lost';
+    else if(!reliable)tone='unreliable';
     else if(f.au4>=2)tone='au4';
     else if(f.au12>=2)tone='au12';
     else if(f.au7>=2)tone='au7';
     else if(f.au1>=1.5)tone='au1';
     html+=`<div class="cell ${tone}"
-      title="t=${f.t}s AU1:${f.au1} AU4:${f.au4} AU7:${f.au7} AU12:${f.au12} ${f.ok?'有效':'不可靠'}"></div>`;
+      title="t=${f.t}s AU1:${f.au1} AU4:${f.au4} AU7:${f.au7} AU12:${f.au12} ${face&&reliable?'有效':'不可靠'}"></div>`;
   }
   html+=`</div>`;
 
@@ -165,9 +183,11 @@ export function renderExpression(exp,st){
       <thead><tr><th>时间(s)</th><th>AU1</th><th>AU4</th><th>AU7</th><th>AU12</th><th>Yaw°</th><th>Pitch°</th><th>面部</th><th>可靠</th></tr></thead>
       <tbody>`;
   for(const f of show){
+    const reliable=frameReliable(f);
+    const face=frameFace(f);
     const au4ok=f.au4>=2;
     const au12ok=f.au12>=2;
-    const clsRow=f.ok?'':'lost';
+    const clsRow=face&&reliable?'':'lost';
     html+=`<tr class="${clsRow}">
       <td>${f.t}</td>
       <td class="${f.au1>=1.5?'trigger':''}">${f.au1}</td>
@@ -175,12 +195,12 @@ export function renderExpression(exp,st){
       <td class="${f.au7>=2?'trigger':''}">${f.au7}</td>
       <td class="${au12ok?'trigger':''}">${f.au12}</td>
       <td>${f.yaw}</td><td>${f.pitch}</td>
-      <td>${f.face?'✅':'❌'}</td><td>${f.ok?'✅':'⚠️'}</td>
+      <td>${face?'✅':'❌'}</td><td>${reliable?'✅':'⚠️'}</td>
     </tr>`;
   }
   html+=`</tbody></table></div></div>`;
 
-  $('detail').innerHTML=html;
+  writeDetail(html);
 }
 
 // ── Baseline ──
@@ -211,7 +231,7 @@ export function renderBaseline(exp){
     </div>`;
   }
   // Also show the session's expression stats summary
-  $('detail').innerHTML=html;
+  writeDetail(html);
 }
 
 // ── Export ──

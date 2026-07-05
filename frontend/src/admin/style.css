@@ -417,8 +417,8 @@ textarea:focus {
 .site-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 22px;
+  gap: 14px;
+  padding: 0 28px 0 24px;
 }
 
 .home-link,
@@ -428,6 +428,9 @@ textarea:focus {
 }
 
 .home-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
   font-size: 14px;
   font-weight: 560;
   line-height: 1;
@@ -440,7 +443,8 @@ textarea:focus {
 
 .divider {
   width: 1px;
-  height: 24px;
+  height: 20px;
+  margin: 0 2px;
   background: var(--border);
 }
 
@@ -448,11 +452,11 @@ textarea:focus {
   position: relative;
   display: block;
   flex-shrink: 0;
-  width: 40px;
-  height: 22px;
+  width: 44px;
+  height: 24px;
   min-height: 0;
   border: 1px solid var(--border-strong);
-  border-radius: 11px;
+  border-radius: 12px;
   background: var(--surface-muted);
   padding: 0;
   box-shadow: none;
@@ -469,8 +473,8 @@ textarea:focus {
   top: 1px;
   left: 1px;
   display: grid;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   place-items: center;
   border-radius: 50%;
   background: var(--surface);
@@ -480,22 +484,22 @@ textarea:focus {
 }
 
 :root.dark .switch-check {
-  transform: translateX(18px);
+  transform: translateX(20px);
 }
 
 .switch-icon {
   position: relative;
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   overflow: hidden;
   border-radius: 50%;
 }
 
 .theme-icon {
   position: absolute;
-  top: 3px;
-  left: 3px;
+  top: 4px;
+  left: 4px;
   width: 12px;
   height: 12px;
   color: var(--muted);
@@ -528,7 +532,7 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 36px;
+  width: 40px;
   height: 36px;
   overflow: visible;
   color: var(--muted);
@@ -536,8 +540,8 @@ textarea:focus {
 }
 
 .github-link svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   overflow: visible;
   fill: currentColor;
 }
@@ -826,7 +830,12 @@ pre,
 
 .au-strip .cell.neutral,
 .au-legend .swatch.neutral {
-  background: color-mix(in srgb, var(--muted) 34%, var(--surface));
+  background: color-mix(in srgb, var(--green) 76%, var(--surface));
+}
+
+.au-strip .cell.unreliable {
+  background: color-mix(in srgb, var(--muted) 28%, var(--surface));
+  opacity: .55;
 }
 
 .au-strip .cell.lost {
@@ -1110,6 +1119,9 @@ pre,
   justify-content: center;
   width: 100%;
   min-height: 38px;
+  padding-right: 14px;
+  padding-left: 14px;
+  text-align: center;
   line-height: 1;
 }
 
@@ -1140,7 +1152,8 @@ pre,
   top: 70px;
   right: 24px;
   z-index: 200;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   width: min(360px, calc(100vw - 48px));
   gap: 10px;
   pointer-events: none;
@@ -1157,7 +1170,18 @@ pre,
   font-size: 13px;
   font-weight: 650;
   pointer-events: auto;
-  animation: toastIn .18s ease, toastOut .22s ease 2.8s forwards;
+  will-change: max-height, margin, padding, opacity, transform;
+  transition: max-height .24s ease, margin .24s ease, padding .24s ease, border-width .24s ease, opacity .18s ease, transform .18s ease;
+  animation: toastIn .18s ease;
+}
+
+.toast.leaving {
+  margin-top: -10px;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  opacity: 0;
+  transform: translateX(16px);
 }
 
 .toast::after {
