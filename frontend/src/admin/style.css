@@ -636,11 +636,11 @@ button.danger:hover {
 }
 
 .info-card,
-.detail-section > p,
 .detail-section > pre,
 .debug-box,
 .debug-result,
 .debug-table-wrap,
+.frame-table-wrap,
 .timeline,
 .questionnaire,
 .final-email,
@@ -653,6 +653,31 @@ button.danger:hover {
 
 .info-card {
   padding: 12px 14px;
+}
+
+.final-email {
+  max-height: 320px;
+  overflow: auto;
+  padding: 16px 18px;
+  color: var(--text);
+  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-size: 14px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+}
+
+.evaluation-box {
+  padding: 14px 16px;
+}
+
+.evaluation-card {
+  margin-bottom: 8px;
+}
+
+.evaluation-json {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .info-card .lbl {
@@ -763,8 +788,55 @@ pre,
   opacity: .85;
 }
 
+.au-strip .cell.au4,
+.au-legend .swatch.au4 {
+  background: var(--red);
+}
+
+.au-name.au4 {
+  color: var(--red);
+}
+
+.au-strip .cell.au12,
+.au-legend .swatch.au12 {
+  background: var(--green);
+}
+
+.au-name.au12 {
+  color: var(--green);
+}
+
+.au-strip .cell.au7,
+.au-legend .swatch.au7 {
+  background: var(--yellow);
+}
+
+.au-name.au7 {
+  color: var(--yellow);
+}
+
+.au-strip .cell.au1,
+.au-legend .swatch.au1 {
+  background: #818cf8;
+}
+
+.au-name.au1 {
+  color: #818cf8;
+}
+
+.au-strip .cell.neutral,
+.au-legend .swatch.neutral {
+  background: color-mix(in srgb, var(--muted) 34%, var(--surface));
+}
+
 .au-strip .cell.lost {
-  opacity: .25;
+  background: color-mix(in srgb, var(--muted) 18%, var(--surface));
+  opacity: .45;
+}
+
+.au-legend .swatch.lost {
+  background: color-mix(in srgb, var(--muted) 18%, var(--surface));
+  opacity: .7;
 }
 
 .au-legend {
@@ -786,6 +858,39 @@ pre,
   width: 10px;
   height: 10px;
   border-radius: 2px;
+}
+
+.frame-table-wrap {
+  max-height: 500px;
+  overflow: auto;
+}
+
+.baseline-vector {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+
+.baseline-vector p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.baseline-vector-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  font-size: 13px;
+}
+
+.baseline-vector-row strong {
+  color: var(--text-strong);
 }
 
 .au-chart-wrap {
@@ -964,9 +1069,8 @@ pre,
   position: fixed;
   inset: 0;
   z-index: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   background: color-mix(in srgb, var(--bg) 86%, #000 14%);
   padding: 24px;
 }
@@ -981,7 +1085,8 @@ pre,
   border-radius: 8px;
   background: var(--surface);
   box-shadow: 0 20px 60px rgba(0, 0, 0, .18);
-  padding: 26px;
+  padding: 28px 30px 30px;
+  transform: translateY(-3vh);
 }
 
 .auth-card h2 {
@@ -1000,7 +1105,12 @@ pre,
 }
 
 .auth-card button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
+  min-height: 38px;
+  line-height: 1;
 }
 
 .auth-error {
@@ -1025,48 +1135,85 @@ pre,
   }
 }
 
-.toast {
+#toast-container {
   position: fixed;
-  bottom: 24px;
-  left: 50%;
+  top: 70px;
+  right: 24px;
   z-index: 200;
+  display: grid;
+  width: min(360px, calc(100vw - 48px));
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 10px 24px;
+  padding: 12px 14px 15px;
+  background: var(--surface);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .16);
   font-size: 13px;
   font-weight: 650;
-  transform: translateX(-50%);
-  animation: toastIn .25s ease, toastOut .25s ease 2.5s forwards;
+  pointer-events: auto;
+  animation: toastIn .18s ease, toastOut .22s ease 2.8s forwards;
+}
+
+.toast::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  opacity: .45;
+  animation: toastTimer 3s linear forwards;
 }
 
 .toast.ok {
   background: color-mix(in srgb, var(--green) 18%, var(--surface));
+  border-color: color-mix(in srgb, var(--green) 34%, var(--border));
   color: var(--green);
 }
 
 .toast.err {
   background: color-mix(in srgb, var(--red) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--red) 34%, var(--border));
   color: var(--red);
 }
 
 @keyframes toastIn {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(10px);
+    transform: translateX(16px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(0);
   }
 }
 
 @keyframes toastOut {
   from {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(0);
   }
   to {
     opacity: 0;
-    transform: translateX(-50%) translateY(10px);
+    transform: translateX(16px);
+  }
+}
+
+@keyframes toastTimer {
+  from {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  to {
+    transform: scaleX(0);
+    transform-origin: left;
   }
 }
 

@@ -83,8 +83,7 @@ export function renderOverview(exp,st){
   // Final email
   if(s.final_email){
     html+=`<div class="detail-section"><h3>最终草稿</h3>
-      <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px;
-        font-family:Georgia,serif;font-size:.85em;line-height:1.7;color:#cbd5e1;white-space:pre-wrap;max-height:300px;overflow-y:auto">${escHtml(s.final_email)}</div>
+      <div class="final-email">${escHtml(s.final_email)}</div>
     </div>`;
   }
 
@@ -94,10 +93,10 @@ export function renderOverview(exp,st){
     for(const e of evals){
       let detail='';
       try{detail=JSON.stringify(JSON.parse(e.details_json||'{}'),null,2)}catch(_){detail=e.details_json||''}
-      html+=`<div class="info-card" style="margin-bottom:8px">
+      html+=`<div class="info-card evaluation-card">
         <div class="lbl">${e.layer} · 模型 ${e.evaluator_model}</div>
         <div class="val mono">${e.score?.toFixed(1)}</div>
-        ${detail?`<pre style="font-size:.7em;color:#94a3b8;margin-top:4px">${escHtml(detail)}</pre>`:''}
+        ${detail?`<pre class="evaluation-json">${escHtml(detail)}</pre>`:''}
       </div>`;
     }
     html+=`</div>`;
@@ -138,28 +137,30 @@ export function renderExpression(exp,st){
 
   // AU timeline strip
   html+=`<div class="au-legend">
-    <span><span class="swatch" style="background:#ef4444"></span>AU4≥2 (困惑/沮丧)</span>
-    <span><span class="swatch" style="background:#22c55e"></span>AU12≥2 (正向)</span>
-    <span><span class="swatch" style="background:#f59e0b"></span>AU7≥2</span>
-    <span><span class="swatch" style="background:#818cf8"></span>AU1≥1.5</span>
-    <span><span class="swatch" style="background:#334155"></span>中性</span>
+    <span><span class="swatch au4"></span>AU4≥2 (困惑/沮丧)</span>
+    <span><span class="swatch au12"></span>AU12≥2 (正向)</span>
+    <span><span class="swatch au7"></span>AU7≥2</span>
+    <span><span class="swatch au1"></span>AU1≥1.5</span>
+    <span><span class="swatch neutral"></span>中性有效帧</span>
+    <span><span class="swatch lost"></span>不可靠/丢失</span>
   </div>`;
   html+=`<div class="au-strip">`;
   for(const f of frames){
-    let color='#334155';
-    if(f.au4>=2)color='#ef4444';
-    else if(f.au12>=2)color='#22c55e';
-    else if(f.au7>=2)color='#f59e0b';
-    else if(f.au1>=1.5)color='#818cf8';
-    html+=`<div class="cell ${f.ok?'':'lost'}" style="background:${color}"
-      title="t=${f.t}s AU1:${f.au1} AU4:${f.au4} AU7:${f.au7} AU12:${f.au12} ${f.ok?'✅':'⚠️'}"></div>`;
+    let tone='neutral';
+    if(!f.ok)tone='lost';
+    else if(f.au4>=2)tone='au4';
+    else if(f.au12>=2)tone='au12';
+    else if(f.au7>=2)tone='au7';
+    else if(f.au1>=1.5)tone='au1';
+    html+=`<div class="cell ${tone}"
+      title="t=${f.t}s AU1:${f.au1} AU4:${f.au4} AU7:${f.au7} AU12:${f.au12} ${f.ok?'有效':'不可靠'}"></div>`;
   }
   html+=`</div>`;
 
   // AU table (first 200 rows for performance)
   const show=frames.slice(0,200);
   html+=`<div class="detail-section"><h3>帧数据表 (显示前 ${show.length} 帧, 共 ${frames.length})</h3>
-    <div style="max-height:500px;overflow-y:auto;border:1px solid #334155;border-radius:10px">
+    <div class="frame-table-wrap">
     <table class="frame-table">
       <thead><tr><th>时间(s)</th><th>AU1</th><th>AU4</th><th>AU7</th><th>AU12</th><th>Yaw°</th><th>Pitch°</th><th>面部</th><th>可靠</th></tr></thead>
       <tbody>`;
@@ -199,13 +200,13 @@ export function renderBaseline(exp){
       <div class="info-card"><div class="lbl">基线 AU12</div><div class="val mono">${p.baseline_au12?.toFixed(3)||'-'}</div></div>
       <div class="info-card"><div class="lbl">基线帧数</div><div class="val mono">${p.baseline_frame_count||0}</div></div>
     </div>
-    <div style="margin-top:20px;padding:16px;background:#0f172a;border:1px solid #334155;border-radius:10px">
-      <p style="font-size:.75em;color:#64748b;margin-bottom:8px">基线 AU 向量 (用于偏差计算)</p>
-      <div style="display:flex;gap:24px;font-family:monospace;font-size:.9em">
-        <div><span style="color:#818cf8">AU1</span> <strong>${p.baseline_au1?.toFixed(3)||'-'}</strong></div>
-        <div><span style="color:#ef4444">AU4</span> <strong>${p.baseline_au4?.toFixed(3)||'-'}</strong></div>
-        <div><span style="color:#f59e0b">AU7</span> <strong>${p.baseline_au7?.toFixed(3)||'-'}</strong></div>
-        <div><span style="color:#22c55e">AU12</span> <strong>${p.baseline_au12?.toFixed(3)||'-'}</strong></div>
+    <div class="baseline-vector">
+      <p>基线 AU 向量 (用于偏差计算)</p>
+      <div class="baseline-vector-row">
+        <div><span class="au-name au1">AU1</span> <strong>${p.baseline_au1?.toFixed(3)||'-'}</strong></div>
+        <div><span class="au-name au4">AU4</span> <strong>${p.baseline_au4?.toFixed(3)||'-'}</strong></div>
+        <div><span class="au-name au7">AU7</span> <strong>${p.baseline_au7?.toFixed(3)||'-'}</strong></div>
+        <div><span class="au-name au12">AU12</span> <strong>${p.baseline_au12?.toFixed(3)||'-'}</strong></div>
       </div>
     </div>`;
   }
