@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -26,4 +26,11 @@ async def participant_page():
 @router.get("/admin")
 async def admin_page():
     """Serve experimenter dashboard."""
-    return FileResponse(STATIC_DIR / "admin.html", headers=NO_STORE_HEADERS)
+    admin_html = STATIC_DIR / "admin.html"
+    asset_version = int(max(
+        admin_html.stat().st_mtime,
+        (STATIC_DIR / "admin.css").stat().st_mtime,
+        (STATIC_DIR / "admin.js").stat().st_mtime,
+    ))
+    html = admin_html.read_text(encoding="utf-8").replace("__ASSET_VERSION__", str(asset_version))
+    return HTMLResponse(html, headers=NO_STORE_HEADERS)

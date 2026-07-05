@@ -11,7 +11,9 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from . import debug_log
 from .auth import require_admin
-from .database import ChatLog, Evaluation, ExpressionFrame, Participant, Questionnaire, Session
+from .database import (
+    ChatLog, Evaluation, ExpressionFrame, Participant, PostTaskSurvey, Questionnaire, Session,
+)
 from .expression import PYFEAT_API_TIMEOUT
 from .session_activity import forget_session, get_session_activity, is_session_active
 
@@ -111,6 +113,7 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
             raise HTTPException(409, "用户正在实验中")
 
         db_session.query(Evaluation).filter(Evaluation.session_id == session_id).delete()
+        db_session.query(PostTaskSurvey).filter(PostTaskSurvey.session_id == session_id).delete()
         db_session.query(Questionnaire).filter(Questionnaire.session_id == session_id).delete()
         db_session.query(ExpressionFrame).filter(ExpressionFrame.session_id == session_id).delete()
         db_session.query(ChatLog).filter(ChatLog.session_id == session_id).delete()
