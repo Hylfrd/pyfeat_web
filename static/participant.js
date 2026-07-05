@@ -92,6 +92,7 @@ let mediaRecorder, webcamStream, chunkIndex = 0;
 let isAiWaiting = false;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
+let intentionalWsClose = false;
 let lastExpressionSentAt = 0;
 let lastCaptureNoticeAt = 0;
 let captureState = '';
@@ -129,6 +130,7 @@ function connectWS(){
     ws = new WebSocket(`${wsProtocol}//${location.host}/ws/${participantId}`);
     ws.onopen = () => {
       console.log('[WS] Connected');
+      intentionalWsClose=false;
       reconnectAttempts=0;
       clearToasts('connection');
       if(currentSessionId)ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
@@ -145,6 +147,12 @@ function connectWS(){
     };
     ws.onclose = (e) => {
       console.log('[WS] Closed:', e.code, e.reason);
+      const intentional= intentionalWsClose || e.reason==='task complete';
+      intentionalWsClose=false;
+      if(intentional){
+        clearToasts('connection');
+        return;
+      }
       if(currentStage==='task-view')setCapturePaused('连接恢复中',true);
       if(isAiWaiting){
         updateThinking('连接中断，正在恢复...');
@@ -392,6 +400,7 @@ function stopAiSyncPolling(){
 }
 function closeWS(){
   if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING)){
+    intentionalWsClose=true;
     try{ws.close(1000,'task complete')}catch(e){}
   }
   ws=null;
