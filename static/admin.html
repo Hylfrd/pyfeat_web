@@ -26,8 +26,8 @@
   </div>
   <div class="stats-row" id="stats-row"></div>
   <div class="filters">
-    <input id="search" type="text" placeholder="搜索 ID / 参与者..." oninput="renderList()">
-    <select id="filter-cond" onchange="renderList()">
+    <input id="search" type="text" placeholder="搜索 ID / 参与者...">
+    <select id="filter-cond">
       <option value="all">全部条件</option>
       <option value="affect-aware">情感感知</option>
       <option value="text-only">纯文本</option>
@@ -53,7 +53,7 @@
   </div>
 </div>
 
-<div id="modal-overlay" class="hidden" onclick="if(event.target===this)closeModal()">
+<div id="modal-overlay" class="hidden">
   <div class="modal"></div>
 </div>
 <div id="toast-container"></div>

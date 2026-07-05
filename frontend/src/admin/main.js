@@ -118,7 +118,7 @@ function renderList(){
     const dur=s.duration_ms?Math.floor(s.duration_ms/1000)+'s':'';
     const loss=s.frame_loss_ratio>0.3?`<span style="color:#ef4444">⚠${Math.round(s.frame_loss_ratio*100)}%</span>`:'';
     html+=`<div class="session-item ${s.id===activeSid?'active':''} ${s.excluded?'excluded':''}"
-      onclick="selectSession(${s.id})">
+      data-action="select-session" data-session-id="${s.id}">
       <div class="left">
         <div class="top">
           <span class="pid">${escHtml(s.participant_id)}</span>
@@ -257,24 +257,24 @@ async function renderDebug(){
   debugAutoFollow=true;
   $('detail').innerHTML=`
     <div class="debug-console-bar">
-      <button id="debug-toggle" class="primary" onclick="setDebugMode(!debugEnabled)">开启日志记录</button>
+      <button id="debug-toggle" class="primary" data-action="toggle-debug">开启日志记录</button>
       <div id="pyfeat-status" class="debug-status-card">PyFeat 检测中...</div>
-      <button class="danger" onclick="clearDebugLogs()">清空当前日志</button>
+      <button class="danger" data-action="clear-debug">清空当前日志</button>
       <div id="debug-cache" class="debug-cache-card">缓存图片：检测中...</div>
     </div>
     <div class="debug-test-bar">
-      <button onclick="checkDebugHealth()">检查模型状态</button>
-      <button onclick="stopDebugFollow();$('debug-upload').click()">上传图片至 PyFeat</button>
-      <button onclick="testAIStatus('deepseek')">测试 DeepSeek 状态</button>
-      <button onclick="testAIStatus('kimi')">测试 Kimi 状态</button>
-      <input id="debug-upload" type="file" accept="image/*" hidden onchange="uploadDebugImage()">
+      <button data-action="check-health">检查模型状态</button>
+      <button data-action="choose-debug-image">上传图片至 PyFeat</button>
+      <button data-action="test-ai" data-provider="deepseek">测试 DeepSeek 状态</button>
+      <button data-action="test-ai" data-provider="kimi">测试 Kimi 状态</button>
+      <input id="debug-upload" type="file" accept="image/*" hidden>
     </div>
     <pre id="debug-result" class="debug-result"></pre>
     <div class="debug-tools">
-      <input id="debug-search" type="text" placeholder="搜索 participant / session / message / API JSON..." oninput="stopDebugFollow();scheduleDebugReload()">
-      <input id="debug-participant" type="text" placeholder="参与者" oninput="stopDebugFollow();scheduleDebugReload()">
-      <input id="debug-session" type="text" placeholder="Session" oninput="stopDebugFollow();scheduleDebugReload()">
-      <select id="debug-kind" onchange="stopDebugFollow();reloadDebug()">
+      <input id="debug-search" type="text" placeholder="搜索 participant / session / message / API JSON...">
+      <input id="debug-participant" type="text" placeholder="参与者">
+      <input id="debug-session" type="text" placeholder="Session">
+      <select id="debug-kind">
         <option value="">全部类型</option>
         <option value="expression">expression</option>
         <option value="baseline">baseline</option>
@@ -418,7 +418,7 @@ function renderDebugRows(){
         <td>${e.reliable?'yes':'no'}</td>
         <td>${escHtml(e.message||'')}</td>
         <td>
-          <button class="debug-expand" onclick="toggleDebugDetail(event,${Number(e.id??0)})">${expanded?'收起':'展开'}</button>
+          <button class="debug-expand" data-action="debug-detail" data-event-id="${Number(e.id??0)}">${expanded?'收起':'展开'}</button>
         </td>
       </tr>
       ${expanded?`<tr class="debug-detail-row"><td colspan="10"><div class="debug-detail-body">${detail||'加载详情中...'}</div></td></tr>`:''}`;
@@ -563,9 +563,9 @@ function renderOverview(exp,st){
 
   let html=`
     <div class="action-bar">
-      <button onclick="exportSession(${s.id})">⬇ 导出 JSON</button>
-      <button onclick="exportSessionCSV(${s.id})">⬇ 导出 CSV</button>
-      <button class="danger" onclick="confirmDelete(${s.id},'${escHtml(s.participant_id)}')">✕ 删除此 Session</button>
+      <button data-action="export-session" data-session-id="${s.id}">⬇ 导出 JSON</button>
+      <button data-action="export-session-csv" data-session-id="${s.id}">⬇ 导出 CSV</button>
+      <button class="danger" data-action="confirm-delete" data-session-id="${s.id}" data-participant-id="${escAttr(s.participant_id)}">✕ 删除此 Session</button>
     </div>
 
     <div class="detail-section"><h3>会话信息</h3>
@@ -661,7 +661,7 @@ function renderOverview(exp,st){
 function renderChat(exp){
   const logs=exp.chat_logs||[];
   let html=`<div class="action-bar">
-    <button onclick="exportSession(${exp.session.id})">⬇ 导出 JSON</button>
+    <button data-action="export-session" data-session-id="${exp.session.id}">⬇ 导出 JSON</button>
   </div><div class="detail-section"><h3>对话记录 (${logs.length} 条)</h3></div>`;
 
   for(const l of logs){
@@ -684,7 +684,7 @@ function renderChat(exp){
 function renderExpression(exp,st){
   const frames=st.frames||[];
   let html=`<div class="action-bar">
-    <button onclick="exportExpressionCSV(${exp.session.id})">⬇ 导出 AU 数据 CSV</button>
+    <button data-action="export-expression-csv" data-session-id="${exp.session.id}">⬇ 导出 AU 数据 CSV</button>
   </div><div class="detail-section"><h3>表情 AU 数据 (${frames.length} 帧)</h3></div>`;
 
   // AU timeline strip
@@ -809,8 +809,8 @@ function confirmDelete(sid,pid){
     这将同时删除所有关联的聊天记录、表情数据、问卷和评估结果。<br><br>
     <span style="color:#ef4444">此操作不可撤销。</span></p>
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="closeModal()">取消</button>
-      <button class="danger" onclick="doDelete(${sid})">确认删除</button>
+      <button data-action="close-modal">取消</button>
+      <button class="danger" data-action="do-delete" data-session-id="${sid}">确认删除</button>
     </div>
   `;
 }
@@ -836,23 +836,56 @@ async function doDelete(sid){
 }
 
 
-Object.assign(window, {
-  renderList,
-  closeModal,
-  selectSession,
-  setDebugMode,
-  checkDebugHealth,
-  clearDebugLogs,
-  uploadDebugImage,
-  stopDebugFollow,
-  testAIStatus,
-  reloadDebug,
-  toggleDebugDetail,
-  exportSession,
-  exportSessionCSV,
-  exportExpressionCSV,
-  confirmDelete,
-  doDelete,
-});
+function bindAdminEvents(){
+  $('search')?.addEventListener('input', renderList);
+  $('filter-cond')?.addEventListener('change', renderList);
+  document.addEventListener('click', handleAdminClick);
+  document.addEventListener('input', handleAdminInput);
+  document.addEventListener('change', handleAdminChange);
+}
 
+function handleAdminClick(e){
+  if(e.target===$('modal-overlay')){
+    closeModal();
+    return;
+  }
+  const el=e.target.closest('[data-action]');
+  if(!el)return;
+  const action=el.dataset.action;
+  if(action==='select-session')return selectSession(Number(el.dataset.sessionId));
+  if(action==='toggle-debug')return setDebugMode(!debugEnabled);
+  if(action==='clear-debug')return clearDebugLogs();
+  if(action==='check-health')return checkDebugHealth();
+  if(action==='choose-debug-image'){
+    stopDebugFollow();
+    return $('debug-upload')?.click();
+  }
+  if(action==='test-ai')return testAIStatus(el.dataset.provider);
+  if(action==='debug-detail')return toggleDebugDetail(e,Number(el.dataset.eventId));
+  if(action==='export-session')return exportSession(Number(el.dataset.sessionId));
+  if(action==='export-session-csv')return exportSessionCSV(Number(el.dataset.sessionId));
+  if(action==='export-expression-csv')return exportExpressionCSV(Number(el.dataset.sessionId));
+  if(action==='confirm-delete')return confirmDelete(Number(el.dataset.sessionId),el.dataset.participantId||'');
+  if(action==='close-modal')return closeModal();
+  if(action==='do-delete')return doDelete(Number(el.dataset.sessionId));
+}
+
+function handleAdminInput(e){
+  if(['debug-search','debug-participant','debug-session'].includes(e.target.id)){
+    stopDebugFollow();
+    scheduleDebugReload();
+  }
+}
+
+function handleAdminChange(e){
+  if(e.target.id==='debug-kind'){
+    stopDebugFollow();
+    reloadDebug();
+  }
+  if(e.target.id==='debug-upload'){
+    uploadDebugImage();
+  }
+}
+
+bindAdminEvents();
 initAuth();
