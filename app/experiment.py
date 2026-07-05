@@ -11,6 +11,7 @@ from .database import (
     ChatLog, Participant, PostTaskSurvey, PreTaskSurvey, Questionnaire, Session,
 )
 from .evaluation import run_posthoc_evaluation
+from .session_activity import get_session_activity
 from .strategy import StrategySelector
 
 
@@ -83,6 +84,22 @@ def create_experiment_router(
     ):
         """Deprecated: the experiment now uses one assigned writing task."""
         raise HTTPException(410, "This experiment now uses a single task session.")
+
+    @router.get("/api/session/status/{session_id}")
+    async def session_status(
+        session_id: int,
+        participant_id: str,
+    ):
+        session = db_session.query(Session).get(session_id)
+        if not session or session.participant_id != participant_id:
+            raise HTTPException(404, "Session not found")
+        return {
+            "ok": True,
+            "session_id": session.id,
+            "participant_id": session.participant_id,
+            "completed": session.completed,
+            "activity": get_session_activity(session.id),
+        }
 
     @router.post("/api/session/complete")
     async def complete_session(

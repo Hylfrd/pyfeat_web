@@ -13,6 +13,7 @@ from . import debug_log
 from .auth import require_admin
 from .database import ChatLog, Evaluation, ExpressionFrame, Participant, Questionnaire, Session
 from .expression import PYFEAT_API_TIMEOUT
+from .session_activity import forget_session, get_session_activity, is_session_active
 
 
 def create_admin_router(db_session, expression_engine) -> APIRouter:
@@ -36,6 +37,7 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
                 "duration_ms": s.duration_ms,
                 "frame_loss_ratio": round(s.frame_loss_ratio, 3),
                 "excluded": s.excluded_by_frame_loss,
+                "activity": get_session_activity(s.id),
             }
             for s in sessions
         ]
@@ -105,6 +107,8 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
         session = db_session.query(Session).get(session_id)
         if not session:
             raise HTTPException(404, "Session not found")
+        if is_session_active(session_id):
+            raise HTTPException(409, "Session is active. Stop the participant page or wait before deleting it.")
 
         db_session.query(Evaluation).filter(Evaluation.session_id == session_id).delete()
         db_session.query(Questionnaire).filter(Questionnaire.session_id == session_id).delete()
@@ -112,6 +116,7 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
         db_session.query(ChatLog).filter(ChatLog.session_id == session_id).delete()
         db_session.delete(session)
         db_session.commit()
+        forget_session(session_id)
         return {"ok": True, "deleted_session_id": session_id}
 
     @router.get("/api/admin/sessions/{session_id}/export")
@@ -164,6 +169,7 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
                 "unreliable_frames": session.unreliable_frames,
                 "frame_loss_ratio": session.frame_loss_ratio,
                 "excluded_by_frame_loss": session.excluded_by_frame_loss,
+                "activity": get_session_activity(session.id),
             },
             "participant": {
                 "id": participant.id if participant else None,

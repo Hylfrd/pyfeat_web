@@ -813,7 +813,12 @@ async function doDelete(sid){
     toast('已删除','ok');
     refresh();
   }else{
-    toast('删除失败','err');
+    let message='删除失败';
+    try{
+      const data=await r.json();
+      if(data.detail)message=data.detail;
+    }catch(e){}
+    toast(message,'err');
   }
 }
 

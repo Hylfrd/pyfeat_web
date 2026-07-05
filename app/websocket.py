@@ -11,6 +11,7 @@ from . import debug_log
 from .ai_client import ChatMessage
 from .database import ChatLog, ExpressionFrame, Session
 from .expression import AUFrame
+from .session_activity import mark_disconnected, touch_session
 from .strategy import Strategy, UserTurn
 
 
@@ -50,6 +51,14 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                 socket_alive = False
                 return False
 
+        async def ensure_session_exists() -> bool:
+            if not current_session_id:
+                return True
+            if db_session.query(Session).get(current_session_id):
+                return True
+            await safe_send({"type": "session_missing"})
+            return False
+
         try:
             while True:
                 try:
@@ -60,6 +69,10 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                     if msg_type == "session_init":
                         current_session_id = msg.get("session_id")
                         session = db_session.query(Session).get(current_session_id)
+                        if not session:
+                            await safe_send({"type": "session_missing"})
+                            continue
+                        touch_session(participant_id, current_session_id)
                         logs = (
                             db_session.query(ChatLog)
                             .filter(ChatLog.session_id == current_session_id)
@@ -93,6 +106,9 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                         }, ensure_ascii=False))
 
                     elif msg_type == "baseline_frame":
+                        if not await ensure_session_exists():
+                            continue
+                        touch_session(participant_id, current_session_id)
 
                         frame_b64 = msg.get("frame", "")
                         started = time.perf_counter()
@@ -129,6 +145,9 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             }))
 
                     elif msg_type == "expression_frame":
+                        if not await ensure_session_exists():
+                            continue
+                        touch_session(participant_id, current_session_id)
 
                         frame_b64 = msg.get("frame", "")
                         started = time.perf_counter()
@@ -214,6 +233,9 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                 db_session.commit()
 
                     elif msg_type == "chat":
+                        if not await ensure_session_exists():
+                            continue
+                        touch_session(participant_id, current_session_id)
 
                         user_text = msg.get("text", "")
                         condition = msg.get("condition", "text-only")
@@ -399,4 +421,5 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
             except Exception:
                 pass
             active_connections.pop(participant_id, None)
+            mark_disconnected(participant_id)
     return router

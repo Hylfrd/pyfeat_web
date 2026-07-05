@@ -629,7 +629,13 @@ button{padding:12px 20px;border-radius:14px;font-size:.92em;font-weight:600;bord
 const $ = id => document.getElementById(id);
 const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view'];
 function showView(id){views.forEach(v=>$(v).classList.add('hidden'));$(id).classList.remove('hidden')}
-function setStage(id){currentStage=id;showView(id);writeProgress()}
+function setStage(id){
+  currentStage=id;
+  showView(id);
+  writeProgress();
+  if(currentSessionId&&id!=='complete-view')startSessionStatusCheck();
+  if(id==='complete-view')stopSessionStatusCheck();
+}
 const STORAGE_KEY='hmcl-helper-progress-v1';
 let currentStage='setup-view';
 let chatTranscript=[];
@@ -716,6 +722,7 @@ let reconnectAttempts = 0;
 let lastExpressionSentAt = 0;
 let lastCaptureNoticeAt = 0;
 let captureState = '';
+let sessionStatusTimer = null;
 
 // ── Toast ──
 function toast(msg, duration=3000, kind=''){
@@ -796,6 +803,9 @@ function connectWS(){
       }
       if(msg.type==='chat_sync'){
         applyChatSync(msg);
+      }
+      if(msg.type==='session_missing'){
+        forceRestartExperiment();
       }
       if(msg.type==='ai_wait'){
         updateThinking();
@@ -991,6 +1001,7 @@ async function fetchChatSync(){
   try{
     const params=new URLSearchParams({participant_id:participantId});
     const r=await fetch(`/api/session/sync/${currentSessionId}?${params.toString()}`,{cache:'no-store'});
+    if(r.status===404){forceRestartExperiment();return;}
     if(!r.ok)return;
     const data=await r.json();
     applyChatSync(data);
@@ -1012,11 +1023,42 @@ function closeWS(){
   }
   ws=null;
 }
+function stopSessionStatusCheck(){
+  if(sessionStatusTimer){clearInterval(sessionStatusTimer);sessionStatusTimer=null}
+}
+function startSessionStatusCheck(){
+  if(sessionStatusTimer||!participantId||!currentSessionId)return;
+  verifySessionExists();
+  sessionStatusTimer=setInterval(verifySessionExists,5000);
+}
+async function verifySessionExists(){
+  if(!participantId||!currentSessionId||currentStage==='complete-view')return;
+  try{
+    const params=new URLSearchParams({participant_id:participantId});
+    const r=await fetch(`/api/session/status/${currentSessionId}?${params.toString()}`,{cache:'no-store'});
+    if(r.status===404)forceRestartExperiment();
+  }catch(err){}
+}
+function forceRestartExperiment(){
+  stopSessionStatusCheck();
+  stopAiSyncPolling();
+  clearInterval(timerInterval);
+  clearInterval(baselineInterval);
+  pauseTaskCapture();
+  closeWS();
+  if(webcamStream){
+    webcamStream.getTracks().forEach(track=>track.stop());
+    webcamStream=null;
+  }
+  clearProgress();
+  location.replace(location.pathname);
+}
 async function resumeProgress(saved){
   participantId=saved.participantId;
   orderGroup=saved.orderGroup;
   language=saved.language||'zh';
   currentSessionId=saved.currentSessionId;
+  if(currentSessionId)startSessionStatusCheck();
   currentCondition=saved.currentCondition;
   currentScenario=saved.currentScenario;
   currentStage=saved.currentStage||'setup-view';
