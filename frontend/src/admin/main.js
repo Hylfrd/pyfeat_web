@@ -28,7 +28,8 @@ function showAuth(message = '') {
   const error = $('auth-error');
   if (!overlay) return;
   overlay.classList.remove('hidden');
-  if (error) error.textContent = message;
+  if (error) error.textContent = '';
+  if (message) toast(message, 'err');
   setTimeout(() => $('auth-token')?.focus(), 0);
   if (refreshTimer) {
     clearInterval(refreshTimer);
@@ -61,7 +62,7 @@ authForm?.addEventListener('submit', async (e) => {
   const error = $('auth-error');
   const token = tokenInput?.value.trim() || '';
   if (!token) {
-    if (error) error.textContent = '请输入 token。';
+    if (error) error.textContent = '';
     toast('请输入 token', 'err');
     return;
   }
@@ -69,7 +70,7 @@ authForm?.addEventListener('submit', async (e) => {
   body.set('token', token);
   const r = await fetch('/api/admin/login', { method: 'POST', body, credentials: 'same-origin' });
   if (!r.ok) {
-    if (error) error.textContent = 'Token 错误';
+    if (error) error.textContent = '';
     toast('Token 错误', 'err');
     return;
   }

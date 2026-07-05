@@ -146,9 +146,10 @@ export function renderChat(exp){
 // ── Expression ──
 export function renderExpression(exp,st){
   const frames=st.frames||[];
-  let html=`<div class="action-bar">
+  let html=`<div class="expression-head">
+    <h3>表情 AU 数据 (${frames.length} 帧)</h3>
     <button data-action="export-expression-csv" data-session-id="${exp.session.id}">⬇ 导出 AU 数据 CSV</button>
-  </div><div class="detail-section"><h3>表情 AU 数据 (${frames.length} 帧)</h3></div>`;
+  </div>`;
 
   // AU timeline strip
   html+=`<div class="au-legend">
