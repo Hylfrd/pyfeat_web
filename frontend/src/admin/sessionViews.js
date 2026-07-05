@@ -24,20 +24,22 @@ export function renderOverview(exp,st){
   const faceOkPct=st.total_frames?Math.round(framesOk/st.total_frames*100):0;
 
   let html=`
-    <div class="action-bar">
-      <button data-action="export-session" data-session-id="${s.id}">⬇ 导出 JSON</button>
-      <button data-action="export-session-csv" data-session-id="${s.id}">⬇ 导出 CSV</button>
-      <button class="danger" data-action="confirm-delete" data-session-id="${s.id}" data-participant-id="${escAttr(s.participant_id)}">✕ 删除此 Session</button>
-    </div>
-
-    <div class="detail-section"><h3>会话信息</h3>
+    <div class="detail-section">
+      <div class="section-heading">
+        <h3>会话信息</h3>
+        <div class="action-bar compact">
+          <button data-action="export-session" data-session-id="${s.id}">⬇ 导出 JSON</button>
+          <button data-action="export-session-csv" data-session-id="${s.id}">⬇ 导出 CSV</button>
+          <button class="danger" data-action="confirm-delete" data-session-id="${s.id}" data-participant-id="${escAttr(s.participant_id)}">✕ 删除此 Session</button>
+        </div>
+      </div>
       <div class="info-grid">
         <div class="info-card"><div class="lbl">Session ID</div><div class="val mono">#${s.id}</div></div>
         <div class="info-card"><div class="lbl">参与者</div><div class="val mono">${escHtml(s.participant_id)}</div></div>
         <div class="info-card"><div class="lbl">条件</div><div class="val">${s.condition==='affect-aware'?'情感感知 AI':'纯文本 AI'}</div></div>
         <div class="info-card"><div class="lbl">场景</div><div class="val">${s.task_scenario==='A'?'场景 A (电脑崩溃)':'场景 B (组员失联)'}</div></div>
         <div class="info-card"><div class="lbl">任务流程</div><div class="val">单次写作任务</div></div>
-        <div class="info-card"><div class="lbl">完成方式</div><div class="val">${s.completion_type==='timeout'?'⏱ 超时':'手动提交'} ${s.completed?'✅':''}</div></div>
+        <div class="info-card"><div class="lbl">完成方式</div><div class="val">${s.completion_type==='timeout'?'超时':'手动提交'}</div></div>
         <div class="info-card"><div class="lbl">用时</div><div class="val">${durStr}</div></div>
         <div class="info-card"><div class="lbl">对话轮次 / 修改</div><div class="val mono">${s.total_turns||0} 轮 · ${s.total_revisions||0} 修改</div></div>
         <div class="info-card"><div class="lbl">表情帧</div><div class="val mono">${st.total_frames||0} 帧 (可靠 ${st.reliable_frames||0})</div></div>
@@ -123,9 +125,14 @@ export function renderOverview(exp,st){
 // ── Chat ──
 export function renderChat(exp){
   const logs=exp.chat_logs||[];
-  let html=`<div class="action-bar">
-    <button data-action="export-session" data-session-id="${exp.session.id}">⬇ 导出 JSON</button>
-  </div><div class="detail-section"><h3>对话记录 (${logs.length} 条)</h3></div>`;
+  let html=`<div class="detail-section">
+    <div class="section-heading">
+      <h3>对话记录 (${logs.length} 条)</h3>
+      <div class="action-bar compact">
+        <button data-action="export-session" data-session-id="${exp.session.id}">⬇ 导出 JSON</button>
+      </div>
+    </div>
+  </div>`;
 
   for(const l of logs){
     const isUser=l.role==='user';

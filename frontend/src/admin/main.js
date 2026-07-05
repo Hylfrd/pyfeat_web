@@ -184,22 +184,27 @@ function renderList() {
   const html = filtered.map((s) => {
     const conditionLabel = s.condition === 'affect-aware' ? '情感感知' : '纯文本';
     const sceneLabel = s.task_scenario ? `场景 ${s.task_scenario}` : '场景 -';
+    const status = sessionStatusText(s);
     const loss = s.frame_loss_ratio > 0.3 ? `<span class="loss">丢帧 ${Math.round(s.frame_loss_ratio * 100)}%</span>` : '';
     return `<button type="button" class="session-item ${s.id === activeSid ? 'active' : ''} ${s.excluded ? 'excluded' : ''}"
       data-action="select-session" data-session-id="${s.id}">
-      <span class="session-topline">
-        <span class="session-id">${escHtml(s.participant_id)}</span>
-        <span class="session-badges">
-          <span class="tag ${s.condition === 'affect-aware' ? 'ai' : 'text'}">${conditionLabel}</span>
-          <span class="tag scene">${sceneLabel}</span>
+      <span class="session-main">
+        <span class="session-head">
+          <span class="session-id">${escHtml(s.participant_id)}</span>
+          <span class="session-badges">
+            <span class="tag ${s.condition === 'affect-aware' ? 'ai' : 'text'}">${conditionLabel}</span>
+            <span class="tag scene">${sceneLabel}</span>
+          </span>
         </span>
-        <span class="dot ${sessionDotClass(s)}" title="${sessionStatusText(s)}"></span>
+        <span class="session-meta">
+          <span class="session-number">#${s.id}</span>
+          <span>${status}</span>
+          ${loss}
+        </span>
       </span>
-      <span class="session-subline">
-        <span class="session-number">#${s.id}</span>
-        <span>${sessionStatusText(s)}</span>
+      <span class="session-side">
+        <span class="dot ${sessionDotClass(s)}" title="${status}"></span>
         <span class="turns">${s.total_turns || 0}轮</span>
-        ${loss}
       </span>
     </button>`;
   }).join('');

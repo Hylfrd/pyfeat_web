@@ -232,16 +232,20 @@ textarea:focus {
 
 .session-item {
   display: grid;
-  grid-template-rows: auto auto;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 12px;
+  align-items: center;
   width: 100%;
   min-height: 58px;
   border: 0;
   border-left: 3px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
-  padding: 9px 18px 8px;
+  padding: 9px 18px 8px 17px;
   text-align: left;
+  box-shadow: none;
+  position: relative;
 }
 
 .session-item:hover {
@@ -249,8 +253,16 @@ textarea:focus {
 }
 
 .session-item.active {
-  border-left-color: var(--accent);
+  border-left-color: transparent;
   background: var(--accent-soft);
+}
+
+.session-item.active::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
 }
 
 .session-item.excluded .session-id {
@@ -258,11 +270,17 @@ textarea:focus {
   text-decoration-color: var(--red);
 }
 
-.session-topline {
+.session-main {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 10px;
-  gap: 7px;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-head {
+  display: flex;
   align-items: center;
+  gap: 9px;
+  min-width: 0;
 }
 
 .session-id {
@@ -271,6 +289,7 @@ textarea:focus {
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  min-width: 54px;
 }
 
 .session-badges {
@@ -281,11 +300,11 @@ textarea:focus {
   overflow: hidden;
 }
 
-.session-subline {
-  display: grid;
-  grid-template-columns: 48px 68px minmax(38px, 1fr) auto;
-  gap: 7px;
+.session-meta {
+  display: flex;
   align-items: center;
+  gap: 10px;
+  min-width: 0;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.25;
@@ -297,8 +316,15 @@ textarea:focus {
   font-variant-numeric: tabular-nums;
 }
 
+.session-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 0;
+}
+
 .turns {
-  justify-self: end;
   color: var(--muted);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -583,6 +609,24 @@ textarea:focus {
   margin-bottom: 16px;
 }
 
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.section-heading h3 {
+  margin: 0;
+}
+
+.action-bar.compact {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  margin-bottom: 0;
+}
+
 button,
 .debug-json-link {
   min-height: 34px;
@@ -677,6 +721,11 @@ button.danger:hover {
 }
 
 .info-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
   padding: 12px 14px;
 }
 
@@ -696,6 +745,7 @@ button.danger:hover {
 }
 
 .evaluation-card {
+  display: block;
   margin-bottom: 8px;
 }
 
@@ -706,21 +756,26 @@ button.danger:hover {
 }
 
 .info-card .lbl {
-  display: block;
+  display: inline;
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--muted);
   font-size: 12px;
   font-weight: 650;
 }
 
 .info-card .val {
-  display: block;
-  margin-top: 5px;
+  display: inline;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-top: 0;
   color: var(--text-strong);
   font-size: 16px;
   font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
 }
 
-.info-card .mono,
 pre,
 .frame-table,
 .log-console,
@@ -728,6 +783,20 @@ pre,
 .debug-box pre,
 .debug-details pre {
   font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+.info-card .mono {
+  font-family: inherit;
+}
+
+.evaluation-card .lbl,
+.evaluation-card .val {
+  display: block;
+  text-align: left;
+}
+
+.evaluation-card .val {
+  margin-top: 5px;
 }
 
 .chat-entry {
@@ -915,7 +984,6 @@ pre,
   display: flex;
   flex-wrap: wrap;
   gap: 18px 28px;
-  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
   font-size: 13px;
 }
 
