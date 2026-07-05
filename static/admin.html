@@ -1,64 +1,107 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Experimenter Dashboard — Co-Writing Study</title>
-<link rel="stylesheet" href="/static/dist/admin.css?v=__ASSET_VERSION__">
-</head>
-<body>
-
-<div id="auth-overlay" class="auth-overlay">
-  <form id="auth-form" class="auth-card">
-    <h2>Admin Token</h2>
-    <p>请输入后台 token 进入实验管理页面。</p>
-    <input id="auth-token" type="password" autocomplete="current-password" placeholder="Token">
-    <button class="primary" type="submit">进入后台</button>
-    <div id="auth-error" class="auth-error"></div>
-  </form>
-</div>
-
-<!-- ═══ Sidebar ═══ -->
-<div id="sidebar">
-  <div class="head">
-    <h1>Experimenter Dashboard</h1>
-    <div class="sub">Co-Writing Emotion AI Study · BNBU FST</div>
-  </div>
-  <div class="stats-row" id="stats-row"></div>
-  <div class="filters">
-    <input id="search" type="text" placeholder="搜索 ID / 参与者...">
-    <select id="filter-cond">
-      <option value="all">全部条件</option>
-      <option value="affect-aware">情感感知</option>
-      <option value="text-only">纯文本</option>
-    </select>
-  </div>
-  <div id="session-list"></div>
-</div>
-
-<!-- ═══ Main Panel ═══ -->
-<div id="main">
-  <div id="tabs">
-    <button data-tab="overview">概览</button>
-    <button data-tab="chat">对话记录</button>
-    <button data-tab="expression">表情数据</button>
-    <button data-tab="baseline">基线数据</button>
-    <button data-tab="debug" class="active">日志</button>
-  </div>
-  <div id="detail">
-    <div class="empty-state">
-      <div class="icon">...</div>
-      <p>日志加载中</p>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Experimenter Dashboard</title>
+    <link rel="stylesheet" href="/static/dist/admin.css?v=__ASSET_VERSION__" />
+  </head>
+  <body>
+    <div id="auth-overlay" class="auth-overlay">
+      <form id="auth-form" class="auth-card">
+        <h2>Admin Token</h2>
+        <p>请输入后台 token 进入实验管理页面。</p>
+        <input id="auth-token" type="password" autocomplete="current-password" placeholder="Token" />
+        <button class="primary" type="submit">进入后台</button>
+        <div id="auth-error" class="auth-error"></div>
+      </form>
     </div>
-  </div>
-</div>
 
-<div id="modal-overlay" class="hidden">
-  <div class="modal"></div>
-</div>
-<div id="toast-container"></div>
+    <div class="app-shell">
+      <header class="app-banner">
+        <div class="brand">
+          <h1>Experimenter Dashboard</h1>
+        </div>
 
-<script type="module" src="/static/dist/admin.js?v=__ASSET_VERSION__"></script>
-</body>
+        <div class="topbar">
+          <nav id="tabs" class="tabs" aria-label="后台页面">
+            <button data-tab="overview">概览</button>
+            <button data-tab="chat">对话记录</button>
+            <button data-tab="expression">表情数据</button>
+            <button data-tab="baseline">基线数据</button>
+            <button data-tab="debug" class="active">日志</button>
+          </nav>
+
+          <div class="site-actions">
+            <a class="home-link" href="/" target="_blank" rel="noreferrer">实验页面</a>
+            <span class="divider" aria-hidden="true"></span>
+            <button
+              id="themeToggle"
+              class="theme-switch"
+              type="button"
+              role="switch"
+              aria-checked="false"
+              aria-label="切换明暗主题"
+              title="切换明暗主题"
+            >
+              <span class="switch-check">
+                <span class="switch-icon">
+                  <svg class="theme-icon theme-sun" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 18.5A6.5 6.5 0 1 1 12 5a6.5 6.5 0 0 1 0 13.5Zm0-2A4.5 4.5 0 1 0 12 7a4.5 4.5 0 0 0 0 9.5ZM11 0h2v3.5h-2V0Zm0 20.5h2V24h-2v-3.5ZM20.5 11H24v2h-3.5v-2ZM0 11h3.5v2H0v-2Zm18.36-9.36 1.41 1.41-2.47 2.48-1.42-1.42 2.48-2.47ZM4.23 18.47l2.47-2.48 1.42 1.42-2.48 2.47-1.41-1.41Zm15.54 2.48-1.41 1.41-2.48-2.47 1.42-1.42 2.47 2.48ZM5.64 1.64l2.48 2.47L6.7 5.53 4.23 3.05l1.41-1.41Z" />
+                  </svg>
+                  <svg class="theme-icon theme-moon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12.3 22C6.7 22 2.1 17.4 2.1 11.8c0-4.2 2.6-8 6.5-9.5.5-.2.9.3.7.8A8.3 8.3 0 0 0 19 14.3c.6-.2 1 .5.6 1A10.2 10.2 0 0 1 12.3 22Z" />
+                  </svg>
+                </span>
+              </span>
+            </button>
+            <span class="divider" aria-hidden="true"></span>
+            <a
+              class="github-link"
+              href="https://github.com/Hylfrd/pyfeat_web"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="打开 GitHub 仓库"
+              title="GitHub"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 .3A12 12 0 0 0 8.2 23.7c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.3-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.7.3 2.9.1 3.2.8.9 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.4 5.9.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A12 12 0 0 0 12 .3Z" />
+              </svg>
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <div class="app-body">
+        <aside id="sidebar" class="sidebar">
+          <section class="stats-row" id="stats-row" aria-label="统计"></section>
+          <div class="filters">
+            <input id="search" type="search" placeholder="搜索 ID / 参与者" />
+            <select id="filter-cond">
+              <option value="all">全部条件</option>
+              <option value="affect-aware">情感感知</option>
+              <option value="text-only">纯文本</option>
+            </select>
+          </div>
+          <div id="session-list" class="session-list" aria-label="Session 列表"></div>
+        </aside>
+
+        <main id="main" class="workspace">
+          <section id="detail" class="content">
+            <div class="empty-state">
+              <div class="icon">...</div>
+              <p>日志加载中</p>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="modal-overlay" class="hidden">
+      <div class="modal"></div>
+    </div>
+    <div id="toast-container"></div>
+
+    <script type="module" src="/static/dist/admin.js?v=__ASSET_VERSION__"></script>
+  </body>
 </html>
-
