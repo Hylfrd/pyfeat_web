@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import time
 from typing import Optional
 
@@ -13,6 +14,15 @@ from .database import ChatLog, ExpressionFrame, Session
 from .expression import AUFrame
 from .session_activity import mark_disconnected, touch_session
 from .strategy import Strategy, UserTurn
+from .websocket_utils import (
+    TASK_TIME_LIMIT_SECONDS,
+    ai_error_debug_payload,
+    ai_success_debug_payload,
+    ai_unavailable_message,
+    chat_state_from_logs,
+    chat_sync_payload,
+    utc_timestamp,
+)
 
 
 def create_websocket_router(db_session, expression_engine, selectors, ai_client) -> APIRouter:
@@ -79,31 +89,12 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             .order_by(ChatLog.seq)
                             .all()
                         )
-                        chat_history = [
-                            ChatMessage(role=log.role, content=log.content)
-                            for log in logs
-                            if log.role in ("user", "ai")
-                        ]
-                        turn_counter = sum(1 for log in logs if log.role == "user")
-                        revision_counter = sum(
-                            1 for log in logs
-                            if log.role == "ai" and "[DRAFT_START]" in log.content
-                        )
+                        chat_history, turn_counter, revision_counter = chat_state_from_logs(logs)
                         await websocket.send_text(json.dumps({"type": "ready"}))
-                        await websocket.send_text(json.dumps({
-                            "type": "chat_sync",
-                            "messages": [
-                                {"role": log.role, "text": log.content}
-                                for log in logs
-                                if log.role in ("user", "ai")
-                            ],
-                            "turn": turn_counter,
-                            "revision": revision_counter,
-                            "session_id": current_session_id,
-                            "condition": session.condition if session else None,
-                            "scenario": session.task_scenario if session else None,
-                            "task_index": session.condition_order if session else None,
-                        }, ensure_ascii=False))
+                        await websocket.send_text(json.dumps(
+                            chat_sync_payload(logs, session, turn_counter, revision_counter, current_session_id),
+                            ensure_ascii=False,
+                        ))
 
                     elif msg_type == "baseline_frame":
                         if not await ensure_session_exists():
@@ -291,7 +282,7 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                 seq=turn_counter * 2 - 1,
                                 role="user",
                                 content=user_text,
-                                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                timestamp=utc_timestamp(),
                                 expression_label=expression_engine.get_expression_label(participant_id),
                             ))
                             db_session.commit()
@@ -322,33 +313,26 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                     "participant_id": participant_id,
                                     "session_id": current_session_id,
                                     "elapsed_ms": ai_elapsed_ms,
-                                    "api_response": {
-                                        "ok": True,
-                                        "model": ai_client.model,
-                                        "base_url": ai_client.base_url,
-                                        "condition": condition,
-                                        "strategy": strategy_name,
-                                        "prompt": user_text,
-                                        "response": ai_response_text,
-                                        "prompt_chars": len(user_text),
-                                        "history_messages": len(chat_history),
-                                        "response_chars": len(ai_response_text),
-                                    },
+                                    "api_response": ai_success_debug_payload(
+                                        ai_client=ai_client,
+                                        condition=condition,
+                                        strategy_name=strategy_name,
+                                        user_text=user_text,
+                                        chat_history=chat_history,
+                                        ai_response_text=ai_response_text,
+                                    ),
                                     "message": f"AI response turn {turn_counter}: {ai_elapsed_ms} ms",
                                 })
                         except Exception as api_err:
-                            import sys
                             ai_elapsed_ms = round((time.perf_counter() - ai_started) * 1000, 1)
-                            api_response = debug_log._api_error_payload(api_err)
-                            api_response.update({
-                                "model": ai_client.model,
-                                "base_url": ai_client.base_url,
-                                "condition": condition,
-                                "strategy": strategy_name,
-                                "prompt": user_text,
-                                "prompt_chars": len(user_text),
-                                "history_messages": len(chat_history),
-                            })
+                            api_response = ai_error_debug_payload(
+                                api_err=api_err,
+                                ai_client=ai_client,
+                                condition=condition,
+                                strategy_name=strategy_name,
+                                user_text=user_text,
+                                chat_history=chat_history,
+                            )
                             debug_log._push_debug({
                                 "kind": "ai",
                                 "participant_id": participant_id,
@@ -358,11 +342,7 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                 "message": f"AI error turn {turn_counter}: {type(api_err).__name__}",
                             })
                             print(f"[ws] AI API error for {participant_id}: {api_err}", file=sys.stderr)
-                            ai_response_text = (
-                                "抱歉，我暂时无法回应。请稍等片刻再试。"
-                                if email_language == "zh"
-                                else "Sorry, I'm temporarily unavailable. Please try again in a moment."
-                            )
+                            ai_response_text = ai_unavailable_message(email_language)
                             strategy_name = None
 
                         if "[DRAFT_START]" in ai_response_text:
@@ -374,7 +354,7 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                 seq=turn_counter * 2,
                                 role="ai",
                                 content=ai_response_text,
-                                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                timestamp=utc_timestamp(),
                                 strategy_applied=strategy_name,
                             ))
                             db_session.commit()
@@ -391,17 +371,14 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             "revision": revision_counter,
                             "strategy": strategy_name,
                             "elapsed_s": round(elapsed, 1),
-                            "time_remaining_s": max(0, FIFTEEN_MINUTES - int(elapsed)),
+                            "time_remaining_s": max(0, TASK_TIME_LIMIT_SECONDS - int(elapsed)),
                         })
 
                 except WebSocketDisconnect:
                     raise
                 except json.JSONDecodeError:
-
-                    import sys
                     print(f"[ws] Bad JSON from {participant_id}", file=sys.stderr)
                 except Exception as inner_err:
-                    import sys
                     print(f"[ws] Unexpected error for {participant_id}: {inner_err}", file=sys.stderr)
 
                     try:
