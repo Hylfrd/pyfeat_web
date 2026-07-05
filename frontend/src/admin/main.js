@@ -1,6 +1,5 @@
 import './style.css';
-
-const $=id=>document.getElementById(id);
+import { $, escapeAttr as escAttr, escapeHtml as escHtml } from '../shared/dom.js';
 let sessions=[],activeSid=null,sessionCache={};
 let debugEvents=[];
 let debugBefore=null;
@@ -84,10 +83,6 @@ function toast(msg,type='ok'){
   $('toast-container').appendChild(el);
   setTimeout(()=>el.remove(),3000);
 }
-
-// ── Helpers ──
-function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-function escAttr(s){return escHtml(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
 // ── Fetch & render ──
 async function refresh(){

@@ -1,7 +1,7 @@
 import './style.css';
+import { $, escapeHtml } from '../shared/dom.js';
 
 // ── DOM refs ──
-const $ = id => document.getElementById(id);
 const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view'];
 function showView(id){views.forEach(v=>$(v).classList.add('hidden'));$(id).classList.remove('hidden')}
 function setStage(id){
@@ -682,7 +682,6 @@ function appendChat(role,text,record=true){
   }
 }
 
-function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
 function parseDraft(aiText){
   const m=aiText.match(/\[DRAFT_START\]([\s\S]*?)\[DRAFT_END\]/);
