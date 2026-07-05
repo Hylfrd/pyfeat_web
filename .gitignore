@@ -35,6 +35,7 @@ captures/
 node_modules/
 dist/
 build/
+static/dist/
 
 # OS and editor files
 .DS_Store

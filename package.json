@@ -3,6 +3,10 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "check": "python -m compileall app"
+    "build": "vite build --config vite.admin.config.mjs && vite build --config vite.participant.config.mjs",
+    "check": "npm run build"
+  },
+  "devDependencies": {
+    "vite": "^8.1.3"
   }
 }

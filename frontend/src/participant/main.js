@@ -1,3 +1,5 @@
+import './style.css';
+
 // ── DOM refs ──
 const $ = id => document.getElementById(id);
 const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view'];
@@ -1032,3 +1034,10 @@ $('setup-form').addEventListener('submit',async e=>{
 });
 
 initProgressRecovery();
+
+
+Object.assign(window, {
+  closeEvalModal,
+  doFinalSubmit,
+  extractDraft,
+});

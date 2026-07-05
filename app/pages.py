@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT_DIR / "static"
+DIST_DIR = STATIC_DIR / "dist"
 NO_STORE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
     "Pragma": "no-cache",
@@ -23,8 +24,8 @@ async def participant_page():
     participant_html = STATIC_DIR / "participant.html"
     participant_assets = [
         participant_html,
-        STATIC_DIR / "participant.css",
-        STATIC_DIR / "participant.js",
+        DIST_DIR / "participant.css",
+        DIST_DIR / "participant.js",
     ]
     asset_version = int(max(path.stat().st_mtime for path in participant_assets))
     html = participant_html.read_text(encoding="utf-8").replace("__ASSET_VERSION__", str(asset_version))
@@ -37,8 +38,8 @@ async def admin_page():
     admin_html = STATIC_DIR / "admin.html"
     admin_assets = [
         admin_html,
-        STATIC_DIR / "admin.css",
-        *STATIC_DIR.glob("admin_*.js"),
+        DIST_DIR / "admin.css",
+        DIST_DIR / "admin.js",
     ]
     asset_version = int(max(path.stat().st_mtime for path in admin_assets))
     html = admin_html.read_text(encoding="utf-8").replace("__ASSET_VERSION__", str(asset_version))

@@ -22,8 +22,19 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
       - name: Check Python
         run: python -m compileall app
+
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build
 
       - name: Check repository hygiene
         shell: bash
