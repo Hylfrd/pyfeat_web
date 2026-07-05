@@ -14,6 +14,8 @@ function setStage(id){
 const STORAGE_KEY='hmcl-helper-progress-v1';
 let currentStage='setup-view';
 let chatTranscript=[];
+let draftActionCounter=0;
+const draftActionText=new Map();
 
 function readProgress(){
   try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){return null}
@@ -664,10 +666,12 @@ function appendChat(role,text,record=true){
   const now=new Date();
   const timeStr=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
   const clean=text.replace(/\[DRAFT_START\]|\[DRAFT_END\]/g,'');
+  const draftActionId=role==='ai'&&text.includes('[DRAFT_START]')?`draft-${++draftActionCounter}`:'';
+  if(draftActionId)draftActionText.set(draftActionId,text);
   wrap.innerHTML=`
     <div class="sender">${role==='ai'?'AI 助手':'你'}</div>
     <div class="bubble">${escapeHtml(clean)}</div>
-    ${role==='ai'&&text.includes('[DRAFT_START]')?`<button class="draft-btn" onclick="extractDraft(\`${escapeHtml(text)}\`)">→ 应用草稿</button>`:''}
+    ${draftActionId?`<button class="draft-btn" data-action="apply-draft" data-draft-id="${draftActionId}">→ 应用草稿</button>`:''}
     <div class="time">${timeStr}</div>
   `;
   area.appendChild(wrap);
@@ -860,9 +864,9 @@ function showEvalModal(result, isTimeout){
   // Actions
   html += `<div class="eval-actions">`;
   if(canSubmit){
-    html += `<button class="btn-green" onclick="closeEvalModal(false);doFinalSubmit(${isTimeout});">提交并进入问卷</button>`;
+    html += `<button class="btn-green" data-action="final-submit" data-timeout="${isTimeout?1:0}">提交并进入问卷</button>`;
   }
-  html += `<button class="${canSubmit?'btn-secondary':'btn-primary'}" onclick="closeEvalModal(true)">继续修改</button>`;
+  html += `<button class="${canSubmit?'btn-secondary':'btn-primary'}" data-action="close-eval" data-resume="1">继续修改</button>`;
   html += `</div>`;
 
   $('eval-modal').innerHTML = html;
@@ -1036,8 +1040,20 @@ $('setup-form').addEventListener('submit',async e=>{
 initProgressRecovery();
 
 
-Object.assign(window, {
-  closeEvalModal,
-  doFinalSubmit,
-  extractDraft,
-});
+function bindParticipantEvents(){
+  $('eval-overlay')?.addEventListener('click',e=>{
+    if(e.target===$('eval-overlay'))closeEvalModal();
+  });
+  document.addEventListener('click',e=>{
+    const el=e.target.closest('[data-action]');
+    if(!el)return;
+    if(el.dataset.action==='apply-draft')return extractDraft(draftActionText.get(el.dataset.draftId)||'');
+    if(el.dataset.action==='final-submit'){
+      closeEvalModal(false);
+      return doFinalSubmit(el.dataset.timeout==='1');
+    }
+    if(el.dataset.action==='close-eval')return closeEvalModal(el.dataset.resume==='1');
+  });
+}
+
+bindParticipantEvents();
