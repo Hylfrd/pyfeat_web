@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "build": "vite build --config vite.admin.config.mjs && vite build --config vite.participant.config.mjs",
+    "build": "vite build",
     "check": "npm run build"
   },
   "devDependencies": {
