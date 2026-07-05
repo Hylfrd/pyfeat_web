@@ -20,7 +20,15 @@ router = APIRouter()
 @router.get("/")
 async def participant_page():
     """Serve participant HTML."""
-    return FileResponse(STATIC_DIR / "participant.html", headers=NO_STORE_HEADERS)
+    participant_html = STATIC_DIR / "participant.html"
+    participant_assets = [
+        participant_html,
+        STATIC_DIR / "participant.css",
+        STATIC_DIR / "participant.js",
+    ]
+    asset_version = int(max(path.stat().st_mtime for path in participant_assets))
+    html = participant_html.read_text(encoding="utf-8").replace("__ASSET_VERSION__", str(asset_version))
+    return HTMLResponse(html, headers=NO_STORE_HEADERS)
 
 
 @router.get("/admin")
