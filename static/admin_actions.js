@@ -1,0 +1,70 @@
+// ── Export ──
+function downloadJSON(data,filename){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+}
+async function exportSession(sid){
+  const r=await adminFetch(`/api/admin/sessions/${sid}/export`);
+  const data=await r.json();
+  downloadJSON(data,`session_${sid}_${data.session.participant_id}.json`);
+  toast('导出 JSON 完成','ok');
+}
+function exportSessionCSV(sid){
+  const {exp}=sessionCache[sid]||{};
+  if(!exp)return;
+  const logs=exp.chat_logs||[];
+  let csv='seq,role,content,timestamp,expression_label,strategy_applied\n';
+  for(const l of logs){
+    csv+=`${l.seq},"${l.role}","${(l.content||'').replace(/"/g,'""')}","${l.timestamp}","${l.expression_label||''}","${l.strategy_applied||''}"\n`;
+  }
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`session_${sid}_chat.csv`;a.click();
+  toast('导出 CSV 完成','ok');
+}
+async function exportExpressionCSV(sid){
+  const r=await adminFetch(`/api/admin/expression/${sid}/stats`);
+  const st=await r.json();
+  const frames=st.frames||[];
+  let csv='time_s,au1,au4,au7,au12,head_yaw,head_pitch,face_detected,reliable\n';
+  for(const f of frames){
+    csv+=`${f.t},${f.au1},${f.au4},${f.au7},${f.au12},${f.yaw},${f.pitch},${f.face},${f.ok}\n`;
+  }
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`session_${sid}_expression.csv`;a.click();
+  toast('导出 AU CSV 完成','ok');
+}
+
+// ── Delete ──
+function confirmDelete(sid,pid){
+  $('modal-overlay').classList.remove('hidden');
+  $('modal-overlay').querySelector('.modal').innerHTML=`
+    <h3>删除 Session #${sid}</h3>
+    <p>确定删除 <strong>${escHtml(pid)}</strong> 的 Session #${sid}？<br>
+    这将同时删除所有关联的聊天记录、表情数据、问卷和评估结果。<br><br>
+    <span style="color:#ef4444">此操作不可撤销。</span></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeModal()">取消</button>
+      <button class="danger" onclick="doDelete(${sid})">确认删除</button>
+    </div>
+  `;
+}
+function closeModal(){$('modal-overlay').classList.add('hidden')}
+async function doDelete(sid){
+  const r=await adminFetch(`/api/admin/sessions/${sid}`,{method:'DELETE'});
+  if(r.ok){
+    closeModal();
+    activeSid=null;
+    activeTab='debug';
+    setActiveTab(activeTab);
+    renderDebug();
+    toast('已删除','ok');
+    refresh();
+  }else{
+    let message=r.status===409?'用户正在实验中':'删除失败';
+    try{
+      const data=await r.json();
+      if(data.detail)message=data.detail;
+    }catch(e){}
+    toast(message,'err');
+  }
+}
