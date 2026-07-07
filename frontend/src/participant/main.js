@@ -3,7 +3,12 @@ import { $, escapeHtml } from '../shared/dom.js';
 
 // ── DOM refs ──
 const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view'];
-function showView(id){views.forEach(v=>$(v).classList.add('hidden'));$(id).classList.remove('hidden')}
+function showView(id){
+  views.forEach(v=>$(v).classList.add('hidden'));
+  $(id).classList.remove('hidden');
+  document.documentElement.dataset.stage=id;
+  document.documentElement.classList.toggle('task-page', id==='task-view');
+}
 function setStage(id){
   currentStage=id;
   showView(id);
@@ -16,6 +21,7 @@ let currentStage='setup-view';
 let chatTranscript=[];
 let draftActionCounter=0;
 const draftActionText=new Map();
+document.documentElement.dataset.stage=currentStage;
 
 function readProgress(){
   try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){return null}
@@ -101,6 +107,60 @@ let lastExpressionSentAt = 0;
 let lastCaptureNoticeAt = 0;
 let captureState = '';
 let sessionStatusTimer = null;
+
+const recordingDrawer = $('webcam-wrap');
+const recordingStorageKey = 'hmcl-recording-drawer-top';
+
+function clampRecordingTop(top){
+  if(!recordingDrawer)return top;
+  const footerHeight=document.querySelector('.site-footer')?.offsetHeight||48;
+  const margin=8;
+  const drawerHeight=recordingDrawer.offsetHeight||148;
+  const minTop=margin;
+  const maxTop=Math.max(minTop, window.innerHeight-footerHeight-drawerHeight-margin);
+  return Math.min(Math.max(top,minTop),maxTop);
+}
+
+function setRecordingTop(top,persist=false){
+  if(!recordingDrawer)return;
+  const nextTop=clampRecordingTop(top);
+  recordingDrawer.style.setProperty('--recording-drawer-top',`${nextTop}px`);
+  recordingDrawer.style.bottom='auto';
+  if(persist)localStorage.setItem(recordingStorageKey,String(nextTop));
+}
+
+function initRecordingDrawer(){
+  if(!recordingDrawer)return;
+  const savedTop=Number(localStorage.getItem(recordingStorageKey));
+  const defaultTop=window.innerHeight-48-148-24;
+  setRecordingTop(Number.isFinite(savedTop)&&savedTop>0?savedTop:defaultTop);
+
+  let dragStartY=0;
+  let dragStartTop=0;
+  recordingDrawer.addEventListener('pointerdown',event=>{
+    if(event.button!==0)return;
+    dragStartY=event.clientY;
+    dragStartTop=recordingDrawer.getBoundingClientRect().top;
+    recordingDrawer.classList.add('dragging');
+    recordingDrawer.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  recordingDrawer.addEventListener('pointermove',event=>{
+    if(!recordingDrawer.classList.contains('dragging'))return;
+    setRecordingTop(dragStartTop+event.clientY-dragStartY);
+  });
+  function finishDrag(event){
+    if(!recordingDrawer.classList.contains('dragging'))return;
+    recordingDrawer.classList.remove('dragging');
+    if(recordingDrawer.hasPointerCapture(event.pointerId)){
+      recordingDrawer.releasePointerCapture(event.pointerId);
+    }
+    setRecordingTop(recordingDrawer.getBoundingClientRect().top,true);
+  }
+  recordingDrawer.addEventListener('pointerup',finishDrag);
+  recordingDrawer.addEventListener('pointercancel',finishDrag);
+  window.addEventListener('resize',()=>setRecordingTop(recordingDrawer.getBoundingClientRect().top,true));
+}
 
 // ── Toast ──
 function toast(msg, duration=3000, kind=''){
@@ -266,6 +326,8 @@ async function startWebcam(){
     // Fallback: resolve after 2 seconds even if event doesn't fire
     setTimeout(resolve, 2000);
   });
+  document.querySelector('.camera-mock')?.classList.remove('camera-off');
+  document.querySelector('.camera-mock')?.classList.add('camera-on');
   mediaRecorder=new MediaRecorder(stream,{mimeType:'video/webm'});
   mediaRecorder.ondataavailable=async e=>{
     if(e.data.size>0){
@@ -467,7 +529,7 @@ async function resumeProgress(saved){
   if(currentStage==='task-view'){
     renderTaskMeta();
     $('draft-text').textContent=saved.draftText||'';
-    if(saved.draftText)$('draft-panel').classList.remove('hidden');
+    $('draft-panel').classList.remove('hidden');
     renderRestoredChat();
     $('turn-num').textContent=turnCounter;
     $('rev-num').textContent=revisionCounter;
@@ -643,7 +705,7 @@ async function startTask(){
   chatTranscript=[];
   $('turn-num').textContent='0';$('rev-num').textContent='0';
   $('chat-area').innerHTML='<div class="empty-state"><div class="ai-avatar">AI</div><p>你好！我是你的 AI 写作助手。</p><p style="font-size:.85em;margin-top:4px">今天我可以如何帮助你撰写邮件？</p></div>';
-  $('draft-panel').classList.add('hidden');$('draft-text').textContent='';
+  $('draft-panel').classList.remove('hidden');$('draft-text').textContent='';
   $('user-input').value='';$('timer').classList.remove('warn');
   writeProgress();
 
@@ -1056,3 +1118,4 @@ function bindParticipantEvents(){
 }
 
 bindParticipantEvents();
+initRecordingDrawer();

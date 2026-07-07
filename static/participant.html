@@ -10,13 +10,21 @@
 <body>
 
 <!-- ═══ Webcam (always on) ═══ -->
-<div id="webcam-wrap" class="hidden">
-  <video id="webcam" autoplay playsinline></video>
-  <div id="webcam-status">
-    <div class="rec-dot"></div>
-    <span>Recording</span>
+<aside id="webcam-wrap" class="recording-drawer hidden" aria-label="摄像头录制状态" tabindex="0">
+  <div id="webcam-status" class="recording-handle">
+    <span class="recording-status">
+      <span class="rec-dot"></span>
+      <span class="recording-label">Recording</span>
+    </span>
   </div>
-</div>
+  <div class="recording-panel">
+    <div class="camera-mock camera-off">
+      <video id="webcam" autoplay playsinline muted></video>
+      <div class="camera-off-icon" aria-hidden="true"></div>
+      <div class="camera-off-text">Camera unavailable</div>
+    </div>
+  </div>
+</aside>
 
 <!-- ═══ Evaluation Modal ═══ -->
 <div id="eval-overlay" class="hidden">
@@ -139,7 +147,7 @@
 <!-- ═══════════════════════════════════════════════ -->
 <!-- TASK VIEW                                      -->
 <!-- ═══════════════════════════════════════════════ -->
-<div id="task-view" class="view hidden" style="max-width:800px">
+<div id="task-view" class="view task-view hidden">
   <!-- Timer bar -->
   <div class="timer-bar">
     <div>
@@ -165,7 +173,7 @@
   <div id="chat-area"></div>
 
   <!-- Draft panel -->
-  <div id="draft-panel" class="hidden">
+  <div id="draft-panel">
     <div class="draft-header">
       <span>邮件草稿</span>
       <span class="badge">AI 生成</span>
@@ -299,10 +307,7 @@
 <!-- COMPLETE VIEW                                  -->
 <!-- ═══════════════════════════════════════════════ -->
 <div id="complete-view" class="view hidden">
-  <div class="card" style="text-align:center">
-    <div class="check-icon" style="background:#eef2ff">
-      <svg fill="none" viewBox="0 0 24 24" stroke="#4f46e5" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-    </div>
+  <div class="card center">
     <h1>实验完成</h1>
     <p class="subtitle">感谢您的参与！</p>
   </div>
