@@ -6,6 +6,7 @@ questionnaires, evaluations.
 
 Missing-data policy (§10.1):
   - Expression frames: >30% unreliable → session excluded
+  - Admin manual override can exclude or re-include a session
   - Questionnaires: >2 missing items (out of 10) → response excluded
 
 The LLM for evaluation (Gemini) differs from the writing-task LLM (DeepSeek V4 Flash).
@@ -63,6 +64,7 @@ class Session(Base):
     total_revisions: Mapped[int] = Column(Integer, default=0)
     total_frames: Mapped[int] = Column(Integer, default=0)
     unreliable_frames: Mapped[int] = Column(Integer, default=0)
+    exclusion_override: Mapped[Optional[str]] = Column(String, nullable=True)  # exclude / include / None
      
     completed: Mapped[bool] = Column(Boolean, default=False)
     video_path: Mapped[Optional[str]] = Column(String, nullable=True)
@@ -82,6 +84,14 @@ class Session(Base):
     @property
     def excluded_by_frame_loss(self) -> bool:
         return self.frame_loss_ratio > 0.30
+
+    @property
+    def excluded(self) -> bool:
+        if self.exclusion_override == "exclude":
+            return True
+        if self.exclusion_override == "include":
+            return False
+        return self.excluded_by_frame_loss
 
 
 class ChatLog(Base):
@@ -305,16 +315,18 @@ def init_db(db_path: str = "data/experiment.db") -> Session:
         dbapi_conn.execute("PRAGMA journal_mode=WAL")
 
     Base.metadata.create_all(engine)
-    # Migration: add unreliable_frames column for existing databases
+    # Small migrations for existing SQLite databases.
     try:
         from sqlalchemy import inspect
         insp = inspect(engine)
         if "sessions" in insp.get_table_names():
             cols = [c["name"] for c in insp.get_columns("sessions")]
-            if "unreliable_frames" not in cols:
-                with engine.connect() as conn:
+            with engine.connect() as conn:
+                if "unreliable_frames" not in cols:
                     conn.execute(text("ALTER TABLE sessions ADD COLUMN unreliable_frames INTEGER DEFAULT 0"))
-                    conn.commit()
+                if "exclusion_override" not in cols:
+                    conn.execute(text("ALTER TABLE sessions ADD COLUMN exclusion_override VARCHAR"))
+                conn.commit()
     except Exception:
         pass  # non-critical migration
     from sqlalchemy.orm import Session as DBSession

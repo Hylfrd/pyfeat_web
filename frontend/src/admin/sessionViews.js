@@ -22,6 +22,13 @@ export function renderOverview(exp,st){
   const durStr=dur?`${Math.floor(dur/60)}分${dur%60}秒`:'-';
   const framesOk=(st.total_frames||0)-(st.face_lost_frames||0);
   const faceOkPct=st.total_frames?Math.round(framesOk/st.total_frames*100):0;
+  const exclusionButton = s.excluded
+    ? `<button class="success" data-action="set-exclusion" data-session-id="${s.id}" data-excluded="0">不再排除此Session</button>`
+    : `<button class="danger" data-action="set-exclusion" data-session-id="${s.id}" data-excluded="1">排除此Session</button>`;
+  const exclusionText = s.exclusion_override === 'exclude'
+    ? '手动排除'
+    : (s.exclusion_override === 'include' ? '否 (手动保留)' : (s.excluded_by_frame_loss ? '是 (>30%丢失)' : '否'));
+  const exclusionColor = s.excluded ? '#ef4444' : '#22c55e';
 
   let html=`
     <div class="detail-section">
@@ -30,6 +37,7 @@ export function renderOverview(exp,st){
         <div class="action-bar compact">
           <button data-action="export-session" data-session-id="${s.id}">⬇ 导出 JSON</button>
           <button data-action="export-session-csv" data-session-id="${s.id}">⬇ 导出 CSV</button>
+          ${exclusionButton}
           <button class="danger" data-action="confirm-delete" data-session-id="${s.id}" data-participant-id="${escAttr(s.participant_id)}">✕ 删除此 Session</button>
         </div>
       </div>
@@ -41,7 +49,7 @@ export function renderOverview(exp,st){
         <div class="info-card"><div class="lbl">对话轮次 / 修改</div><div class="val mono">${s.total_turns||0} 轮 · ${s.total_revisions||0} 修改</div></div>
         <div class="info-card"><div class="lbl">表情帧</div><div class="val mono">${st.total_frames||0} 帧 (可靠 ${st.reliable_frames||0})</div></div>
         <div class="info-card"><div class="lbl">帧丢失率</div><div class="val" style="color:${s.frame_loss_ratio>0.3?'#ef4444':'#22c55e'}">${Math.round(s.frame_loss_ratio*100)}%</div></div>
-        <div class="info-card"><div class="lbl">排除</div><div class="val" style="color:${s.excluded_by_frame_loss?'#ef4444':'#22c55e'}">${s.excluded_by_frame_loss?'是 (>30%丢失)':'否'}</div></div>
+        <div class="info-card"><div class="lbl">排除</div><div class="val" style="color:${exclusionColor}">${exclusionText}</div></div>
       </div>
     </div>
 

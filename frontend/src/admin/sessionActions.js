@@ -1,6 +1,6 @@
 import { $, escapeHtml as escHtml } from '../shared/dom.js';
 
-export function createSessionActions({adminFetch, toast, getSessionCache, onDeleted}){
+export function createSessionActions({adminFetch, toast, getSessionCache, onDeleted, onChanged}){
   function downloadJSON(data,filename){
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
@@ -66,6 +66,22 @@ export function createSessionActions({adminFetch, toast, getSessionCache, onDele
       toast(message,'err');
     }
   }
+  async function setExclusion(sid, excluded){
+    const body = new URLSearchParams();
+    body.set('excluded', excluded ? 'true' : 'false');
+    const r=await adminFetch(`/api/admin/sessions/${sid}/exclusion`,{method:'POST',body});
+    if(r.ok){
+      toast(excluded?'Session 已排除':'Session 已恢复','ok');
+      if(onChanged)await onChanged(sid);
+    }else{
+      let message=excluded?'排除失败':'恢复失败';
+      try{
+        const data=await r.json();
+        if(data.detail)message=data.detail;
+      }catch(e){}
+      toast(message,'err');
+    }
+  }
 
   return {
     exportSession,
@@ -74,5 +90,6 @@ export function createSessionActions({adminFetch, toast, getSessionCache, onDele
     confirmDelete,
     closeModal,
     deleteSession: doDelete,
+    setExclusion,
   };
 }

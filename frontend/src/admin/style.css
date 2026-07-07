@@ -687,6 +687,16 @@ button.danger:hover {
   color: var(--red);
 }
 
+button.success {
+  border-color: color-mix(in srgb, var(--green) 45%, var(--border));
+  color: var(--green);
+}
+
+button.success:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
 .detail-section {
   margin-bottom: 18px;
 }

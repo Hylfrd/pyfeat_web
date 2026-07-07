@@ -128,6 +128,10 @@ const sessionActions = createSessionActions({
     debugConsole.render();
     refresh();
   },
+  onChanged: async (sid) => {
+    delete sessionCache[sid];
+    await refresh();
+  },
 });
 
 async function refresh() {
@@ -152,12 +156,14 @@ async function renderStats() {
 
 function sessionStatusText(s) {
   const key = sessionStatusKey(s);
+  if (key === 'excluded') return '已排除';
   if (key === 'done') return '已完成';
   if (key === 'active') return '进行中';
   return '未完成';
 }
 
 function sessionStatusKey(s) {
+  if (s.excluded) return 'excluded';
   if (s.completed) return 'done';
   if (s.activity?.active) return 'active';
   if ((s.total_turns || 0) > 0 || (s.total_revisions || 0) > 0) return 'active';
@@ -207,14 +213,13 @@ function renderList() {
   }).join('');
 
   const list = $('session-list');
-  if (list) list.innerHTML = html || '<div class="empty">无匹配的 Session</div>';
+  if (list) list.innerHTML = html || '<div class="empty">没有符合条件的Session</div>';
 }
 
 function selectedFilters(group) {
   const selector = group === 'status' ? '[data-filter-status]' : '[data-filter-condition]';
   const checked = [...document.querySelectorAll(`${selector}:checked`)].map((input) => input.dataset.filterStatus || input.dataset.filterCondition);
-  if (checked.length) return new Set(checked);
-  return new Set(group === 'status' ? ['done', 'active', 'pending'] : ['text-only', 'affect-aware']);
+  return new Set(checked);
 }
 
 function syncFilterGroup(group, changedInput) {
@@ -227,11 +232,6 @@ function syncFilterGroup(group, changedInput) {
     items.forEach((input) => { input.checked = all.checked; });
   } else {
     all.checked = items.every((input) => input.checked);
-  }
-
-  if (!items.some((input) => input.checked)) {
-    all.checked = true;
-    items.forEach((input) => { input.checked = true; });
   }
 }
 
@@ -324,6 +324,7 @@ function handleAdminClick(e) {
   if (action === 'export-session') return sessionActions.exportSession(Number(el.dataset.sessionId));
   if (action === 'export-session-csv') return sessionActions.exportSessionCSV(Number(el.dataset.sessionId));
   if (action === 'export-expression-csv') return sessionActions.exportExpressionCSV(Number(el.dataset.sessionId));
+  if (action === 'set-exclusion') return sessionActions.setExclusion(Number(el.dataset.sessionId), el.dataset.excluded === '1');
   if (action === 'confirm-delete') return sessionActions.confirmDelete(Number(el.dataset.sessionId), el.dataset.participantId || '');
   if (action === 'close-modal') return sessionActions.closeModal();
   if (action === 'do-delete') return sessionActions.deleteSession(Number(el.dataset.sessionId));

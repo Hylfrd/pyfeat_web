@@ -36,7 +36,9 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
                 "total_revisions": s.total_revisions,
                 "duration_ms": s.duration_ms,
                 "frame_loss_ratio": round(s.frame_loss_ratio, 3),
-                "excluded": s.excluded_by_frame_loss,
+                "excluded": s.excluded,
+                "excluded_by_frame_loss": s.excluded_by_frame_loss,
+                "exclusion_override": s.exclusion_override,
                 "activity": get_session_activity(s.id),
             }
             for s in sessions
@@ -120,6 +122,26 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
         forget_session(session_id)
         return {"ok": True, "deleted_session_id": session_id}
 
+    @router.post("/api/admin/sessions/{session_id}/exclusion")
+    async def admin_set_session_exclusion(
+        session_id: int,
+        excluded: bool = Form(...),
+        _: None = Depends(require_admin),
+    ):
+        """Manually include or exclude a session from analysis."""
+        session = db_session.query(Session).get(session_id)
+        if not session:
+            raise HTTPException(404, "Session not found")
+        session.exclusion_override = "exclude" if excluded else "include"
+        db_session.commit()
+        return {
+            "ok": True,
+            "session_id": session.id,
+            "excluded": session.excluded,
+            "excluded_by_frame_loss": session.excluded_by_frame_loss,
+            "exclusion_override": session.exclusion_override,
+        }
+
     @router.get("/api/admin/sessions/{session_id}/export")
     async def admin_export_session(session_id: int, _: None = Depends(require_admin)):
         """Export a single session as JSON including chat, expression, questionnaire, evaluations."""
@@ -169,7 +191,9 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
                 "total_frames": session.total_frames,
                 "unreliable_frames": session.unreliable_frames,
                 "frame_loss_ratio": session.frame_loss_ratio,
+                "excluded": session.excluded,
                 "excluded_by_frame_loss": session.excluded_by_frame_loss,
+                "exclusion_override": session.exclusion_override,
                 "activity": get_session_activity(session.id),
             },
             "participant": {
