@@ -258,6 +258,9 @@ class ExpressionEngine:
         del self._baseline_buffer[participant_id]
         return result
 
+    def clear_baseline_buffer(self, participant_id: str) -> None:
+        self._baseline_buffer.pop(participant_id, None)
+
     def calibrate_baseline(
         self,
         participant_id: str,

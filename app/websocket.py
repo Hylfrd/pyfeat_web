@@ -10,7 +10,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from . import debug_log
 from .ai_client import ChatMessage
-from .database import ChatLog, ExpressionFrame, Session
+from .database import ChatLog, ExpressionFrame, Participant, Session
 from .expression import AUFrame
 from .session_activity import mark_disconnected, touch_session
 from .strategy import Strategy, UserTurn
@@ -96,6 +96,14 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             ensure_ascii=False,
                         ))
 
+                    elif msg_type == "baseline_reset":
+                        baseline_count = 0
+                        expression_engine.clear_baseline_buffer(participant_id)
+                        await safe_send({
+                            "type": "baseline_ack",
+                            "collected": baseline_count,
+                        })
+
                     elif msg_type == "baseline_frame":
                         if not await ensure_session_exists():
                             continue
@@ -128,6 +136,35 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             "type": "baseline_ack",
                             "collected": baseline_count,
                         }))
+
+                    elif msg_type == "baseline_calibrate":
+                        baseline = expression_engine.calibrate_from_buffer(participant_id)
+                        if baseline is None:
+                            baseline_count = 0
+                            await safe_send({
+                                "type": "baseline_calibrated",
+                                "ok": False,
+                                "message": "No baseline frames collected.",
+                            })
+                            continue
+
+                        p = db_session.query(Participant).get(participant_id)
+                        if p:
+                            p.baseline_au1 = baseline.au1_mean
+                            p.baseline_au4 = baseline.au4_mean
+                            p.baseline_au7 = baseline.au7_mean
+                            p.baseline_au12 = baseline.au12_mean
+                            p.baseline_frame_count = baseline.frame_count
+                            p.baseline_artifact_count = baseline.artifact_count
+                            db_session.commit()
+
+                        baseline_count = 0
+                        await safe_send({
+                            "type": "baseline_calibrated",
+                            "ok": True,
+                            "frame_count": baseline.frame_count,
+                            "artifact_count": baseline.artifact_count,
+                        })
 
                     elif msg_type == "expression_frame":
                         if not await ensure_session_exists():
