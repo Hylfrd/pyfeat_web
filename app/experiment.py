@@ -45,13 +45,11 @@ def create_experiment_router(
         return f"P{n:03d}", order_group
 
     @router.post("/api/session/start")
-    async def start_session(
-        language: str = Form("zh"),
-    ):
+    async def start_session():
         """Create a new participant (auto-generated ID + balanced group) and session."""
         participant_id, order_group = _generate_participant_id()
 
-        p = Participant(id=participant_id, order_group=order_group, language=language)
+        p = Participant(id=participant_id, order_group=order_group, language="zh")
         db_session.add(p)
 
         assigned_condition = "text-only" if order_group == "A" else "affect-aware"

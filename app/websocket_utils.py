@@ -87,7 +87,5 @@ def ai_error_debug_payload(
     return payload
 
 
-def ai_unavailable_message(email_language: str) -> str:
-    if email_language == "zh":
-        return "抱歉，我暂时无法回应。请稍等片刻再试。"
-    return "Sorry, I'm temporarily unavailable. Please try again in a moment."
+def ai_unavailable_message() -> str:
+    return "抱歉，我暂时无法回应。请稍等片刻再试。"

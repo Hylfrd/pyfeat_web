@@ -34,7 +34,7 @@ class Participant(Base):
 
     id: Mapped[str] = Column(String, primary_key=True)  # e.g. "P01"
     order_group: Mapped[str] = Column(String(1), nullable=False)  # A/B condition balancing group
-    language: Mapped[str] = Column(String(2), nullable=False, default="zh")  # zh/en
+    language: Mapped[str] = Column(String(2), nullable=False, default="zh")  # fixed zh
     baseline_au1: Mapped[float] = Column(Float, default=0.0)
     baseline_au4: Mapped[float] = Column(Float, default=0.0)
     baseline_au7: Mapped[float] = Column(Float, default=0.0)

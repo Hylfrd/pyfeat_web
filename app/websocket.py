@@ -259,7 +259,6 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
 
                         user_text = msg.get("text", "")
                         condition = msg.get("condition", "text-only")
-                        email_language = msg.get("language", "zh")
 
                         turn_counter += 1
                         latest_frames = expression_engine.get_recent_frames(participant_id, 3)
@@ -322,7 +321,7 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                 prompt=user_text,
                                 history=chat_history,
                                 condition=condition,
-                                email_language=email_language,
+                                email_language="zh",
                                 strategy=strategy,
                                 escalate_level=escalate_level,
                             ))
@@ -371,7 +370,7 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                 "message": f"AI error turn {turn_counter}: {type(api_err).__name__}",
                             })
                             print(f"[ws] AI API error for {participant_id}: {api_err}", file=sys.stderr)
-                            ai_response_text = ai_unavailable_message(email_language)
+                            ai_response_text = ai_unavailable_message()
                             strategy_name = None
 
                         if "[DRAFT_START]" in ai_response_text:

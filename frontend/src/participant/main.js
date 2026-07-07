@@ -37,7 +37,6 @@ function writeProgress(extra={}){
   }
   const state={
     participantId,
-    language:language||previous.language,
     currentSessionId:currentSessionId||previous.currentSessionId,
     currentCondition:currentCondition||previous.currentCondition,
     currentStage,turnCounter,revisionCounter,taskStartTime,
@@ -81,7 +80,7 @@ document.addEventListener('input',()=>writeProgress());
 document.addEventListener('change',()=>writeProgress());
 
 // ── Global state ──
-let ws, participantId, language;
+let ws, participantId;
 let currentSessionId, currentCondition;
 let turnCounter = 0, revisionCounter = 0, taskStartTime = 0;
 let timerInterval, expressionInterval, expressionWatchdogInterval, baselineInterval;
@@ -600,7 +599,6 @@ function forceRestartExperiment(){
 }
 async function resumeProgress(saved){
   participantId=saved.participantId;
-  language=saved.language||'zh';
   currentSessionId=saved.currentSessionId;
   if(currentSessionId)startSessionStatusCheck();
   currentCondition=saved.currentCondition;
@@ -785,7 +783,6 @@ async function finishBaseline(){
 async function startTask(){
   if(!currentSessionId){
     const f=new FormData();
-    f.append('language',language);
     const r=await fetch('/api/session/start',{method:'POST',body:f});
     const d=await r.json();
     participantId=d.participant_id;
@@ -883,7 +880,7 @@ $('chat-form').addEventListener('submit',e=>{
   appendChat('user',text);
   startAiWaiting();
   try{
-    ws.send(JSON.stringify({type:'chat',text,condition:currentCondition,language}));
+    ws.send(JSON.stringify({type:'chat',text,condition:currentCondition}));
   }catch(err){
     finishAiWaiting();
     toast('连接中断，消息可能未发送，请恢复后重试。',5000,'connection');
@@ -1185,11 +1182,9 @@ document.getElementById('post-survey-form').addEventListener('submit', async e =
 
 $('setup-form').addEventListener('submit',async e=>{
   e.preventDefault();
-  language=$('lang').value;
   if(!await checkModelReady())return;
   try {
     const f=new FormData();
-    f.append('language',language);
     const r=await fetch('/api/session/start',{method:'POST',body:f});
     const d=await r.json();
     participantId=d.participant_id;
