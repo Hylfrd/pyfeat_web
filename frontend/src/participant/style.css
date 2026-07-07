@@ -894,52 +894,87 @@ html[data-stage="complete-view"] .recording-drawer {
   display: none !important;
 }
 
-.toast {
+#toast-container {
   position: fixed;
-  top: 20px;
-  left: 50%;
-  z-index: 220;
-  max-width: 500px;
-  border: 1px solid color-mix(in srgb, var(--red) 34%, var(--border));
+  top: 70px;
+  right: 24px;
+  z-index: 340;
+  display: flex;
+  width: min(360px, calc(100vw - 48px));
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--red) 14%, var(--surface));
-  color: var(--red);
-  padding: 12px 18px;
+  background: var(--surface);
+  padding: 12px 14px 15px;
   box-shadow: 0 14px 36px rgb(0 0 0 / 16%);
   font-size: 13px;
   font-weight: 650;
-  text-align: center;
   pointer-events: auto;
-  transform: translateX(-50%);
-  animation: slideDown .2s ease;
+  will-change: max-height, margin, padding, opacity, transform;
+  transition: max-height .24s ease, margin .24s ease, padding .24s ease, border-width .24s ease, opacity .18s ease, transform .18s ease;
+  animation: toastIn .18s ease;
+}
+
+.toast::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  opacity: .45;
+  animation: toastTimer var(--toast-duration, 3000ms) linear forwards;
+  content: "";
+}
+
+.toast.sticky::after {
+  animation: none;
 }
 
 .toast.ok {
   border-color: color-mix(in srgb, var(--green) 34%, var(--border));
-  background: color-mix(in srgb, var(--green) 14%, var(--surface));
+  background: color-mix(in srgb, var(--green) 18%, var(--surface));
   color: var(--green);
 }
 
 .toast.err {
   border-color: color-mix(in srgb, var(--red) 34%, var(--border));
-  background: color-mix(in srgb, var(--red) 14%, var(--surface));
+  background: color-mix(in srgb, var(--red) 16%, var(--surface));
   color: var(--red);
 }
 
 .toast.leaving {
   opacity: 0;
-  transform: translateX(-50%) translateY(-12px);
-  transition: opacity .2s ease, transform .2s ease;
+  transform: translateX(16px);
+  transition: opacity .18s ease, transform .18s ease;
 }
 
-@keyframes slideDown {
+@keyframes toastIn {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-12px);
+    transform: translateX(16px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(0);
+  }
+}
+
+@keyframes toastTimer {
+  from {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  to {
+    transform: scaleX(0);
+    transform-origin: left;
   }
 }
 

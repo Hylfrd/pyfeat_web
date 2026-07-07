@@ -104,7 +104,7 @@ const AI_RECOVERY_GRACE_MS = 12000;
 
 const TASK_PROMPT_HTML = '<strong>情境</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。';
 const recordingDrawer = $('webcam-wrap');
-const recordingStorageKey = 'hmcl-recording-drawer-top';
+const recordingStorageKey = 'hmcl-recording-drawer-top-v2';
 let recordingPeekTimer = null;
 
 function restoreTaskStartTime(saved={}){
@@ -135,10 +135,17 @@ function setRecordingTop(top,persist=false){
   if(persist)localStorage.setItem(recordingStorageKey,String(nextTop));
 }
 
+function getDefaultRecordingTop(){
+  if(!recordingDrawer)return 0;
+  const footerHeight=document.querySelector('.site-footer')?.offsetHeight||48;
+  const drawerHeight=recordingDrawer.offsetHeight||148;
+  return window.innerHeight-footerHeight-drawerHeight-32;
+}
+
 function initRecordingDrawer(){
   if(!recordingDrawer)return;
   const savedTop=Number(localStorage.getItem(recordingStorageKey));
-  const defaultTop=window.innerHeight-48-148-24;
+  const defaultTop=getDefaultRecordingTop();
   setRecordingTop(Number.isFinite(savedTop)&&savedTop>0?savedTop:defaultTop);
 
   let dragStartY=0;
@@ -181,6 +188,8 @@ function peekRecordingDrawer(duration=2000){
 function toast(msg, duration=3000, kind='', tone='err'){
   const el = document.createElement('div');el.className=`toast ${tone}`;el.textContent=msg;
   if(kind)el.dataset.kind=kind;
+  if(duration>0)el.style.setProperty('--toast-duration',`${duration}ms`);
+  else el.classList.add('sticky');
   $('toast-container').appendChild(el);
   if(duration>0)setTimeout(()=>dismissToast(el),duration);
   return el;
