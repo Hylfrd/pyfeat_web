@@ -1230,7 +1230,7 @@ pre,
   background: color-mix(in srgb, var(--surface) 98%, transparent);
   box-shadow: 0 14px 36px rgba(0, 0, 0, .16);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 500;
   line-height: 1.45;
   pointer-events: auto;
   will-change: max-height, margin, padding, opacity, transform;

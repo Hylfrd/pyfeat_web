@@ -41,6 +41,10 @@ function writeProgress(extra={}){
     currentSessionId:currentSessionId||previous.currentSessionId,
     currentCondition:currentCondition||previous.currentCondition,
     currentStage,turnCounter,revisionCounter,taskStartTime,
+    taskElapsedMs:taskStartTime?Math.max(0,Date.now()-taskStartTime):(previous.taskElapsedMs||0),
+    aiWaiting:isAiWaiting,
+    aiWaitStartedAt:isAiWaiting?(aiWaitStartedAt||previous.aiWaitStartedAt||Date.now()):0,
+    aiWaitDeadlineAt:isAiWaiting?(aiWaitDeadlineAt||previous.aiWaitDeadlineAt||Date.now()+AI_WAIT_TIMEOUT_MS):0,
     draftText:currentDraft||previous.draftText||'',
     chatTranscript:chatTranscript.length?chatTranscript:(previous.chatTranscript||[]),
     forms,
@@ -84,6 +88,9 @@ let timerInterval, expressionInterval, expressionWatchdogInterval, baselineInter
 let aiSyncTimer = null;
 let mediaRecorder, webcamStream, chunkIndex = 0;
 let isAiWaiting = false;
+let aiWaitStartedAt = 0;
+let aiWaitDeadlineAt = 0;
+let aiWaitTimeoutTimer = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let intentionalWsClose = false;
@@ -92,11 +99,23 @@ let lastCaptureNoticeAt = 0;
 let captureState = '';
 let sessionStatusTimer = null;
 let pendingResumeProgress = null;
+const AI_WAIT_TIMEOUT_MS = 75000;
+const AI_RECOVERY_GRACE_MS = 12000;
 
 const TASK_PROMPT_HTML = '<strong>情境</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。';
 const recordingDrawer = $('webcam-wrap');
 const recordingStorageKey = 'hmcl-recording-drawer-top';
 let recordingPeekTimer = null;
+
+function restoreTaskStartTime(saved={}){
+  const explicit=Number(saved.taskStartTime);
+  if(Number.isFinite(explicit)&&explicit>0)return explicit;
+  const elapsed=Number(saved.taskElapsedMs);
+  if(Number.isFinite(elapsed)&&elapsed>0)return Date.now()-elapsed;
+  const updated=Number(saved.updatedAt);
+  if(Number.isFinite(updated)&&updated>0)return updated;
+  return Date.now();
+}
 
 function clampRecordingTop(top){
   if(!recordingDrawer)return top;
@@ -221,6 +240,7 @@ function connectWS(){
       if(isAiWaiting){
         updateThinking('连接中断，正在恢复...');
         startAiSyncPolling();
+        armAiWaitTimeout();
       }
       if(e.code!==1000)scheduleReconnect();
     };
@@ -237,6 +257,9 @@ function connectWS(){
       }
       if(msg.type==='ai_response'){
         isAiWaiting=false;
+        aiWaitStartedAt=0;
+        aiWaitDeadlineAt=0;
+        clearAiWaitTimeout();
         stopAiSyncPolling();
         removeThinking();
         appendChat('ai',msg.text);
@@ -254,6 +277,7 @@ function connectWS(){
       }
       if(msg.type==='ai_wait'){
         updateThinking();
+        armAiWaitTimeout();
       }
       if(msg.type==='prompt'){
         toast(msg.message,4000);
@@ -422,6 +446,9 @@ function applyChatSync(msg){
   const last=chatTranscript[chatTranscript.length-1];
   if(last&&last.role==='ai'){
     isAiWaiting=false;
+    aiWaitStartedAt=0;
+    aiWaitDeadlineAt=0;
+    clearAiWaitTimeout();
     stopAiSyncPolling();
     removeThinking();
     const draft=parseDraft(last.text);
@@ -431,6 +458,7 @@ function applyChatSync(msg){
     }
   }else if(isAiWaiting){
     ensureThinking();
+    armAiWaitTimeout();
   }
   writeProgress();
 }
@@ -455,6 +483,48 @@ function startAiSyncPolling(){
 }
 function stopAiSyncPolling(){
   if(aiSyncTimer){clearInterval(aiSyncTimer);aiSyncTimer=null}
+}
+function clearAiWaitTimeout(){
+  if(aiWaitTimeoutTimer){clearTimeout(aiWaitTimeoutTimer);aiWaitTimeoutTimer=null}
+}
+function armAiWaitTimeout(timeoutMs=null){
+  clearAiWaitTimeout();
+  if(!isAiWaiting||currentStage!=='task-view')return;
+  if(!aiWaitDeadlineAt){
+    aiWaitDeadlineAt=Date.now()+(timeoutMs??AI_WAIT_TIMEOUT_MS);
+  }
+  const delay=Math.max(1000,aiWaitDeadlineAt-Date.now());
+  aiWaitTimeoutTimer=setTimeout(handleAiWaitTimeout,delay);
+}
+function startAiWaiting(startedAt=Date.now(), timeoutMs=AI_WAIT_TIMEOUT_MS){
+  isAiWaiting=true;
+  aiWaitStartedAt=startedAt||Date.now();
+  aiWaitDeadlineAt=Date.now()+timeoutMs;
+  showThinking();
+  startAiSyncPolling();
+  armAiWaitTimeout();
+  writeProgress();
+}
+function finishAiWaiting(){
+  isAiWaiting=false;
+  aiWaitStartedAt=0;
+  aiWaitDeadlineAt=0;
+  clearAiWaitTimeout();
+  stopAiSyncPolling();
+  removeThinking();
+  writeProgress({aiWaiting:false,aiWaitStartedAt:0,aiWaitDeadlineAt:0});
+}
+function handleAiWaitTimeout(){
+  aiWaitTimeoutTimer=null;
+  if(!isAiWaiting||currentStage!=='task-view')return;
+  isAiWaiting=false;
+  aiWaitStartedAt=0;
+  aiWaitDeadlineAt=0;
+  stopAiSyncPolling();
+  removeThinking();
+  toast('AI 回复暂时没有返回，已恢复输入。请检查网络后继续发送。',6500,'ai-timeout');
+  if(!ws||ws.readyState!==WebSocket.OPEN)scheduleReconnect();
+  writeProgress({aiWaiting:false,aiWaitStartedAt:0,aiWaitDeadlineAt:0});
 }
 function closeWS(){
   if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING)){
@@ -482,6 +552,10 @@ async function verifySessionExists(){
 function forceRestartExperiment(){
   stopSessionStatusCheck();
   stopAiSyncPolling();
+  clearAiWaitTimeout();
+  isAiWaiting=false;
+  aiWaitStartedAt=0;
+  aiWaitDeadlineAt=0;
   clearInterval(timerInterval);
   clearInterval(baselineInterval);
   pauseTaskCapture();
@@ -503,7 +577,7 @@ async function resumeProgress(saved){
   if(currentStage==='break-view')currentStage='complete-view';
   turnCounter=saved.turnCounter||0;
   revisionCounter=saved.revisionCounter||0;
-  taskStartTime=saved.taskStartTime||Date.now();
+  taskStartTime=restoreTaskStartTime(saved);
   chatTranscript=Array.isArray(saved.chatTranscript)?saved.chatTranscript:[];
   restoreFormValues(saved.forms||{});
   let cameraReady=true;
@@ -525,9 +599,16 @@ async function resumeProgress(saved){
     $('rev-num').textContent=revisionCounter;
     const last=chatTranscript[chatTranscript.length-1];
     if(last&&last.role==='user'){
-      isAiWaiting=true;
-      showThinking();
-      startAiSyncPolling();
+      const savedWaitStarted=Number(saved.aiWaitStartedAt)||Number(saved.updatedAt)||Date.now();
+      const savedDeadline=Number(saved.aiWaitDeadlineAt);
+      const elapsed=Math.max(0,Date.now()-savedWaitStarted);
+      const waitMs=Number.isFinite(savedDeadline)&&savedDeadline>Date.now()
+        ? savedDeadline-Date.now()
+        : (elapsed>=AI_WAIT_TIMEOUT_MS?AI_RECOVERY_GRACE_MS:AI_WAIT_TIMEOUT_MS-elapsed);
+      startAiWaiting(savedWaitStarted,waitMs);
+      if(elapsed>=AI_WAIT_TIMEOUT_MS){
+        toast('正在尝试恢复上次 AI 回复，若仍无返回会恢复输入。',5000,'ai-timeout','info');
+      }
     }
     lastExpressionSentAt=Date.now();
     captureState='';
@@ -762,18 +843,24 @@ $('chat-form').addEventListener('submit',e=>{
     return;
   }
   appendChat('user',text);
-  isAiWaiting=true;
-  showThinking();
-  startAiSyncPolling();
-  ws.send(JSON.stringify({type:'chat',text,condition:currentCondition,language}));
+  startAiWaiting();
+  try{
+    ws.send(JSON.stringify({type:'chat',text,condition:currentCondition,language}));
+  }catch(err){
+    finishAiWaiting();
+    toast('连接中断，消息可能未发送，请恢复后重试。',5000,'connection');
+    scheduleReconnect();
+    return;
+  }
   input.value='';input.disabled=true;$('submit-email').disabled=true;
+  writeProgress();
 });
 function showThinking(){
   if(thinkingEl){
     updateThinking();
     return;
   }
-  thinkingStartedAt=Date.now();
+  thinkingStartedAt=aiWaitStartedAt||Date.now();
   const area=$('chat-area');
   if(area.querySelector('.empty-state'))area.innerHTML='';
   const wrap=document.createElement('div');wrap.className='msg-wrap ai';wrap.id='thinking-msg';
@@ -936,6 +1023,9 @@ async function doFinalSubmit(isTimeout){
   finalSubmitting=true;
   evalInFlight=false;
   isAiWaiting=false;
+  aiWaitStartedAt=0;
+  aiWaitDeadlineAt=0;
+  clearAiWaitTimeout();
   clearInterval(timerInterval);clearInterval(expressionInterval);
   removeThinking();
   pauseTaskCapture();

@@ -251,7 +251,9 @@ button:not(:disabled):hover,
 }
 
 .site-footer a {
-  font-weight: 650;
+  color: inherit;
+  font-weight: 400;
+  text-decoration: none;
 }
 
 .steps {
@@ -913,7 +915,7 @@ html[data-stage="complete-view"] .recording-drawer {
   padding: 11px 13px;
   box-shadow: 0 12px 30px rgb(0 0 0 / 14%);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 500;
   line-height: 1.45;
   pointer-events: auto;
   animation: toastIn .18s ease;
