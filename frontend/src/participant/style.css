@@ -894,56 +894,52 @@ html[data-stage="complete-view"] .recording-drawer {
   display: none !important;
 }
 
-#toast-container {
+.toast {
   position: fixed;
   top: 20px;
-  right: 20px;
-  z-index: 340;
-  display: flex;
-  width: min(340px, calc(100vw - 40px));
-  flex-direction: column;
-  gap: 10px;
-  pointer-events: none;
-}
-
-.toast {
-  border: 1px solid var(--border);
-  border-left-width: 3px;
+  left: 50%;
+  z-index: 220;
+  max-width: 500px;
+  border: 1px solid color-mix(in srgb, var(--red) 34%, var(--border));
   border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 98%, transparent);
-  color: var(--text);
-  padding: 11px 13px;
-  box-shadow: 0 12px 30px rgb(0 0 0 / 14%);
+  background: color-mix(in srgb, var(--red) 14%, var(--surface));
+  color: var(--red);
+  padding: 12px 18px;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 16%);
   font-size: 13px;
-  font-weight: 500;
-  line-height: 1.45;
+  font-weight: 650;
+  text-align: center;
   pointer-events: auto;
-  animation: toastIn .18s ease;
-  backdrop-filter: blur(10px);
+  transform: translateX(-50%);
+  animation: slideDown .2s ease;
 }
 
 .toast.ok {
-  border-left-color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 34%, var(--border));
+  background: color-mix(in srgb, var(--green) 14%, var(--surface));
+  color: var(--green);
 }
 
 .toast.err {
-  border-left-color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 34%, var(--border));
+  background: color-mix(in srgb, var(--red) 14%, var(--surface));
+  color: var(--red);
 }
 
 .toast.leaving {
   opacity: 0;
-  transform: translateX(16px);
-  transition: opacity .18s ease, transform .18s ease;
+  transform: translateX(-50%) translateY(-12px);
+  transition: opacity .2s ease, transform .2s ease;
 }
 
-@keyframes toastIn {
+@keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateX(16px);
+    transform: translateX(-50%) translateY(-12px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateX(-50%) translateY(0);
   }
 }
 
