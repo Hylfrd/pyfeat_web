@@ -186,8 +186,8 @@ button,
   box-shadow: var(--shadow);
 }
 
-button:hover,
-.btn-secondary:hover {
+button:not(:disabled):hover,
+.btn-secondary:not(:disabled):hover {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -199,7 +199,7 @@ button:hover,
   color: #fff;
 }
 
-.btn-primary:hover {
+.btn-primary:not(:disabled):hover {
   color: #fff;
   background: color-mix(in srgb, var(--accent) 92%, #000);
 }
@@ -219,7 +219,7 @@ button:hover,
   color: #fff;
 }
 
-.btn-green:hover {
+.btn-green:not(:disabled):hover {
   color: #fff;
   background: color-mix(in srgb, var(--green) 92%, #000);
 }
@@ -248,6 +248,10 @@ button:hover,
 
 .site-footer a:hover {
   color: var(--accent);
+}
+
+.site-footer a {
+  font-weight: 650;
 }
 
 .steps {
@@ -612,6 +616,26 @@ html.task-page .site-footer {
   word-break: break-word;
 }
 
+#thinking-msg {
+  min-width: 150px;
+}
+
+#thinking-msg .thinking-bubble {
+  display: grid;
+  min-width: 126px;
+  min-height: 74px;
+  align-content: center;
+  justify-items: center;
+  padding: 12px 18px;
+}
+
+.thinking-label {
+  margin-top: 6px;
+  color: var(--muted-soft);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .msg-wrap.user .bubble {
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
   background: var(--accent-soft);
@@ -666,7 +690,7 @@ html.task-page .site-footer {
   min-height: 0;
   overflow: auto;
   color: var(--text);
-  font-family: Georgia, "Noto Serif SC", serif;
+  font-family: inherit;
   line-height: 1.75;
   white-space: pre-wrap;
 }
@@ -715,6 +739,7 @@ html.task-page .site-footer {
 }
 
 .recording-drawer:hover,
+.recording-drawer.peek,
 .recording-drawer.dragging {
   transform: translateX(0);
 }

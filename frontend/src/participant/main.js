@@ -109,6 +109,7 @@ let sessionStatusTimer = null;
 const TASK_PROMPT_HTML = '<strong>情境</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。';
 const recordingDrawer = $('webcam-wrap');
 const recordingStorageKey = 'hmcl-recording-drawer-top';
+let recordingPeekTimer = null;
 
 function clampRecordingTop(top){
   if(!recordingDrawer)return top;
@@ -159,6 +160,15 @@ function initRecordingDrawer(){
   recordingDrawer.addEventListener('pointerup',finishDrag);
   recordingDrawer.addEventListener('pointercancel',finishDrag);
   window.addEventListener('resize',()=>setRecordingTop(recordingDrawer.getBoundingClientRect().top,true));
+}
+
+function peekRecordingDrawer(duration=2000){
+  if(!recordingDrawer||recordingDrawer.classList.contains('hidden'))return;
+  clearTimeout(recordingPeekTimer);
+  recordingDrawer.classList.add('peek');
+  recordingPeekTimer=setTimeout(()=>{
+    recordingDrawer.classList.remove('peek');
+  },duration);
 }
 
 // ── Toast ──
@@ -356,7 +366,7 @@ function startExpressionCapture(){
   expressionInterval=setInterval(()=>{
     if(currentStage!=='task-view')return;
     if(isAiWaiting){
-      setCapturePaused('AI 回复中，采集暂停');
+      setFaceStatus('found','面部已检测');
       return;
     }
     if(!ws||ws.readyState!==WebSocket.OPEN){
@@ -592,7 +602,7 @@ function startExpressionWatchdog(){
       return;
     }
     if(isAiWaiting){
-      setCapturePaused('AI 回复中，采集暂停');
+      setFaceStatus('found','面部已检测');
       return;
     }
     if(!expressionInterval||Date.now()-lastExpressionSentAt>3000){
@@ -707,7 +717,10 @@ function updateTimer(){
   const m=Math.floor(remaining/60),s=Math.floor(remaining%60);
   const el=$('timer');el.textContent=`${m}:${String(s).padStart(2,'0')}`;
   if(remaining<60)el.classList.add('warn');
-  if(remaining<=0){clearInterval(timerInterval);submitEmail(true);}
+  if(remaining<=0&&!finalSubmitting){
+    clearInterval(timerInterval);
+    doFinalSubmit(true);
+  }
 }
 
 function appendChat(role,text,record=true){
@@ -781,9 +794,9 @@ function showThinking(){
   const wrap=document.createElement('div');wrap.className='msg-wrap ai';wrap.id='thinking-msg';
   wrap.innerHTML=`
     <div class="sender">AI 助手</div>
-    <div class="bubble" style="padding:10px 20px">
+    <div class="bubble thinking-bubble">
       <div class="thinking-dots"><span></span><span></span><span></span></div>
-      <div style="font-size:.7em;color:#94a3b8;margin-top:4px">思考中...</div>
+      <div class="thinking-label">思考中...</div>
     </div>
   `;
   area.appendChild(wrap);
@@ -835,9 +848,14 @@ async function submitEmail(isTimeout){
       const ef=new FormData();ef.append('draft_text',draftText);
       evalResult=await(await fetch('/api/evaluate-draft',{method:'POST',body:ef})).json();
     } catch(e) {
+      if(finalSubmitting||currentStage!=='task-view')return;
       toast('评估失败，请重试。');
       btn.textContent=origText;btn.disabled=false;evalInFlight=false;
       resumeTaskCapture();
+      return;
+    }
+    if(finalSubmitting||currentStage!=='task-view'){
+      evalInFlight=false;
       return;
     }
     evalInFlight=false;
@@ -931,7 +949,10 @@ function closeEvalModal(resume=false){
 async function doFinalSubmit(isTimeout){
   if(finalSubmitting)return;
   finalSubmitting=true;
+  evalInFlight=false;
+  isAiWaiting=false;
   clearInterval(timerInterval);clearInterval(expressionInterval);
+  removeThinking();
   pauseTaskCapture();
   stopAiSyncPolling();
   closeWS();
@@ -1083,6 +1104,7 @@ $('setup-form').addEventListener('submit',async e=>{
     return;
   }
   setStage('pre-survey-view');
+  peekRecordingDrawer();
 });
 
 initProgressRecovery();
