@@ -388,7 +388,7 @@ html.task-page .site-footer {
 .task-view {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(300px, .95fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   grid-template-areas:
     "timer timer"
     "debug debug"
@@ -1141,6 +1141,7 @@ html[data-stage="complete-view"] .recording-drawer {
   .task-view {
     display: grid;
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto auto auto auto;
     grid-template-areas:
       "timer"
       "debug"
