@@ -91,6 +91,7 @@ let lastExpressionSentAt = 0;
 let lastCaptureNoticeAt = 0;
 let captureState = '';
 let sessionStatusTimer = null;
+let pendingResumeProgress = null;
 
 const TASK_PROMPT_HTML = '<strong>情境</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。';
 const recordingDrawer = $('webcam-wrap');
@@ -158,13 +159,17 @@ function peekRecordingDrawer(duration=2000){
 }
 
 // ── Toast ──
-function toast(msg, duration=3000, kind=''){
-  const el = document.createElement('div');el.className='toast';el.textContent=msg;
+function toast(msg, duration=3000, kind='', tone='err'){
+  const el = document.createElement('div');el.className=`toast ${tone}`;el.textContent=msg;
   if(kind)el.dataset.kind=kind;
-  if(duration<=0)el.classList.add('sticky');
   $('toast-container').appendChild(el);
-  if(duration>0)setTimeout(()=>el.remove(),duration);
+  if(duration>0)setTimeout(()=>dismissToast(el),duration);
   return el;
+}
+function dismissToast(el){
+  if(!el||el.classList.contains('leaving'))return;
+  el.classList.add('leaving');
+  setTimeout(()=>el.remove(),220);
 }
 function clearToasts(kind){
   const selector=kind?`.toast[data-kind="${kind}"]`:'.toast';
@@ -287,7 +292,7 @@ function scheduleReconnect(){
     try{
       await connectWS();
       clearToasts('connection');
-      toast('连接已恢复。',2000,'connection');
+      toast('连接已恢复。',2000,'connection','ok');
     }catch(e){
       scheduleReconnect();
     }
@@ -541,11 +546,8 @@ function initProgressRecovery(){
     showView('setup-view');
     return;
   }
-  if(confirm('检测到未完成的实验进度。是否继续上次实验？')){
-    resumeProgress(saved);
-  }else{
-    clearProgress();
-  }
+  pendingResumeProgress=saved;
+  $('resume-overlay')?.classList.remove('hidden');
 }
 function webcamLive(){
   const stream=$('webcam').srcObject||webcamStream;
@@ -1007,7 +1009,7 @@ document.getElementById('pre-survey-form').addEventListener('submit', async e =>
     const r = await fetch('/api/pre-survey', {method:'POST', body: new URLSearchParams(f)});
     if (!r.ok) { const d = await r.json(); throw new Error(d.detail || r.statusText); }
   } catch(err) {
-    toast('Failed to save pre-survey: ' + err.message, 5000);
+    toast('保存开场问卷失败，请重试。' + (err.message ? ` ${err.message}` : ''), 5000);
     return;
   }
   await startBaseline();
@@ -1044,7 +1046,7 @@ document.getElementById('post-survey-form').addEventListener('submit', async e =
     const r = await fetch('/api/post-survey', {method:'POST', body: new URLSearchParams(f)});
     if (!r.ok) { const d = await r.json(); throw new Error(d.detail || r.statusText); }
   } catch(err) {
-    toast('Failed to save post-survey: ' + err.message, 5000);
+    toast('保存结束问卷失败，请重试。' + (err.message ? ` ${err.message}` : ''), 5000);
     return;
   }
   setStage('complete-view');
@@ -1106,6 +1108,17 @@ function bindParticipantEvents(){
       return doFinalSubmit(el.dataset.timeout==='1');
     }
     if(el.dataset.action==='close-eval')return closeEvalModal(el.dataset.resume==='1');
+    if(el.dataset.action==='resume-progress'){
+      $('resume-overlay')?.classList.add('hidden');
+      const saved=pendingResumeProgress;
+      pendingResumeProgress=null;
+      if(saved)return resumeProgress(saved);
+    }
+    if(el.dataset.action==='discard-progress'){
+      $('resume-overlay')?.classList.add('hidden');
+      pendingResumeProgress=null;
+      clearProgress();
+    }
   });
 }
 

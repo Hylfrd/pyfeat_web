@@ -1212,30 +1212,31 @@ pre,
 
 #toast-container {
   position: fixed;
-  top: 70px;
-  right: 24px;
+  top: 20px;
+  right: 20px;
   z-index: 700;
   display: flex;
   flex-direction: column;
-  width: min(360px, calc(100vw - 48px));
+  width: min(340px, calc(100vw - 40px));
   gap: 10px;
   pointer-events: none;
 }
 
 .toast {
-  position: relative;
-  overflow: hidden;
   border: 1px solid var(--border);
+  border-left-width: 3px;
   border-radius: 6px;
-  padding: 12px 14px 15px;
-  background: var(--surface);
+  padding: 11px 13px;
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
   box-shadow: 0 14px 36px rgba(0, 0, 0, .16);
   font-size: 13px;
   font-weight: 650;
+  line-height: 1.45;
   pointer-events: auto;
   will-change: max-height, margin, padding, opacity, transform;
   transition: max-height .24s ease, margin .24s ease, padding .24s ease, border-width .24s ease, opacity .18s ease, transform .18s ease;
   animation: toastIn .18s ease;
+  backdrop-filter: blur(10px);
 }
 
 .toast.leaving {
@@ -1247,28 +1248,14 @@ pre,
   transform: translateX(16px);
 }
 
-.toast::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  background: currentColor;
-  opacity: .45;
-  animation: toastTimer 3s linear forwards;
-}
-
 .toast.ok {
-  background: color-mix(in srgb, var(--green) 18%, var(--surface));
-  border-color: color-mix(in srgb, var(--green) 34%, var(--border));
-  color: var(--green);
+  border-left-color: var(--green);
+  color: var(--text);
 }
 
 .toast.err {
-  background: color-mix(in srgb, var(--red) 16%, var(--surface));
-  border-color: color-mix(in srgb, var(--red) 34%, var(--border));
-  color: var(--red);
+  border-left-color: var(--red);
+  color: var(--text);
 }
 
 @keyframes toastIn {
@@ -1290,17 +1277,6 @@ pre,
   to {
     opacity: 0;
     transform: translateX(16px);
-  }
-}
-
-@keyframes toastTimer {
-  from {
-    transform: scaleX(1);
-    transform-origin: left;
-  }
-  to {
-    transform: scaleX(0);
-    transform-origin: left;
   }
 }
 

@@ -892,45 +892,98 @@ html[data-stage="complete-view"] .recording-drawer {
   display: none !important;
 }
 
-.toast {
+#toast-container {
   position: fixed;
   top: 20px;
-  left: 50%;
-  z-index: 220;
-  max-width: 500px;
-  border: 1px solid color-mix(in srgb, var(--red) 34%, var(--border));
+  right: 20px;
+  z-index: 340;
+  display: flex;
+  width: min(340px, calc(100vw - 40px));
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--red) 14%, var(--surface));
-  color: var(--red);
-  padding: 12px 18px;
-  box-shadow: 0 14px 36px rgb(0 0 0 / 16%);
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  color: var(--text);
+  padding: 11px 13px;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 14%);
   font-size: 13px;
   font-weight: 650;
-  text-align: center;
-  transform: translateX(-50%);
-  animation: slideDown .2s ease, slideUp .2s ease 2.8s forwards;
+  line-height: 1.45;
+  pointer-events: auto;
+  animation: toastIn .18s ease;
+  backdrop-filter: blur(10px);
 }
 
-.toast.sticky {
-  animation: slideDown .2s ease;
+.toast.ok {
+  border-left-color: var(--green);
 }
 
-@keyframes slideDown {
+.toast.err {
+  border-left-color: var(--red);
+}
+
+.toast.leaving {
+  opacity: 0;
+  transform: translateX(16px);
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+@keyframes toastIn {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-12px);
+    transform: translateX(16px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(0);
   }
 }
 
-@keyframes slideUp {
-  to {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-12px);
-  }
+#resume-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 310;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 34%);
+  padding: 20px;
+}
+
+#resume-overlay:not(.hidden) {
+  display: flex;
+}
+
+.resume-modal {
+  width: min(420px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 22%);
+  padding: 22px;
+}
+
+.resume-modal h3 {
+  color: var(--text-strong);
+  font-size: 18px;
+}
+
+.resume-modal p {
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+.resume-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 20px;
 }
 
 #eval-overlay {
