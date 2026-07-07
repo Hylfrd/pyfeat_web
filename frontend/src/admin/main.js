@@ -121,12 +121,11 @@ const sessionActions = createSessionActions({
   adminFetch,
   toast,
   getSessionCache: () => sessionCache,
-  onDeleted: () => {
-    activeSid = null;
-    activeTab = 'debug';
-    setActiveTab(activeTab);
-    debugConsole.render();
-    refresh();
+  onDeleted: async (sid) => {
+    delete sessionCache[sid];
+    if (activeSid === sid) activeSid = null;
+    await refresh();
+    renderActiveTab();
   },
   onChanged: async (sid) => {
     delete sessionCache[sid];
@@ -238,6 +237,7 @@ function syncFilterGroup(group, changedInput) {
 async function selectSession(sid) {
   activeSid = sid;
   renderList();
+  if (activeTab === 'debug') return;
   await loadSession(sid);
 }
 
@@ -256,10 +256,14 @@ async function loadSession(sid, silent = false) {
   renderActiveTab();
 }
 
-$('tabs')?.addEventListener('click', (e) => {
+$('tabs')?.addEventListener('click', async (e) => {
   if (e.target.tagName !== 'BUTTON') return;
   activeTab = e.target.dataset.tab;
   setActiveTab(activeTab);
+  if (activeTab !== 'debug' && activeSid && !sessionCache[activeSid]) {
+    await loadSession(activeSid);
+    return;
+  }
   renderActiveTab();
 });
 

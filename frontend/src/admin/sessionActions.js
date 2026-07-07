@@ -55,7 +55,7 @@ export function createSessionActions({adminFetch, toast, getSessionCache, onDele
     const r=await adminFetch(`/api/admin/sessions/${sid}`,{method:'DELETE'});
     if(r.ok){
       closeModal();
-      onDeleted();
+      if(onDeleted)await onDeleted(sid);
       toast('Session 已删除','ok');
     }else{
       let message=r.status===409?'用户正在实验中':'删除失败';
