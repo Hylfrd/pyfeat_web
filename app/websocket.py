@@ -111,9 +111,8 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                         elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
                         if vector is not None:
                             baseline_count += 1
-                        debug_event = None
                         if debug_log.is_enabled():
-                            debug_event = debug_log._push_debug({
+                            debug_log._push_debug({
                                 "kind": "baseline",
                                 "participant_id": participant_id,
                                 "session_id": current_session_id,
@@ -129,11 +128,6 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             "type": "baseline_ack",
                             "collected": baseline_count,
                         }))
-                        if debug_event:
-                            await websocket.send_text(json.dumps({
-                                "type": "debug_log",
-                                "event": debug_event,
-                            }))
 
                     elif msg_type == "expression_frame":
                         if not await ensure_session_exists():
@@ -191,7 +185,7 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                     api_response = {**api_response, **trigger_checks}
                                 else:
                                     api_response = {"raw": api_response, **trigger_checks}
-                            debug_event = debug_log._push_debug({
+                            debug_log._push_debug({
                                 "kind": "expression",
                                 "participant_id": participant_id,
                                 "session_id": current_session_id,
@@ -203,10 +197,6 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                 "api_response": api_response,
                                 "message": f"expression frame {total_frames}: {elapsed_ms} ms",
                             })
-                            await websocket.send_text(json.dumps({
-                                "type": "debug_log",
-                                "event": debug_event,
-                            }))
 
                         if current_session_id and au_frame:
                             db_session.add(ExpressionFrame(

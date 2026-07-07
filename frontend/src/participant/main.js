@@ -76,20 +76,6 @@ function restoreFormValues(values={}){
 document.addEventListener('input',()=>writeProgress());
 document.addEventListener('change',()=>writeProgress());
 
-function appendDebugLog(event){
-  const panel=$('debug-panel');
-  if(!panel)return;
-  panel.classList.add('on');
-  const line=document.createElement('div');
-  line.className='line';
-  const kb=event.bytes?`${(event.bytes/1024).toFixed(1)}KB`:'0KB';
-  const face=event.face_detected?(event.reliable?'face ok':'pose bad'):'no face';
-  line.textContent=`[${event.ts}] ${event.kind} ${kb} ${event.elapsed_ms}ms ${face}`;
-  panel.appendChild(line);
-  while(panel.children.length>40)panel.removeChild(panel.firstChild);
-  panel.scrollTop=panel.scrollHeight;
-}
-
 // ── Global state ──
 let ws, participantId, language;
 let currentSessionId, currentCondition;
@@ -276,9 +262,6 @@ function connectWS(){
         }else{
           setFaceStatus('lost','未检测到面部');
         }
-      }
-      if(msg.type==='debug_log'){
-        appendDebugLog(msg.event);
       }
     };
     // Timeout after 5 seconds

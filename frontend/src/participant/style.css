@@ -392,10 +392,9 @@ html.task-page .site-footer {
 .task-view {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(300px, .95fr);
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   grid-template-areas:
     "timer timer"
-    "debug debug"
     "prompt prompt"
     "chat draft"
     "form draft"
@@ -500,24 +499,6 @@ html.task-page .site-footer {
   height: 7px;
   border-radius: 999px;
   background: currentColor;
-}
-
-.debug-panel {
-  grid-area: debug;
-  display: none;
-  max-height: 120px;
-  overflow: auto;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  background: #0f172a;
-  color: #cbd5e1;
-  padding: 10px 12px;
-  font-family: Consolas, Menlo, monospace;
-  font-size: 12px;
-}
-
-.debug-panel.on {
-  display: block;
 }
 
 .task-prompt {
@@ -1172,10 +1153,9 @@ html[data-stage="complete-view"] .recording-drawer {
   .task-view {
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto auto auto auto auto;
+    grid-template-rows: auto auto auto auto auto auto;
     grid-template-areas:
       "timer"
-      "debug"
       "prompt"
       "chat"
       "form"
