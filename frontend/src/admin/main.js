@@ -151,14 +151,17 @@ async function renderStats() {
 }
 
 function sessionStatusText(s) {
-  if (s.completed) {
-    if (s.completion_type === 'timeout') return '超时';
-    if (s.completion_type === 'deleted') return '已删除';
-    return '手动提交';
-  }
-  if (s.activity?.active) return '进行中';
-  if ((s.total_turns || 0) > 0 || (s.total_revisions || 0) > 0) return '进行中';
-  return '未开始';
+  const key = sessionStatusKey(s);
+  if (key === 'done') return '已完成';
+  if (key === 'active') return '进行中';
+  return '未完成';
+}
+
+function sessionStatusKey(s) {
+  if (s.completed) return 'done';
+  if (s.activity?.active) return 'active';
+  if ((s.total_turns || 0) > 0 || (s.total_revisions || 0) > 0) return 'active';
+  return 'pending';
 }
 
 function sessionDotClass(s) {
@@ -170,7 +173,8 @@ function sessionDotClass(s) {
 
 function renderList() {
   const q = ($('search').value || '').toLowerCase();
-  const cond = $('filter-cond').value;
+  const statusFilters = selectedFilters('status');
+  const conditionFilters = selectedFilters('condition');
   let filtered = sessions;
   if (q) {
     filtered = filtered.filter((s) => (
@@ -179,7 +183,8 @@ function renderList() {
       || String(s.condition || '').toLowerCase().includes(q)
     ));
   }
-  if (cond !== 'all') filtered = filtered.filter((s) => s.condition === cond);
+  filtered = filtered.filter((s) => statusFilters.has(sessionStatusKey(s)));
+  filtered = filtered.filter((s) => conditionFilters.has(s.condition));
 
   const html = filtered.map((s) => {
     const conditionLabel = s.condition === 'affect-aware' ? '情感感知' : '纯文本';
@@ -203,6 +208,31 @@ function renderList() {
 
   const list = $('session-list');
   if (list) list.innerHTML = html || '<div class="empty">无匹配的 Session</div>';
+}
+
+function selectedFilters(group) {
+  const selector = group === 'status' ? '[data-filter-status]' : '[data-filter-condition]';
+  const checked = [...document.querySelectorAll(`${selector}:checked`)].map((input) => input.dataset.filterStatus || input.dataset.filterCondition);
+  if (checked.length) return new Set(checked);
+  return new Set(group === 'status' ? ['done', 'active', 'pending'] : ['text-only', 'affect-aware']);
+}
+
+function syncFilterGroup(group, changedInput) {
+  const all = document.querySelector(`[data-filter-all="${group}"]`);
+  const selector = group === 'status' ? '[data-filter-status]' : '[data-filter-condition]';
+  const items = [...document.querySelectorAll(selector)];
+  if (!all || !items.length) return;
+
+  if (changedInput === all) {
+    items.forEach((input) => { input.checked = all.checked; });
+  } else {
+    all.checked = items.every((input) => input.checked);
+  }
+
+  if (!items.some((input) => input.checked)) {
+    all.checked = true;
+    items.forEach((input) => { input.checked = true; });
+  }
 }
 
 async function selectSession(sid) {
@@ -257,7 +287,14 @@ function renderActiveTab() {
 
 function bindAdminEvents() {
   $('search')?.addEventListener('input', renderList);
-  $('filter-cond')?.addEventListener('change', renderList);
+  document.querySelectorAll('[data-filter-all], [data-filter-status], [data-filter-condition]').forEach((input) => {
+    input.addEventListener('change', (event) => {
+      const target = event.currentTarget;
+      const group = target.dataset.filterAll || (target.dataset.filterStatus ? 'status' : 'condition');
+      syncFilterGroup(group, target);
+      renderList();
+    });
+  });
   $('themeToggle')?.addEventListener('click', () => {
     setTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark');
   });

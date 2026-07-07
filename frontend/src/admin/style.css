@@ -189,10 +189,53 @@ button {
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px;
-  gap: 8px;
+  grid-template-columns: 1fr;
+  gap: 10px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.filter-checks {
+  display: grid;
+  gap: 6px;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.filter-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.filter-row label:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.filter-row input[type="checkbox"] {
+  width: 11px;
+  min-width: 11px;
+  height: 11px;
+  min-height: 11px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 input,
@@ -271,16 +314,16 @@ textarea:focus {
 }
 
 .session-main {
-  display: flex;
+  display: grid;
+  grid-template-columns: 60px 78px 34px 52px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
 }
 
 .session-id {
-  flex: 0 0 auto;
   color: var(--text-strong);
   font-size: 13px;
   font-weight: 750;
@@ -290,11 +333,14 @@ textarea:focus {
 
 .session-number,
 .session-status {
-  flex: 0 0 auto;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.25;
   font-variant-numeric: tabular-nums;
+}
+
+.session-number {
+  text-align: right;
 }
 
 .session-side {
@@ -898,6 +944,22 @@ pre,
 .au-strip .cell.neutral,
 .au-legend .swatch.neutral {
   background: color-mix(in srgb, var(--green) 76%, var(--surface));
+}
+
+.au-strip .cell.face-ok,
+.au-legend .swatch.face-ok {
+  background: var(--green);
+}
+
+.au-strip .cell.face-lost,
+.au-legend .swatch.face-lost {
+  background: var(--red);
+}
+
+.au-strip .cell.face-unreliable,
+.au-legend .swatch.face-unreliable {
+  background: color-mix(in srgb, var(--muted) 48%, var(--surface));
+  opacity: .72;
 }
 
 .au-strip .cell.unreliable {

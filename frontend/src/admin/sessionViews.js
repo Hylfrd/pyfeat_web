@@ -37,7 +37,6 @@ export function renderOverview(exp,st){
         <div class="info-card"><div class="lbl">Session ID</div><div class="val mono">#${s.id}</div></div>
         <div class="info-card"><div class="lbl">参与者</div><div class="val mono">${escHtml(s.participant_id)}</div></div>
         <div class="info-card"><div class="lbl">条件</div><div class="val">${s.condition==='affect-aware'?'情感感知 AI':'纯文本 AI'}</div></div>
-        <div class="info-card"><div class="lbl">完成方式</div><div class="val">${s.completion_type==='timeout'?'超时':'手动提交'}</div></div>
         <div class="info-card"><div class="lbl">用时</div><div class="val">${durStr}</div></div>
         <div class="info-card"><div class="lbl">对话轮次 / 修改</div><div class="val mono">${s.total_turns||0} 轮 · ${s.total_revisions||0} 修改</div></div>
         <div class="info-card"><div class="lbl">表情帧</div><div class="val mono">${st.total_frames||0} 帧 (可靠 ${st.reliable_frames||0})</div></div>
@@ -62,17 +61,16 @@ export function renderOverview(exp,st){
   if(st.frames&&st.frames.length){
     html+=`<div class="detail-section"><h3>面部检测时间线 (每点 = 1 帧, ${st.frames.length} 帧)</h3>`;
     html+=`<div class="au-legend">
-      <span><span class="swatch" style="background:#22c55e"></span>已检测</span>
-      <span><span class="swatch" style="background:#ef4444"></span>丢失</span>
-      <span><span class="swatch" style="background:#64748b;opacity:.4"></span>不可靠</span>
+      <span><span class="swatch face-ok"></span>已检测</span>
+      <span><span class="swatch face-lost"></span>丢失</span>
+      <span><span class="swatch face-unreliable"></span>不可靠</span>
     </div>`;
     html+=`<div class="au-strip">`;
     for(const f of st.frames){
       const reliable=frameReliable(f);
       const face=frameFace(f);
-      const cls=face&&reliable?'':'lost';
-      const color=!face?'#ef4444':(reliable?'#22c55e':'#64748b');
-      html+=`<div class="cell ${cls}" style="background:${color}" title="t=${f.t}s AU4:${f.au4} AU12:${f.au12} ${face&&reliable?'✅':'⚠️'}"></div>`;
+      const cls=!face?'face-lost':(reliable?'face-ok':'face-unreliable');
+      html+=`<div class="cell ${cls}" title="t=${f.t}s AU4:${f.au4} AU12:${f.au12} ${face&&reliable?'✅':'⚠️'}"></div>`;
     }
     html+=`</div></div>`;
   }
