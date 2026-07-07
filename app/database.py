@@ -51,7 +51,7 @@ class Session(Base):
 
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
     participant_id: Mapped[str] = Column(String, ForeignKey("participants.id"), nullable=False)
-    task_scenario: Mapped[str] = Column(String(1), nullable=False)  # A/B
+    task_scenario: Mapped[str] = Column(String(1), nullable=False)  # fixed A for current single-task flow
     condition: Mapped[str] = Column(String, nullable=False)  # text-only / affect-aware
     condition_order: Mapped[int] = Column(Integer, nullable=False)  # 1 for current single-task flow
     start_time: Mapped[Optional[str]] = Column(String, nullable=True)

@@ -37,7 +37,7 @@ export function renderOverview(exp,st){
         <div class="info-card"><div class="lbl">Session ID</div><div class="val mono">#${s.id}</div></div>
         <div class="info-card"><div class="lbl">参与者</div><div class="val mono">${escHtml(s.participant_id)}</div></div>
         <div class="info-card"><div class="lbl">条件</div><div class="val">${s.condition==='affect-aware'?'情感感知 AI':'纯文本 AI'}</div></div>
-        <div class="info-card"><div class="lbl">场景</div><div class="val">${s.task_scenario==='A'?'场景 A (电脑崩溃)':'场景 B (组员失联)'}</div></div>
+        <div class="info-card"><div class="lbl">任务</div><div class="val">电脑崩溃延期邮件</div></div>
         <div class="info-card"><div class="lbl">任务流程</div><div class="val">单次写作任务</div></div>
         <div class="info-card"><div class="lbl">完成方式</div><div class="val">${s.completion_type==='timeout'?'超时':'手动提交'}</div></div>
         <div class="info-card"><div class="lbl">用时</div><div class="val">${durStr}</div></div>

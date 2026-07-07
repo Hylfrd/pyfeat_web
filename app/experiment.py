@@ -24,14 +24,14 @@ def create_experiment_router(
 ) -> APIRouter:
     router = APIRouter()
 
-    GROUPS = ["A", "B", "C", "D"]
+    GROUPS = ["A", "B"]
     FIFTEEN_MINUTES = 15 * 60
 
     def _generate_participant_id() -> tuple[str, str]:
         """Auto-generate sequential participant ID and balanced order group.
 
         Returns (participant_id, order_group).
-        Groups assigned cyclically: P001→A, P002→B, P003→C, P004→D, P005→A, ...
+        Groups are assigned cyclically across the two retained conditions.
         """
         last = db_session.query(Participant).order_by(Participant.id.desc()).first()
         if last and last.id.startswith("P"):
@@ -41,7 +41,7 @@ def create_experiment_router(
                 n = 1
         else:
             n = 1
-        order_group = GROUPS[(n - 1) % 4]
+        order_group = GROUPS[(n - 1) % len(GROUPS)]
         return f"P{n:03d}", order_group
 
     @router.post("/api/session/start")
@@ -54,8 +54,8 @@ def create_experiment_router(
         p = Participant(id=participant_id, order_group=order_group, language=language)
         db_session.add(p)
 
-        assigned_condition = "text-only" if order_group in ("A", "B") else "affect-aware"
-        assigned_scenario = "A" if order_group in ("A", "C") else "B"
+        assigned_condition = "text-only" if order_group == "A" else "affect-aware"
+        assigned_scenario = "A"
 
         session = Session(
             participant_id=participant_id,

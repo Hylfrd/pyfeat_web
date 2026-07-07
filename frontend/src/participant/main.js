@@ -108,6 +108,7 @@ let lastCaptureNoticeAt = 0;
 let captureState = '';
 let sessionStatusTimer = null;
 
+const TASK_SCENARIO_HTML = '<strong>情境</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。';
 const recordingDrawer = $('webcam-wrap');
 const recordingStorageKey = 'hmcl-recording-drawer-top';
 
@@ -402,11 +403,7 @@ function renderTaskMeta(){
     $('condition-badge').style.background=currentCondition==='affect-aware'?'#e0e7ff':'#f1f5f9';
     $('condition-badge').style.color=currentCondition==='affect-aware'?'#4f46e5':'#64748b';
   }
-  if(currentScenario){
-    $('scenario-text').innerHTML=currentScenario==='A'
-      ?'<strong>情境 A</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。'
-      :'<strong>情境 B</strong><br>小组项目中一名组员始终没有回应，你独自承担了全部工作量。请与 AI 协作写一封邮件向教授请求帮助。';
-  }
+  if(currentScenario)$('scenario-text').innerHTML=TASK_SCENARIO_HTML;
 }
 function applyChatSync(msg){
   const messages=Array.isArray(msg.messages)?msg.messages:[];
@@ -694,9 +691,7 @@ async function startTask(){
   $('condition-badge').textContent=currentCondition==='affect-aware'?'情感感知 AI':'纯文本 AI';
   $('condition-badge').style.background=currentCondition==='affect-aware'?'#e0e7ff':'#f1f5f9';
   $('condition-badge').style.color=currentCondition==='affect-aware'?'#4f46e5':'#64748b';
-  $('scenario-text').innerHTML=currentScenario==='A'
-    ?'<strong>情境 A</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。'
-    :'<strong>情境 B</strong><br>小组项目中一名组员始终没有回应，你独自承担了全部工作量。请与 AI 协作写一封邮件向教授请求帮助。';
+  $('scenario-text').innerHTML=TASK_SCENARIO_HTML;
 
   setStage('task-view');
   turnCounter=0;revisionCounter=0;taskStartTime=Date.now();

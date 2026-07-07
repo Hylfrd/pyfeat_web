@@ -183,7 +183,6 @@ function renderList() {
 
   const html = filtered.map((s) => {
     const conditionLabel = s.condition === 'affect-aware' ? '情感感知' : '纯文本';
-    const sceneLabel = s.task_scenario ? `场景 ${s.task_scenario}` : '场景 -';
     const status = sessionStatusText(s);
     const loss = s.frame_loss_ratio > 0.3 ? `<span class="loss">丢帧 ${Math.round(s.frame_loss_ratio * 100)}%</span>` : '';
     return `<button type="button" class="session-item ${s.id === activeSid ? 'active' : ''} ${s.excluded ? 'excluded' : ''}"
@@ -193,7 +192,6 @@ function renderList() {
           <span class="session-id">${escHtml(s.participant_id)}</span>
           <span class="session-badges">
             <span class="tag ${s.condition === 'affect-aware' ? 'ai' : 'text'}">${conditionLabel}</span>
-            <span class="tag scene">${sceneLabel}</span>
           </span>
         </span>
         <span class="session-meta">
