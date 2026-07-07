@@ -394,7 +394,7 @@ html.task-page .site-footer {
     "debug debug"
     "scenario scenario"
     "chat draft"
-    "form ."
+    "form draft"
     "submit submit";
   gap: 12px;
   width: min(calc(100vw - clamp(28px, 5vw, 96px)), 1180px);
