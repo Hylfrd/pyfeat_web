@@ -39,8 +39,6 @@ def chat_sync_payload(logs, session, turn_counter: int, revision_counter: int, s
         "revision": revision_counter,
         "session_id": session_id,
         "condition": session.condition if session else None,
-        "scenario": session.task_scenario if session else None,
-        "task_index": session.condition_order if session else None,
     }
 
 

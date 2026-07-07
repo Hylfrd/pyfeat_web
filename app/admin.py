@@ -30,8 +30,6 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
                 "id": s.id,
                 "participant_id": s.participant_id,
                 "condition": s.condition,
-                "task_scenario": s.task_scenario,
-                "condition_order": s.condition_order,
                 "completed": s.completed,
                 "completion_type": s.completion_type,
                 "total_turns": s.total_turns,

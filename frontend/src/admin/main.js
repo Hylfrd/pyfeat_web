@@ -188,17 +188,11 @@ function renderList() {
     return `<button type="button" class="session-item ${s.id === activeSid ? 'active' : ''} ${s.excluded ? 'excluded' : ''}"
       data-action="select-session" data-session-id="${s.id}">
       <span class="session-main">
-        <span class="session-head">
-          <span class="session-id">${escHtml(s.participant_id)}</span>
-          <span class="session-badges">
-            <span class="tag ${s.condition === 'affect-aware' ? 'ai' : 'text'}">${conditionLabel}</span>
-          </span>
-        </span>
-        <span class="session-meta">
-          <span class="session-number">#${s.id}</span>
-          <span>${status}</span>
-          ${loss}
-        </span>
+        <span class="session-id">${escHtml(s.participant_id)}</span>
+        <span class="tag ${s.condition === 'affect-aware' ? 'ai' : 'text'}">${conditionLabel}</span>
+        <span class="session-number">#${s.id}</span>
+        <span class="session-status">${status}</span>
+        ${loss}
       </span>
       <span class="session-side">
         <span class="dot ${sessionDotClass(s)}" title="${status}"></span>

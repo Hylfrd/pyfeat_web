@@ -55,11 +55,10 @@ def create_experiment_router(
         db_session.add(p)
 
         assigned_condition = "text-only" if order_group == "A" else "affect-aware"
-        assigned_scenario = "A"
 
         session = Session(
             participant_id=participant_id,
-            task_scenario=assigned_scenario,
+            task_scenario="A",
             condition=assigned_condition,
             condition_order=1,
             start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -71,19 +70,10 @@ def create_experiment_router(
 
         return {
             "participant_id": participant_id,
-            "order_group": order_group,
             "session_id": session.id,
             "condition": assigned_condition,
-            "scenario": assigned_scenario,
             "time_limit_s": FIFTEEN_MINUTES,
         }
-
-    @router.post("/api/session/next")
-    async def next_session(
-        participant_id: str = Form(...),
-    ):
-        """Deprecated: the experiment now uses one assigned writing task."""
-        raise HTTPException(410, "This experiment now uses a single task session.")
 
     @router.get("/api/session/status/{session_id}")
     async def session_status(
@@ -183,8 +173,6 @@ def create_experiment_router(
             ),
             "session_id": session.id,
             "condition": session.condition,
-            "scenario": session.task_scenario,
-            "task_index": session.condition_order,
         }
 
     @router.post("/api/baseline-calibrate")

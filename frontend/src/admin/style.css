@@ -232,17 +232,17 @@ textarea:focus {
 
 .session-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
   width: 100%;
-  min-height: 58px;
+  min-height: 48px;
   border: 0;
   border-left: 3px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--text);
-  padding: 9px 18px 8px 17px;
+  padding: 8px 18px 8px 17px;
   text-align: left;
   box-shadow: none;
   position: relative;
@@ -271,48 +271,29 @@ textarea:focus {
 }
 
 .session-main {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-
-.session-head {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .session-id {
+  flex: 0 0 auto;
   color: var(--text-strong);
   font-size: 13px;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  min-width: 54px;
 }
 
-.session-badges {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.session-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+.session-number,
+.session-status {
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.25;
-  white-space: nowrap;
-}
-
-.session-number {
-  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -331,8 +312,10 @@ textarea:focus {
 }
 
 .loss {
+  flex: 0 0 auto;
   color: var(--red);
   font-weight: 700;
+  font-size: 11px;
 }
 
 .tag,
@@ -356,12 +339,6 @@ textarea:focus {
 .badge.affect {
   border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
   color: var(--accent);
-}
-
-.tag.scene,
-.badge.s {
-  border-color: color-mix(in srgb, var(--yellow) 42%, var(--border));
-  color: var(--yellow);
 }
 
 .dot,

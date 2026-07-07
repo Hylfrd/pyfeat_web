@@ -37,8 +37,6 @@ export function renderOverview(exp,st){
         <div class="info-card"><div class="lbl">Session ID</div><div class="val mono">#${s.id}</div></div>
         <div class="info-card"><div class="lbl">参与者</div><div class="val mono">${escHtml(s.participant_id)}</div></div>
         <div class="info-card"><div class="lbl">条件</div><div class="val">${s.condition==='affect-aware'?'情感感知 AI':'纯文本 AI'}</div></div>
-        <div class="info-card"><div class="lbl">任务</div><div class="val">电脑崩溃延期邮件</div></div>
-        <div class="info-card"><div class="lbl">任务流程</div><div class="val">单次写作任务</div></div>
         <div class="info-card"><div class="lbl">完成方式</div><div class="val">${s.completion_type==='timeout'?'超时':'手动提交'}</div></div>
         <div class="info-card"><div class="lbl">用时</div><div class="val">${durStr}</div></div>
         <div class="info-card"><div class="lbl">对话轮次 / 修改</div><div class="val mono">${s.total_turns||0} 轮 · ${s.total_revisions||0} 修改</div></div>
@@ -221,7 +219,6 @@ export function renderBaseline(exp){
     html+=`
     <div class="info-grid">
       <div class="info-card"><div class="lbl">参与者 ID</div><div class="val mono">${escHtml(p.id)}</div></div>
-      <div class="info-card"><div class="lbl">顺序组</div><div class="val mono">${p.order_group}</div></div>
       <div class="info-card"><div class="lbl">基线 AU1</div><div class="val mono">${p.baseline_au1?.toFixed(3)||'-'}</div></div>
       <div class="info-card"><div class="lbl">基线 AU4</div><div class="val mono">${p.baseline_au4?.toFixed(3)||'-'}</div></div>
       <div class="info-card"><div class="lbl">基线 AU7</div><div class="val mono">${p.baseline_au7?.toFixed(3)||'-'}</div></div>

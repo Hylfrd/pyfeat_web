@@ -81,7 +81,7 @@ a {
 
 .card,
 .timer-bar,
-.scenario-box,
+.task-prompt,
 #chat-area,
 #draft-panel {
   border: 1px solid var(--border);
@@ -392,7 +392,7 @@ html.task-page .site-footer {
   grid-template-areas:
     "timer timer"
     "debug debug"
-    "scenario scenario"
+    "prompt prompt"
     "chat draft"
     "form draft"
     "submit submit";
@@ -516,8 +516,8 @@ html.task-page .site-footer {
   display: block;
 }
 
-.scenario-box {
-  grid-area: scenario;
+.task-prompt {
+  grid-area: prompt;
   display: flex;
   gap: 18px;
   align-items: center;
@@ -527,11 +527,11 @@ html.task-page .site-footer {
   line-height: 1.7;
 }
 
-.scenario-box br {
+.task-prompt br {
   display: none;
 }
 
-.scenario-box strong {
+.task-prompt strong {
   flex: 0 0 auto;
   color: var(--text-strong);
   line-height: 1.5;
@@ -1151,7 +1151,7 @@ html[data-stage="complete-view"] .recording-drawer {
     grid-template-areas:
       "timer"
       "debug"
-      "scenario"
+      "prompt"
       "chat"
       "form"
       "draft"
