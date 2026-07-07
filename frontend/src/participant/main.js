@@ -101,6 +101,7 @@ let sessionStatusTimer = null;
 let pendingResumeProgress = null;
 const AI_WAIT_TIMEOUT_MS = 75000;
 const AI_RECOVERY_GRACE_MS = 12000;
+const BASELINE_FACE_TOAST_MS = 5000;
 
 const TASK_PROMPT_HTML = '<strong>情境</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。';
 const recordingDrawer = $('webcam-wrap');
@@ -260,6 +261,9 @@ function connectWS(){
         const pct=Math.min(100,(msg.collected/10)*100);
         $('baseline-bar').style.width=pct+'%';
         $('baseline-count').textContent=msg.collected;
+        if(currentStage==='baseline-view'&&(msg.face_detected===false||msg.reliable===false)){
+          showBaselineFaceToast();
+        }
         if(msg.collected>=10 && !baselineDone && !baselineCalibrating){
           baselineDone=true;clearInterval(baselineInterval);finishBaseline();
         }
@@ -272,9 +276,10 @@ function connectWS(){
           baselineDone=false;
           baselineAckedCount=0;
           baselineSentCount=0;
+          baselineFaceToastVisible=false;
           $('baseline-bar').style.width='0%';
           $('baseline-count').textContent='0';
-          toast('未采集到有效面部基线，请确认摄像头开启并正对屏幕。',5000,'baseline');
+          showBaselineFaceToast();
           setFaceLost();
           setTimeout(()=>{
             if(currentStage==='baseline-view')startBaseline();
@@ -722,6 +727,13 @@ let baselineAckedCount = 0;
 let baselineDone = false;
 let baselineSendComplete = false;
 let baselineCalibrating = false;
+let baselineFaceToastVisible = false;
+function showBaselineFaceToast(){
+  if(baselineFaceToastVisible)return;
+  baselineFaceToastVisible=true;
+  toast('未采集到有效面部基线，请确认摄像头开启并正对屏幕。',BASELINE_FACE_TOAST_MS,'baseline');
+  setTimeout(()=>{baselineFaceToastVisible=false},BASELINE_FACE_TOAST_MS+260);
+}
 async function startBaseline(){
   if(!await checkModelReady())return;
   setStage('baseline-view');
@@ -733,7 +745,7 @@ async function startBaseline(){
     return;
   }
   clearInterval(baselineInterval);
-  baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false; baselineCalibrating=false;
+  baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false; baselineCalibrating=false; baselineFaceToastVisible=false;
   if(ws.readyState===WebSocket.OPEN){
     ws.send(JSON.stringify({type:'baseline_reset'}));
   }
@@ -743,7 +755,7 @@ async function startBaseline(){
       ws.send(JSON.stringify({type:'baseline_frame',frame:captureFrame()}));
       baselineSentCount++;
       if(baselineSentCount>=20 && baselineAckedCount===0){
-        toast('未收到有效面部基线，请确认摄像头开启并正对屏幕。',4000);
+        showBaselineFaceToast();
         baselineSentCount=0;
       }
     }else{

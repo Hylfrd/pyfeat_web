@@ -135,6 +135,8 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                         await websocket.send_text(json.dumps({
                             "type": "baseline_ack",
                             "collected": baseline_count,
+                            "face_detected": vector is not None,
+                            "reliable": vector is not None,
                         }))
 
                     elif msg_type == "baseline_calibrate":
