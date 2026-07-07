@@ -173,7 +173,7 @@ button {
 }
 
 .stat .val.amber {
-  color: var(--yellow);
+  color: var(--red);
 }
 
 .stat .val.indigo {
@@ -197,7 +197,7 @@ button {
 
 .filter-checks {
   display: grid;
-  gap: 6px;
+  gap: 12px;
 }
 
 .filter-row {
@@ -390,10 +390,10 @@ textarea:focus {
 .dot,
 .status-dot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--yellow);
+  background: var(--muted);
 }
 
 .dot.done,
@@ -402,7 +402,11 @@ textarea:focus {
 }
 
 .dot.active {
-  background: var(--yellow);
+  background: var(--green);
+}
+
+.dot.pending {
+  background: var(--muted);
 }
 
 .dot.excl,
@@ -602,25 +606,31 @@ textarea:focus {
 
 .empty-state,
 .loading {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   min-height: 320px;
-  place-items: center;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   color: var(--muted);
   text-align: center;
 }
 
-.empty-state .icon {
-  color: var(--accent);
-  font-size: 28px;
-  font-weight: 700;
+.empty-state p,
+.loading p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .empty {
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  padding: 28px;
+  min-height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
   color: var(--muted);
+  font-size: 16px;
   text-align: center;
 }
 
@@ -1268,8 +1278,8 @@ pre,
 }
 
 .spinner {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;

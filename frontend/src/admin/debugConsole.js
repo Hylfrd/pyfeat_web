@@ -355,7 +355,20 @@ export function createDebugConsole({adminFetch, toast}){
     if(!$('debug-cache'))return;
     const r=await adminFetch('/api/admin/debug-cache');
     const data=await r.json();
-    $('debug-cache').textContent=`缓存图片：${data.count||0} 张 · ${data.kb||0} KB`;
+    $('debug-cache').textContent=`缓存图片：${data.count||0} 张 · ${formatBytes(data.bytes||0)}`;
+  }
+
+  function formatBytes(bytes){
+    const value=Number(bytes)||0;
+    const units=['B','KB','MB','GB'];
+    let size=value;
+    let unit=0;
+    while(size>=1024&&unit<units.length-1){
+      size/=1024;
+      unit++;
+    }
+    const digits=unit===0?0:(size>=100?0:(size>=10?1:2));
+    return `${size.toFixed(digits)} ${units[unit]}`;
   }
 
   async function clearDebugLogs(){

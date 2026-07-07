@@ -237,7 +237,6 @@ function syncFilterGroup(group, changedInput) {
 
 async function selectSession(sid) {
   activeSid = sid;
-  activeTab = 'overview';
   renderList();
   await loadSession(sid);
 }
@@ -276,7 +275,7 @@ function renderActiveTab() {
   }
   debugConsole.stopTimers();
   if (!exp) {
-    if ($('detail')) $('detail').innerHTML = '<div class="empty-state"><div class="icon">→</div><p>从左侧选择一个 Session 查看详情</p></div>';
+    if ($('detail')) $('detail').innerHTML = '<div class="empty-state"><p>从左侧选择一个 Session 查看详情</p></div>';
     return;
   }
   if (activeTab === 'overview') renderOverview(exp, st);
