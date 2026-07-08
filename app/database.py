@@ -17,9 +17,23 @@ from typing import Optional
 
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, Text, DateTime,
-    ForeignKey, create_engine, event, text,
+    ForeignKey, create_engine, text,
 )
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, relationship, sessionmaker
+
+from .mysql_config import (
+    MYSQL_CHARSET,
+    MYSQL_COLLATION,
+    MYSQL_DATABASE,
+    MYSQL_HOST,
+    MYSQL_MAX_OVERFLOW,
+    MYSQL_PASSWORD,
+    MYSQL_POOL_RECYCLE_SECONDS,
+    MYSQL_POOL_SIZE,
+    MYSQL_PORT,
+    MYSQL_USER,
+)
 
 
 # ── Base ────────────────────────────────────────────────────────────
@@ -33,7 +47,7 @@ class Base(DeclarativeBase):
 class Participant(Base):
     __tablename__ = "participants"
 
-    id: Mapped[str] = Column(String, primary_key=True)  # e.g. "P01"
+    id: Mapped[str] = Column(String(32), primary_key=True)  # e.g. "P01"
     order_group: Mapped[str] = Column(String(1), nullable=False)  # A/B condition balancing group
     language: Mapped[str] = Column(String(2), nullable=False, default="zh")  # fixed zh
     baseline_au1: Mapped[float] = Column(Float, default=0.0)
@@ -42,7 +56,7 @@ class Participant(Base):
     baseline_au12: Mapped[float] = Column(Float, default=0.0)
     baseline_frame_count: Mapped[int] = Column(Integer, default=0)
     baseline_artifact_count: Mapped[int] = Column(Integer, default=0)
-    created_at: Mapped[str] = Column(String, default=lambda: datetime.utcnow().isoformat())
+    created_at: Mapped[str] = Column(String(32), default=lambda: datetime.utcnow().isoformat())
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="participant")
 
@@ -51,23 +65,23 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
-    participant_id: Mapped[str] = Column(String, ForeignKey("participants.id"), nullable=False)
+    participant_id: Mapped[str] = Column(String(32), ForeignKey("participants.id"), nullable=False)
     task_scenario: Mapped[str] = Column(String(1), nullable=False)  # fixed A for current single-task flow
-    condition: Mapped[str] = Column(String, nullable=False)  # text-only / affect-aware
+    condition: Mapped[str] = Column(String(32), nullable=False)  # text-only / affect-aware
     condition_order: Mapped[int] = Column(Integer, nullable=False)  # 1 for current single-task flow
-    start_time: Mapped[Optional[str]] = Column(String, nullable=True)
-    end_time: Mapped[Optional[str]] = Column(String, nullable=True)
+    start_time: Mapped[Optional[str]] = Column(String(32), nullable=True)
+    end_time: Mapped[Optional[str]] = Column(String(32), nullable=True)
     duration_ms: Mapped[Optional[int]] = Column(Integer, nullable=True)
-    completion_type: Mapped[str] = Column(String, default="manual")  # manual / timeout
+    completion_type: Mapped[str] = Column(String(32), default="manual")  # manual / timeout
     final_email: Mapped[Optional[str]] = Column(Text, nullable=True)
     total_turns: Mapped[int] = Column(Integer, default=0)
     total_revisions: Mapped[int] = Column(Integer, default=0)
     total_frames: Mapped[int] = Column(Integer, default=0)
     unreliable_frames: Mapped[int] = Column(Integer, default=0)
-    exclusion_override: Mapped[Optional[str]] = Column(String, nullable=True)  # exclude / include / None
+    exclusion_override: Mapped[Optional[str]] = Column(String(32), nullable=True)  # exclude / include / None
      
     completed: Mapped[bool] = Column(Boolean, default=False)
-    video_path: Mapped[Optional[str]] = Column(String, nullable=True)
+    video_path: Mapped[Optional[str]] = Column(String(512), nullable=True)
 
     participant: Mapped[Participant] = relationship(back_populates="sessions")
     chat_logs: Mapped[list["ChatLog"]] = relationship(back_populates="session")
@@ -102,9 +116,9 @@ class ChatLog(Base):
     seq: Mapped[int] = Column(Integer, nullable=False)
     role: Mapped[str] = Column(String(4), nullable=False)  # "user" / "ai"
     content: Mapped[str] = Column(Text, nullable=False)
-    timestamp: Mapped[str] = Column(String, nullable=False)
-    expression_label: Mapped[Optional[str]] = Column(String, nullable=True)
-    strategy_applied: Mapped[Optional[str]] = Column(String, nullable=True)  # Strategy.name
+    timestamp: Mapped[str] = Column(String(32), nullable=False)
+    expression_label: Mapped[Optional[str]] = Column(String(32), nullable=True)
+    strategy_applied: Mapped[Optional[str]] = Column(String(64), nullable=True)  # Strategy.name
     is_hidden: Mapped[bool] = Column(Boolean, default=False)
 
     session: Mapped[Session] = relationship(back_populates="chat_logs")
@@ -193,11 +207,11 @@ class Evaluation(Base):
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[int] = Column(Integer, ForeignKey("sessions.id"), nullable=False)
     run_number: Mapped[int] = Column(Integer, nullable=False)  # 1/2/3 for self-consistency
-    layer: Mapped[str] = Column(String, nullable=False)  # "deterministic" / "llm_heuristic"
+    layer: Mapped[str] = Column(String(64), nullable=False)  # "deterministic" / "llm_heuristic"
     score: Mapped[float] = Column(Float, nullable=False)
-    evaluator_model: Mapped[str] = Column(String, nullable=False)  # e.g. "kimi-k2.6"
+    evaluator_model: Mapped[str] = Column(String(128), nullable=False)  # e.g. "kimi-k2.6"
     details_json: Mapped[Optional[str]] = Column(Text, nullable=True)
-    timestamp: Mapped[str] = Column(String, default=lambda: datetime.utcnow().isoformat())
+    timestamp: Mapped[str] = Column(String(32), default=lambda: datetime.utcnow().isoformat())
 
     session: Mapped[Session] = relationship(back_populates="evaluations")
 
@@ -207,12 +221,12 @@ class PreTaskSurvey(Base):
     __tablename__ = "pre_task_surveys"
 
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
-    participant_id: Mapped[str] = Column(String, ForeignKey("participants.id"), nullable=False, unique=True)
+    participant_id: Mapped[str] = Column(String(32), ForeignKey("participants.id"), nullable=False, unique=True)
 
     # A1-A7: Background and prior experience
-    a1_age: Mapped[Optional[str]] = Column(String, nullable=True)
-    a2_gender: Mapped[Optional[str]] = Column(String, nullable=True)
-    a3_ai_frequency: Mapped[Optional[str]] = Column(String, nullable=True)
+    a1_age: Mapped[Optional[str]] = Column(String(64), nullable=True)
+    a2_gender: Mapped[Optional[str]] = Column(String(64), nullable=True)
+    a3_ai_frequency: Mapped[Optional[str]] = Column(String(64), nullable=True)
     a4_ai_experience: Mapped[Optional[int]] = Column(Integer, nullable=True)
     a5_writing_confidence: Mapped[Optional[int]] = Column(Integer, nullable=True)
     a6_ai_tool_confidence: Mapped[Optional[int]] = Column(Integer, nullable=True)
@@ -232,7 +246,7 @@ class PreTaskSurvey(Base):
     c3_expect_easy: Mapped[Optional[int]] = Column(Integer, nullable=True)
     c4_expect_collaborative: Mapped[Optional[int]] = Column(Integer, nullable=True)
 
-    created_at: Mapped[str] = Column(String, default=lambda: datetime.utcnow().isoformat())
+    created_at: Mapped[str] = Column(String(32), default=lambda: datetime.utcnow().isoformat())
     participant: Mapped[Participant] = relationship()
 
 
@@ -296,52 +310,74 @@ class PostTaskSurvey(Base):
     m4_suspected_adaptation: Mapped[Optional[int]] = Column(Integer, nullable=True)
     m5_open_response: Mapped[Optional[str]] = Column(Text, nullable=True)
 
-    created_at: Mapped[str] = Column(String, default=lambda: datetime.utcnow().isoformat())
+    created_at: Mapped[str] = Column(String(32), default=lambda: datetime.utcnow().isoformat())
     session: Mapped[Session] = relationship()
 
 
 # ── Engine helper ──────────────────────────────────────────────────
 
-def init_session_factory(db_path: str = "data/experiment.db"):
+def _mysql_url() -> URL:
+    return URL.create(
+        "mysql+pymysql",
+        username=MYSQL_USER,
+        password=MYSQL_PASSWORD,
+        host=MYSQL_HOST,
+        port=MYSQL_PORT,
+        database=MYSQL_DATABASE,
+        query={"charset": MYSQL_CHARSET},
+    )
+
+
+def _mysql_server_url() -> URL:
+    return URL.create(
+        "mysql+pymysql",
+        username=MYSQL_USER,
+        password=MYSQL_PASSWORD,
+        host=MYSQL_HOST,
+        port=MYSQL_PORT,
+        query={"charset": MYSQL_CHARSET},
+    )
+
+
+def _ensure_mysql_database() -> None:
+    database = MYSQL_DATABASE.replace("`", "``")
+    server_engine = create_engine(
+        _mysql_server_url(),
+        echo=False,
+        pool_pre_ping=True,
+        pool_recycle=MYSQL_POOL_RECYCLE_SECONDS,
+    )
+    try:
+        with server_engine.begin() as conn:
+            conn.execute(text(
+                f"CREATE DATABASE IF NOT EXISTS `{database}` "
+                f"CHARACTER SET {MYSQL_CHARSET} COLLATE {MYSQL_COLLATION}"
+            ))
+    finally:
+        server_engine.dispose()
+
+
+def init_session_factory():
     """Create tables and return a session factory.
 
     SQLAlchemy Session objects are not safe to share between concurrent requests,
     so the FastAPI app keeps this factory globally and opens short-lived sessions
     around each database operation.
     """
-    import os
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-
+    _ensure_mysql_database()
     engine = create_engine(
-        f"sqlite:///{db_path}",
+        _mysql_url(),
         echo=False,
-        connect_args={"timeout": 30},
+        pool_pre_ping=True,
+        pool_size=MYSQL_POOL_SIZE,
+        max_overflow=MYSQL_MAX_OVERFLOW,
+        pool_recycle=MYSQL_POOL_RECYCLE_SECONDS,
     )
 
-    # Enable WAL mode for concurrent reads
-    @event.listens_for(engine, "connect")
-    def _set_wal(dbapi_conn, _):
-        dbapi_conn.execute("PRAGMA journal_mode=WAL")
-        dbapi_conn.execute("PRAGMA busy_timeout=30000")
-
     Base.metadata.create_all(engine)
-    # Small migrations for existing SQLite databases.
-    try:
-        from sqlalchemy import inspect
-        insp = inspect(engine)
-        if "sessions" in insp.get_table_names():
-            cols = [c["name"] for c in insp.get_columns("sessions")]
-            with engine.connect() as conn:
-                if "unreliable_frames" not in cols:
-                    conn.execute(text("ALTER TABLE sessions ADD COLUMN unreliable_frames INTEGER DEFAULT 0"))
-                if "exclusion_override" not in cols:
-                    conn.execute(text("ALTER TABLE sessions ADD COLUMN exclusion_override VARCHAR"))
-                conn.commit()
-    except Exception:
-        pass  # non-critical migration
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def init_db(db_path: str = "data/experiment.db") -> Session:
+def init_db() -> Session:
     """Create tables and return a standalone session for compatibility."""
-    return init_session_factory(db_path)()
+    return init_session_factory()()
