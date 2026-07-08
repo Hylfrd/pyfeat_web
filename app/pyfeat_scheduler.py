@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 
-FRAME_QUEUE_TIMEOUT_S = 1.0
+FRAME_QUEUE_TIMEOUT_S = 1.2
 
 
 @dataclass

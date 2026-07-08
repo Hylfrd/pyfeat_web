@@ -275,7 +275,7 @@ function renderDebugSlot(data={}){
   debugEl('debug-stage').textContent=currentStage||'-';
   debugEl('debug-slot').textContent=data.state||'-';
   debugEl('debug-wait').textContent=data.estimated_wait_s!==undefined?formatWait(data.estimated_wait_s):'-';
-  debugEl('debug-active').textContent=`${data.active_count??0}/${data.max_active??2}`;
+  debugEl('debug-active').textContent=`${data.active_count??0}/${data.max_active??3}`;
   debugEl('debug-queue').textContent=String(data.queue_length??0);
   const active=Array.isArray(data.active_slots)?data.active_slots:[];
   const queued=Array.isArray(data.queued_slots)?data.queued_slots:[];
@@ -866,13 +866,13 @@ function renderQueueStatus(data={}){
   renderDebugSlot(data);
   $('queue-estimate').textContent=formatWait(data.estimated_wait_s);
   $('queue-position').textContent=data.position||'-';
-  $('queue-active').textContent=`${data.active_count||0}/${data.max_active||2}`;
+  $('queue-active').textContent=`${data.active_count||0}/${data.max_active||3}`;
   $('queue-length').textContent=data.queue_length||0;
   const wait=Number(data.estimated_wait_s)||0;
   const pct=wait>0?Math.max(4,Math.min(96,100-(wait/900*100))):100;
   $('queue-bar').style.width=`${pct}%`;
   $('queue-note').textContent=data.state==='queued'
-    ? '等待信息每秒自动更新，轮到您时会自动开始基线校准。'
+    ? '请耐心等待，轮到您时会自动开始基线校准。'
     : '正在为您准备基线校准。';
 }
 function stopQueuePolling(){

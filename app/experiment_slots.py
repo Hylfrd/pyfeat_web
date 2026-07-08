@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from .websocket_utils import TASK_TIME_LIMIT_SECONDS
 
 
-MAX_ACTIVE_EXPERIMENTS = 2
+MAX_ACTIVE_EXPERIMENTS = 3
 ACTIVE_SLOT_TTL = 180
 QUEUE_SLOT_TTL = 180
 
