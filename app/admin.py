@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from . import debug_log
 from .auth import require_admin
 from .database import (
-    ChatLog, Evaluation, ExpressionFrame, Participant, PostTaskSurvey, Questionnaire, Session,
+    ChatLog, Evaluation, ExpressionFrame, Participant, PostTaskSurvey, PreTaskSurvey, Questionnaire, Session,
 )
 from .expression import PYFEAT_API_TIMEOUT
 from .session_activity import forget_session, get_session_activity, is_session_active
@@ -178,6 +178,16 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 .filter(Questionnaire.session_id == session_id)
                 .first()
             )
+            pre_survey = (
+                db_session.query(PreTaskSurvey)
+                .filter(PreTaskSurvey.participant_id == session.participant_id)
+                .first()
+            )
+            post_survey = (
+                db_session.query(PostTaskSurvey)
+                .filter(PostTaskSurvey.session_id == session_id)
+                .first()
+            )
             evaluations = (
                 db_session.query(Evaluation)
                 .filter(Evaluation.session_id == session_id)
@@ -249,6 +259,63 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 "q9": questionnaire.q9_confusing,
                 "q10": questionnaire.q10_taxing,
             } if questionnaire else None,
+            "pre_survey": {
+                "a1_age": pre_survey.a1_age,
+                "a2_gender": pre_survey.a2_gender,
+                "a3_ai_frequency": pre_survey.a3_ai_frequency,
+                "a4_ai_experience": pre_survey.a4_ai_experience,
+                "a5_writing_confidence": pre_survey.a5_writing_confidence,
+                "a6_ai_tool_confidence": pre_survey.a6_ai_tool_confidence,
+                "a7_email_familiarity": pre_survey.a7_email_familiarity,
+                "b1_calm": pre_survey.b1_calm,
+                "b2_stressed": pre_survey.b2_stressed,
+                "b3_uncertain": pre_survey.b3_uncertain,
+                "b4_confident": pre_survey.b4_confident,
+                "b5_ready": pre_survey.b5_ready,
+                "b6_webcam_comfort": pre_survey.b6_webcam_comfort,
+                "c1_expect_helpful": pre_survey.c1_expect_helpful,
+                "c2_expect_understand": pre_survey.c2_expect_understand,
+                "c3_expect_easy": pre_survey.c3_expect_easy,
+                "c4_expect_collaborative": pre_survey.c4_expect_collaborative,
+            } if pre_survey else None,
+            "post_survey": {
+                "u1": post_survey.u1_understood_needs,
+                "u2": post_survey.u2_aware_difficulty,
+                "u3": post_survey.u3_matched_intent,
+                "u4": post_survey.u4_noticed_stuck,
+                "u5": post_survey.u5_aligned_thoughts,
+                "s1": post_survey.s1_felt_supported,
+                "s2": post_survey.s2_useful_guidance,
+                "s3": post_survey.s3_reduced_effort,
+                "s4": post_survey.s4_concrete_suggestions,
+                "s5": post_survey.s5_efficient,
+                "sp1": post_survey.sp1_socially_responsive,
+                "sp2": post_survey.sp2_active_partner,
+                "sp3": post_survey.sp3_socially_engaging,
+                "cp1": post_survey.cp1_ai_with_me,
+                "cp2": post_survey.cp2_ai_aware_of_me,
+                "cp3": post_survey.cp3_mutual_awareness,
+                "r1": post_survey.r1_acknowledged_difficulty,
+                "r2": post_survey.r2_signaled_uncertainty,
+                "r3": post_survey.r3_helped_differently,
+                "r4": post_survey.r4_repair_supportive,
+                "r5": post_survey.r5_acknowledgement_appropriate,
+                "e1": post_survey.e1_support_matched_awareness,
+                "e2": post_survey.e2_met_expectations,
+                "e3": post_survey.e3_more_aware_than_helpful,
+                "e4": post_survey.e4_disappointed,
+                "e5": post_survey.e5_raised_expectations,
+                "f1": post_survey.f1_frustrated,
+                "f2": post_survey.f2_smooth,
+                "f3": post_survey.f3_satisfied_draft,
+                "f4": post_survey.f4_satisfied_overall,
+                "f5": post_survey.f5_future_use,
+                "m1": post_survey.m1_responded_to_emotion,
+                "m2": post_survey.m2_webcam_adapted,
+                "m3": post_survey.m3_changed_strategy,
+                "m4": post_survey.m4_suspected_adaptation,
+                "m5": post_survey.m5_open_response,
+            } if post_survey else None,
             "evaluations": [
                 {
                     "run_number": e.run_number,

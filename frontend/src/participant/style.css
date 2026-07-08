@@ -440,6 +440,12 @@ button:not(:disabled):hover,
   padding: 18px 0;
 }
 
+.likert-row.missing {
+  border-radius: 6px;
+  background: #fff1f2;
+  box-shadow: 0 0 0 8px #fff1f2;
+}
+
 .likert-row:last-child {
   border-bottom: 0;
 }
@@ -449,6 +455,19 @@ button:not(:disabled):hover,
   color: var(--text-strong);
   font-size: 14px;
   font-weight: 650;
+}
+
+.required-note {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.required-star {
+  display: block;
+  color: var(--red);
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
 }
 
 .likert-line {
@@ -490,6 +509,14 @@ button:not(:disabled):hover,
   font-size: 12px;
   font-weight: 700;
   text-align: center;
+}
+
+.likert-dot:first-child .dot-label {
+  text-align: left;
+}
+
+.likert-dot:last-child .dot-label {
+  text-align: right;
 }
 
 .likert-dot input:checked + .dot {

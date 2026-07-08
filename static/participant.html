@@ -52,7 +52,7 @@
 
 <div id="toast-container"></div>
 
-<aside id="participant-debug" class="participant-debug" aria-label="实验调试窗口">
+<!-- <aside id="participant-debug" class="participant-debug" aria-label="实验调试窗口">
   <button id="participant-debug-toggle" class="participant-debug-head" type="button">
     <span>Debug</span>
     <strong id="debug-status-pill">idle</strong>
@@ -77,7 +77,7 @@
     <div class="debug-lanes" id="debug-lanes">No active experiment slots.</div>
     <div class="debug-log" id="debug-log"></div>
   </div>
-</aside>
+</aside> -->
 
 <footer class="site-footer">
   <a href="https://github.com/Hylfrd/pyfeat_web" target="_blank" rel="noopener noreferrer">Developed by Hylfrd</a>
@@ -122,39 +122,38 @@
   </div>
   <div class="card">
     <h1>任务前问卷</h1>
-    <p class="subtitle">请在开始写作任务前回答以下问题。1 = 非常不同意 · 7 = 非常同意</p>
+    <p class="subtitle">请在开始写作任务前回答以下问题。1 = 非常不同意 · 7 = 非常同意。<span class="required-note">红色星号为必答题。</span></p>
     <form id="pre-survey-form">
       <div class="section-label">背景信息</div>
 
-      <div class="likert-row"><div class="q-text">A1. Age</div><input type="text" name="pre-a1_age" placeholder="Your age" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em"></div>
-      <div class="likert-row"><div class="q-text">A2. Gender</div>
+      <div class="likert-row"><div class="q-text">1. 年龄<span class="required-star">*</span></div><input type="text" name="pre-a1_age" placeholder="请输入年龄" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em"></div>
+      <div class="likert-row"><div class="q-text">2. 性别<span class="required-star">*</span></div>
         <select name="pre-a2_gender" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;background:#fff">
-          <option value="">Select...</option><option value="Female">Female</option><option value="Male">Male</option><option value="Non-binary">Non-binary</option><option value="Prefer not to say">Prefer not to say</option><option value="Other">Other</option>
+          <option value="">请选择...</option><option value="女性">女性</option><option value="男性">男性</option><option value="非二元性别">非二元性别</option><option value="不愿透露">不愿透露</option><option value="其他">其他</option>
         </select>
       </div>
-      <div class="likert-row"><div class="q-text">A3. How often do you use ChatGPT or similar AI tools?</div>
+      <div class="likert-row"><div class="q-text">3. 你使用 ChatGPT 或类似 AI 工具的频率是？<span class="required-star">*</span></div>
         <select name="pre-a3_ai_frequency" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;background:#fff">
-          <option value="">Select...</option><option value="Never">Never</option><option value="Rarely">Rarely</option><option value="Monthly">Monthly</option><option value="Weekly">Weekly</option><option value="Daily">Daily</option>
+          <option value="">请选择...</option><option value="从不">从不</option><option value="很少">很少</option><option value="每月">每月</option><option value="每周">每周</option><option value="每天">每天</option>
         </select>
       </div>
-      <div class="likert-row"><div class="q-text">A4. I have experience using AI tools for writing or revising text.</div><div class="likert-line" id="likert-pre-a4"></div></div>
-      <div class="likert-row"><div class="q-text">A5. I feel confident writing professional or academic emails in English.</div><div class="likert-line" id="likert-pre-a5"></div></div>
-      <div class="likert-row"><div class="q-text">A6. I feel confident using AI tools to support writing tasks.</div><div class="likert-line" id="likert-pre-a6"></div></div>
-      <div class="likert-row"><div class="q-text">A7. I am familiar with writing emails to professors or instructors.</div><div class="likert-line" id="likert-pre-a7"></div></div>
+      <div class="likert-row"><div class="q-text">4. 我有使用 AI 工具进行写作或修改文本的经验。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-a4"></div></div>
+      <div class="likert-row"><div class="q-text">5. 我有信心使用 AI 工具来辅助写作任务。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-a6"></div></div>
+      <div class="likert-row"><div class="q-text">6. 我熟悉如何给教授或授课教师写邮件。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-a7"></div></div>
 
       <div class="section-label">基线状态</div>
-      <div class="likert-row"><div class="q-text">B1. I feel calm right now.</div><div class="likert-line" id="likert-pre-b1"></div></div>
-      <div class="likert-row"><div class="q-text">B2. I feel mentally stressed right now.</div><div class="likert-line" id="likert-pre-b2"></div></div>
-      <div class="likert-row"><div class="q-text">B3. I feel uncertain about the upcoming writing task.</div><div class="likert-line" id="likert-pre-b3"></div></div>
-      <div class="likert-row"><div class="q-text">B4. I feel confident that I can complete the writing task successfully.</div><div class="likert-line" id="likert-pre-b4"></div></div>
-      <div class="likert-row"><div class="q-text">B5. I feel mentally ready to start the task.</div><div class="likert-line" id="likert-pre-b5"></div></div>
-      <div class="likert-row"><div class="q-text">B6. I am comfortable having a webcam active during this study.</div><div class="likert-line" id="likert-pre-b6"></div></div>
+      <div class="likert-row"><div class="q-text">7. 我现在感到平静。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-b1"></div></div>
+      <div class="likert-row"><div class="q-text">8. 我现在感到精神压力较大。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-b2"></div></div>
+      <div class="likert-row"><div class="q-text">9. 我对即将开始的写作任务感到不确定。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-b3"></div></div>
+      <div class="likert-row"><div class="q-text">10. 我有信心成功完成这项写作任务。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-b4"></div></div>
+      <div class="likert-row"><div class="q-text">11. 我已经做好开始任务的心理准备。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-b5"></div></div>
+      <div class="likert-row"><div class="q-text">12. 我能接受在本研究过程中开启摄像头。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-b6"></div></div>
 
       <div class="section-label">任务期望</div>
-      <div class="likert-row"><div class="q-text">C1. I expect the AI system to help me complete the writing task effectively.</div><div class="likert-line" id="likert-pre-c1"></div></div>
-      <div class="likert-row"><div class="q-text">C2. I expect the AI system to understand my writing needs.</div><div class="likert-line" id="likert-pre-c2"></div></div>
-      <div class="likert-row"><div class="q-text">C3. I expect the AI system to make the writing process easier.</div><div class="likert-line" id="likert-pre-c3"></div></div>
-      <div class="likert-row"><div class="q-text">C4. I expect the interaction with the AI to feel collaborative.</div><div class="likert-line" id="likert-pre-c4"></div></div>
+      <div class="likert-row"><div class="q-text">13. 我预计 AI 系统能有效帮助我完成写作任务。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-c1"></div></div>
+      <div class="likert-row"><div class="q-text">14. 我预计 AI 系统能理解我的写作需求。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-c2"></div></div>
+      <div class="likert-row"><div class="q-text">15. 我预计 AI 系统能让写作过程变得更轻松。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-c3"></div></div>
+      <div class="likert-row"><div class="q-text">16. 我预计与 AI 的互动会有协作感。<span class="required-star">*</span></div><div class="likert-line" id="likert-pre-c4"></div></div>
 
       <button type="submit" class="btn-primary" style="margin-top:24px">提交 · 开始基线校准</button>
     </form>
@@ -277,100 +276,76 @@
     <div class="step-dot active"></div>
   </div>
   <div class="card">
-    <h1>问卷</h1>
-    <p class="subtitle">请根据您刚才与 AI 助手的互动体验作答。1 = 非常不同意 · 7 = 非常同意</p>
+    <h1>实验后问卷</h1>
+    <p class="subtitle">请根据您刚才与 AI 助手的互动体验作答。1 = 非常不同意 · 7 = 非常同意。<span class="required-note">红色星号为必答题。</span></p>
     <form id="q-form">
       <div class="section-label">感知理解与支持</div>
-      <div class="likert-row"><div class="q-text">1. AI 理解了我试图达成的目标。</div><div class="likert-line" id="likert-q1"></div></div>
-      <div class="likert-row"><div class="q-text">2. AI 和我在同一频道上。</div><div class="likert-line" id="likert-q2"></div></div>
-      <div class="likert-row"><div class="q-text">3. AI 知道我在交互中需要什么。</div><div class="likert-line" id="likert-q3"></div></div>
-      <div class="likert-row"><div class="q-text">4. AI 与我建立了连接感。</div><div class="likert-line" id="likert-q4"></div></div>
+      <div class="likert-row"><div class="q-text">1. AI 理解了我试图达成的目标。<span class="required-star">*</span></div><div class="likert-line" id="likert-q1"></div></div>
+      <div class="likert-row"><div class="q-text">2. AI 和我在同一频道上。<span class="required-star">*</span></div><div class="likert-line" id="likert-q2"></div></div>
+      <div class="likert-row"><div class="q-text">3. AI 知道我在交互中需要什么。<span class="required-star">*</span></div><div class="likert-line" id="likert-q3"></div></div>
+      <div class="likert-row"><div class="q-text">4. AI 与我建立了连接感。<span class="required-star">*</span></div><div class="likert-line" id="likert-q4"></div></div>
 
       <div class="section-label">满意度</div>
-      <div class="likert-row"><div class="q-text">5. 这次体验让我感到有收获。</div><div class="likert-line" id="likert-q5"></div></div>
-      <div class="likert-row"><div class="q-text">6. 我对这次体验感到有兴趣。</div><div class="likert-line" id="likert-q6"></div></div>
-      <div class="likert-row"><div class="q-text">7. 这次体验是值得的。</div><div class="likert-line" id="likert-q7"></div></div>
+      <div class="likert-row"><div class="q-text">5. 这次体验让我感到有收获。<span class="required-star">*</span></div><div class="likert-line" id="likert-q5"></div></div>
+      <div class="likert-row"><div class="q-text">6. 我对这次体验感到有兴趣。<span class="required-star">*</span></div><div class="likert-line" id="likert-q6"></div></div>
+      <div class="likert-row"><div class="q-text">7. 这次体验是值得的。<span class="required-star">*</span></div><div class="likert-line" id="likert-q7"></div></div>
 
       <div class="section-label">挫折感</div>
-      <div class="likert-row"><div class="q-text">8. 使用这个助手让我感到沮丧。</div><div class="likert-line" id="likert-q8"></div></div>
-      <div class="likert-row"><div class="q-text">9. 我觉得这个助手让人困惑。</div><div class="likert-line" id="likert-q9"></div></div>
-      <div class="likert-row"><div class="q-text">10. 使用这个助手让我感到脑力消耗很大。</div><div class="likert-line" id="likert-q10"></div></div>
+      <div class="likert-row"><div class="q-text">8. 使用这个助手让我感到沮丧。<span class="required-star">*</span></div><div class="likert-line" id="likert-q8"></div></div>
+      <div class="likert-row"><div class="q-text">9. 我觉得这个助手让人困惑。<span class="required-star">*</span></div><div class="likert-line" id="likert-q9"></div></div>
+      <div class="likert-row"><div class="q-text">10. 使用这个助手让我感到脑力消耗很大。<span class="required-star">*</span></div><div class="likert-line" id="likert-q10"></div></div>
 
-      <button type="submit" class="btn-primary" style="margin-top:24px">提交问卷</button>
-    </form>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════ -->
-<!-- BREAK VIEW                                     -->
-<!-- ═══════════════════════════════════════════════ -->
-
-<!-- POST-TASK SURVEY VIEW                          -->
-<div id="post-survey-view" class="view hidden">
-<div class="steps">
-    <div class="step-dot done"></div>
-    <div class="step-line"></div>
-    <div class="step-dot done"></div>
-    <div class="step-line"></div>
-    <div class="step-dot active"></div>
-    <div class="step-line"></div>
-    <div class="step-dot"></div>
-  </div>
-  <div class="card">
-    <h1>任务后问卷</h1>
-    <p class="subtitle">请在完成写作任务后回答以下问题。1 = 非常不同意 · 7 = 非常同意</p>
-    <form id="post-survey-form">
       <div class="section-label">感知理解</div>
-      <div class="likert-row"><div class="q-text">U1. The AI system seemed to understand what I needed during the writing task.</div><div class="likert-line" id="likert-post-u1"></div></div>
-      <div class="likert-row"><div class="q-text">U2. The AI seemed aware of my difficulty, hesitation, or confusion during the writing process.</div><div class="likert-line" id="likert-post-u2"></div></div>
-      <div class="likert-row"><div class="q-text">U3. The AI responded in a way that matched my writing intentions.</div><div class="likert-line" id="likert-post-u3"></div></div>
-      <div class="likert-row"><div class="q-text">U4. The AI noticed when I was stuck or needed a different type of help.</div><div class="likert-line" id="likert-post-u4"></div></div>
-      <div class="likert-row"><div class="q-text">U5. The AI"s responses were well aligned with my ongoing thoughts and intentions.</div><div class="likert-line" id="likert-post-u5"></div></div>
+      <div class="likert-row"><div class="q-text">11. AI 系统似乎理解我在写作任务中的需求。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-u1"></div></div>
+      <div class="likert-row"><div class="q-text">12. AI 似乎意识到了我在写作过程中的困难、犹豫或困惑。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-u2"></div></div>
+      <div class="likert-row"><div class="q-text">13. AI 的回应方式符合我的写作意图。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-u3"></div></div>
+      <div class="likert-row"><div class="q-text">14. 当我卡住或需要其他帮助时，AI 注意到了这一点。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-u4"></div></div>
+      <div class="likert-row"><div class="q-text">15. AI 的回复与我当时的想法和意图保持一致。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-u5"></div></div>
 
       <div class="section-label">感知支持</div>
-      <div class="likert-row"><div class="q-text">S1. I felt supported by the AI during the writing process.</div><div class="likert-line" id="likert-post-s1"></div></div>
-      <div class="likert-row"><div class="q-text">S2. The AI provided useful guidance when I was unsure how to continue.</div><div class="likert-line" id="likert-post-s2"></div></div>
-      <div class="likert-row"><div class="q-text">S3. The AI helped me reduce the effort required to revise the email.</div><div class="likert-line" id="likert-post-s3"></div></div>
-      <div class="likert-row"><div class="q-text">S4. The AI provided concrete suggestions that improved my draft.</div><div class="likert-line" id="likert-post-s4"></div></div>
-      <div class="likert-row"><div class="q-text">S5. The AI helped me complete the writing task efficiently.</div><div class="likert-line" id="likert-post-s5"></div></div>
+      <div class="likert-row"><div class="q-text">16. 在写作过程中，我感到受到了 AI 的支持。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-s1"></div></div>
+      <div class="likert-row"><div class="q-text">17. 当我不确定如何继续时，AI 提供了有用的指导。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-s2"></div></div>
+      <div class="likert-row"><div class="q-text">18. AI 帮助我减少了修改邮件所需的精力。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-s3"></div></div>
+      <div class="likert-row"><div class="q-text">19. AI 提供了具体建议，帮助改进了我的草稿。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-s4"></div></div>
+      <div class="likert-row"><div class="q-text">20. AI 帮助我高效完成了写作任务。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-s5"></div></div>
 
       <div class="section-label">社交存在感</div>
-      <div class="likert-row"><div class="q-text">SP1. The AI felt socially responsive during the interaction.</div><div class="likert-line" id="likert-post-sp1"></div></div>
-      <div class="likert-row"><div class="q-text">SP2. The AI felt like an active interaction partner rather than only a text generator.</div><div class="likert-line" id="likert-post-sp2"></div></div>
-      <div class="likert-row"><div class="q-text">SP3. The interaction with the AI felt socially engaging.</div><div class="likert-line" id="likert-post-sp3"></div></div>
+      <div class="likert-row"><div class="q-text">21. AI 在互动中显得具有社交回应性。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-sp1"></div></div>
+      <div class="likert-row"><div class="q-text">22. AI 给人的感觉更像是积极的互动伙伴，而不仅仅是文本生成器。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-sp2"></div></div>
+      <div class="likert-row"><div class="q-text">23. 与 AI 的互动让我感到有社交参与感。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-sp3"></div></div>
 
       <div class="section-label">共存感</div>
-      <div class="likert-row"><div class="q-text">CP1. I felt that the AI was "with me" during the writing task.</div><div class="likert-line" id="likert-post-cp1"></div></div>
-      <div class="likert-row"><div class="q-text">CP2. The AI seemed aware of me as I worked through the task.</div><div class="likert-line" id="likert-post-cp2"></div></div>
-      <div class="likert-row"><div class="q-text">CP3. I felt a sense of mutual awareness between myself and the AI.</div><div class="likert-line" id="likert-post-cp3"></div></div>
+      <div class="likert-row"><div class="q-text">24. 我感觉 AI 在写作任务中是“和我一起”的。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-cp1"></div></div>
+      <div class="likert-row"><div class="q-text">25. AI 似乎意识到我正在如何推进任务。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-cp2"></div></div>
+      <div class="likert-row"><div class="q-text">26. 我感到自己和 AI 之间存在一种相互感知。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-cp3"></div></div>
 
       <div class="section-label">修复识别</div>
-      <div class="likert-row"><div class="q-text">R1. The AI acknowledged when I was having difficulty or seemed stuck.</div><div class="likert-line" id="likert-post-r1"></div></div>
-      <div class="likert-row"><div class="q-text">R2. The AI clearly signaled that it noticed my uncertainty, confusion, or frustration.</div><div class="likert-line" id="likert-post-r2"></div></div>
-      <div class="likert-row"><div class="q-text">R3. After acknowledging my difficulty, the AI helped me in a different way.</div><div class="likert-line" id="likert-post-r3"></div></div>
-      <div class="likert-row"><div class="q-text">R4. The AI"s repair or clarification messages made the interaction feel more supportive.</div><div class="likert-line" id="likert-post-r4"></div></div>
-      <div class="likert-row"><div class="q-text">R5. The AI"s acknowledgement of my state felt appropriate rather than intrusive.</div><div class="likert-line" id="likert-post-r5"></div></div>
+      <div class="likert-row"><div class="q-text">27. 当我遇到困难或似乎卡住时，AI 对此作出了回应。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-r1"></div></div>
+      <div class="likert-row"><div class="q-text">28. AI 清楚地表明它注意到了我的不确定、困惑或沮丧。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-r2"></div></div>
+      <div class="likert-row"><div class="q-text">29. 在回应我的困难之后，AI 用不同方式帮助了我。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-r3"></div></div>
+      <div class="likert-row"><div class="q-text">30. AI 的修复或澄清信息让互动感觉更有支持性。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-r4"></div></div>
+      <div class="likert-row"><div class="q-text">31. AI 对我状态的回应是恰当的，而不是令人不适的。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-r5"></div></div>
 
       <div class="section-label">期望满足</div>
-      <div class="likert-row"><div class="q-text">E1. The AI"s level of support matched the level of awareness it appeared to show.</div><div class="likert-line" id="likert-post-e1"></div></div>
-      <div class="likert-row"><div class="q-text">E2. The AI met my expectations for writing support.</div><div class="likert-line" id="likert-post-e2"></div></div>
-      <div class="likert-row"><div class="q-text">E3. The AI appeared more emotionally aware than it was practically helpful.</div><div class="likert-line" id="likert-post-e3"></div></div>
-      <div class="likert-row"><div class="q-text">E4. I felt disappointed when the AI did not provide the help I expected.</div><div class="likert-line" id="likert-post-e4"></div></div>
-      <div class="likert-row"><div class="q-text">E5. The AI"s social responsiveness raised my expectations for better writing help.</div><div class="likert-line" id="likert-post-e5"></div></div>
+      <div class="likert-row"><div class="q-text">32. AI 的支持程度与它表现出的感知能力相匹配。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-e1"></div></div>
+      <div class="likert-row"><div class="q-text">33. AI 满足了我对写作支持的期待。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-e2"></div></div>
+      <div class="likert-row"><div class="q-text">34. AI 表现出的情感感知强于它实际提供的帮助。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-e3"></div></div>
+      <div class="likert-row"><div class="q-text">35. 当 AI 没有提供我期待的帮助时，我感到失望。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-e4"></div></div>
+      <div class="likert-row"><div class="q-text">36. AI 的社交回应性让我期待它能提供更好的写作帮助。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-e5"></div></div>
 
       <div class="section-label">满意度</div>
-      <div class="likert-row"><div class="q-text">F1. I felt frustrated while working with the AI.</div><div class="likert-line" id="likert-post-f1"></div></div>
-      <div class="likert-row"><div class="q-text">F2. The collaborative process with this AI writing assistant was smooth.</div><div class="likert-line" id="likert-post-f2"></div></div>
-      <div class="likert-row"><div class="q-text">F3. I am satisfied with the final email draft created with the AI.</div><div class="likert-line" id="likert-post-f3"></div></div>
-      <div class="likert-row"><div class="q-text">F4. Overall, I am satisfied with the AI writing experience.</div><div class="likert-line" id="likert-post-f4"></div></div>
-      <div class="likert-row"><div class="q-text">F5. I would like to use a writing tool that interacts in this way in the future.</div><div class="likert-line" id="likert-post-f5"></div></div>
+      <div class="likert-row"><div class="q-text">37. 与 AI 协作时，我感到沮丧。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-f1"></div></div>
+      <div class="likert-row"><div class="q-text">38. 与这个 AI 写作助手协作的过程很顺畅。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-f2"></div></div>
+      <div class="likert-row"><div class="q-text">39. 我对通过 AI 完成的最终邮件草稿感到满意。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-f3"></div></div>
+      <div class="likert-row"><div class="q-text">40. 总体而言，我对这次 AI 写作体验感到满意。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-f4"></div></div>
+      <div class="likert-row"><div class="q-text">41. 未来我愿意使用以这种方式互动的写作工具。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-f5"></div></div>
 
       <div class="section-label">反馈</div>
-      <div class="likert-row"><div class="q-text">M1. The AI seemed to respond to my emotional or facial-expression cues.</div><div class="likert-line" id="likert-post-m1"></div></div>
-      <div class="likert-row"><div class="q-text">M2. I thought the webcam was used to adapt the AI"s responses.</div><div class="likert-line" id="likert-post-m2"></div></div>
-      <div class="likert-row"><div class="q-text">M3. The AI seemed to change its strategy when I looked confused, hesitant, or frustrated.</div><div class="likert-line" id="likert-post-m3"></div></div>
-      <div class="likert-row"><div class="q-text">M4. At any specific moment, did you realize or suspect that the AI was responding to your facial expressions? If yes, please describe.</div><textarea name="post-m4" rows="3" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;font-family:inherit;resize:vertical"></textarea></div>
-      <div class="likert-row"><div class="q-text">M5. What did the AI do after you seemed confused, hesitant, or frustrated?</div><textarea name="post-m5" rows="3" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;font-family:inherit;resize:vertical"></textarea></div>
+      <div class="likert-row"><div class="q-text">42. AI 似乎会回应我的情绪或面部表情线索。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-m1"></div></div>
+      <div class="likert-row"><div class="q-text">43. 我认为摄像头被用于调整 AI 的回应。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-m2"></div></div>
+      <div class="likert-row"><div class="q-text">44. 当我看起来困惑、犹豫或沮丧时，AI 似乎会改变策略。<span class="required-star">*</span></div><div class="likert-line" id="likert-post-m3"></div></div>
+      <div class="likert-row"><div class="q-text">45. 在某个具体时刻，你是否意识到或怀疑 AI 正在回应你的面部表情？如果有，请描述。</div><textarea name="post-m4" rows="3" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;font-family:inherit;resize:vertical"></textarea></div>
+      <div class="likert-row"><div class="q-text">46. 当你看起来困惑、犹豫或沮丧之后，AI 做了什么？</div><textarea name="post-m5" rows="3" style="margin-top:8px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;width:100%;font-size:.9em;font-family:inherit;resize:vertical"></textarea></div>
 
       <button type="submit" class="btn-primary" style="margin-top:24px">提交问卷</button>
     </form>

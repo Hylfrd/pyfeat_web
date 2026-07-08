@@ -811,6 +811,57 @@ button.success:hover {
   font-weight: 650;
 }
 
+.survey-results {
+  display: grid;
+  gap: 10px;
+}
+
+.survey-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+
+.survey-item.open {
+  display: block;
+}
+
+.survey-question {
+  color: var(--text-strong);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.survey-answer {
+  min-width: 42px;
+  color: var(--text-strong);
+  font-size: 18px;
+  font-weight: 760;
+  text-align: right;
+}
+
+.survey-text-answer {
+  min-height: 0;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 12px 14px;
+  color: var(--text);
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.survey-text-answer.empty {
+  min-height: 72px;
+}
+
 .info-card .val {
   display: inline;
   flex: 0 0 auto;

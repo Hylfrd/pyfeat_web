@@ -295,7 +295,7 @@ class PostTaskSurvey(Base):
     m1_responded_to_emotion: Mapped[Optional[int]] = Column(Integer, nullable=True)
     m2_webcam_adapted: Mapped[Optional[int]] = Column(Integer, nullable=True)
     m3_changed_strategy: Mapped[Optional[int]] = Column(Integer, nullable=True)
-    m4_suspected_adaptation: Mapped[Optional[int]] = Column(Integer, nullable=True)
+    m4_suspected_adaptation: Mapped[Optional[str]] = Column(Text, nullable=True)
     m5_open_response: Mapped[Optional[str]] = Column(Text, nullable=True)
 
     created_at: Mapped[str] = Column(String, default=lambda: datetime.utcnow().isoformat())

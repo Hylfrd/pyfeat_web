@@ -2,7 +2,7 @@ import './style.css';
 import { $, escapeHtml } from '../shared/dom.js';
 
 // ── DOM refs ──
-const views = ['setup-view','pre-survey-view','queue-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view','duplicate-tab-view'];
+const views = ['setup-view','pre-survey-view','queue-view','baseline-view','task-view','questionnaire-view','complete-view','duplicate-tab-view'];
 function showView(id){
   views.forEach(v=>$(v).classList.add('hidden'));
   $(id).classList.remove('hidden');
@@ -287,6 +287,7 @@ function clearToasts(kind){
 }
 
 // ── Participant debug panel ──
+const DEBUG_PANEL_ENABLED = false;
 let debugFrameStats = [];
 function debugEl(id){return document.getElementById(id)}
 function debugTime(){
@@ -303,6 +304,7 @@ function percentile(values,pct){
   return sorted[index];
 }
 function updateDebugMetrics(){
+  if(!DEBUG_PANEL_ENABLED)return;
   const waits=debugFrameStats.map(item=>item.queued_ms);
   const runs=debugFrameStats.map(item=>item.elapsed_ms);
   const timeouts=debugFrameStats.filter(item=>item.drop_reason==='queue_timeout').length;
@@ -319,6 +321,7 @@ function setDebugStatus(text,tone=''){
   el.className=tone;
 }
 function appendDebugLog(kind,msg={}){
+  if(!DEBUG_PANEL_ENABLED)return;
   const log=debugEl('debug-log');
   if(!log)return;
   const queuedRaw=Number(msg.queued_ms||0);
@@ -349,6 +352,7 @@ function isDroppedFrameStatus(msg={}){
   return ['queue_timeout','scheduler_stop','pyfeat_run_timeout'].includes(msg.drop_reason||'');
 }
 function renderDebugSlot(data={}){
+  if(!DEBUG_PANEL_ENABLED)return;
   debugEl('debug-participant').textContent=participantId||'-';
   debugEl('debug-session').textContent=currentSessionId?`#${currentSessionId}`:'-';
   debugEl('debug-stage').textContent=currentStage||'-';
@@ -363,6 +367,7 @@ function renderDebugSlot(data={}){
   debugEl('debug-lanes').textContent=[...activeText,...queuedText].join(' | ')||'No active experiment slots.';
 }
 async function refreshDebugStatus(){
+  if(!DEBUG_PANEL_ENABLED)return;
   renderDebugSlot({});
   if(!participantId||!currentSessionId)return;
   try{
@@ -371,11 +376,13 @@ async function refreshDebugStatus(){
   }catch(err){}
 }
 function startDebugStatus(){
+  if(!DEBUG_PANEL_ENABLED)return;
   if(debugStatusTimer)return;
   refreshDebugStatus();
   debugStatusTimer=setInterval(refreshDebugStatus,1000);
 }
 function stopDebugStatus(){
+  if(!DEBUG_PANEL_ENABLED)return;
   if(debugStatusTimer){clearInterval(debugStatusTimer);debugStatusTimer=null}
 }
 debugEl('participant-debug-toggle')?.addEventListener('click',()=>{
@@ -386,7 +393,8 @@ debugEl('participant-debug-toggle')?.addEventListener('click',()=>{
 document.querySelectorAll('.likert-line').forEach(row=>{
   for(let v=1;v<=7;v++){
     const lbl=document.createElement('label');lbl.className='likert-dot';
-    lbl.innerHTML=`<input type="radio" name="${row.id}" value="${v}" required><div class="dot"></div><span class="dot-label">${v}</span>`;
+    const label=v===1?'1 - 非常不同意':(v===7?'非常同意 - 7':String(v));
+    lbl.innerHTML=`<input type="radio" name="${row.id}" value="${v}"><div class="dot"></div><span class="dot-label">${label}</span>`;
     row.appendChild(lbl);
   }
 });
@@ -909,6 +917,7 @@ async function resumeProgress(saved){
   currentCondition=saved.currentCondition;
   currentStage=saved.currentStage||'setup-view';
   if(currentStage==='break-view')currentStage='complete-view';
+  if(currentStage==='post-survey-view')currentStage='questionnaire-view';
   turnCounter=saved.turnCounter||0;
   revisionCounter=saved.revisionCounter||0;
   taskStartTime=restoreTaskStartTime(saved);
@@ -1513,16 +1522,77 @@ async function doFinalSubmit(isTimeout){
 }
 
 // ── Questionnaire ──
+function markMissingAnswer(el){
+  const row=el?.closest?.('.likert-row')||el;
+  toast('您有未作答的题目');
+  row?.classList.add('missing');
+  row?.scrollIntoView({behavior:'smooth',block:'center'});
+  if(el&&typeof el.focus==='function')setTimeout(()=>el.focus({preventScroll:true}),250);
+  setTimeout(()=>row?.classList.remove('missing'),2200);
+}
+
+function checkedLikert(id){
+  return document.querySelector(`#${id} input:checked`)?.value||'';
+}
+
+function requireInput(selector){
+  const el=document.querySelector(selector);
+  if(!el)return '';
+  const value=(el.value||'').trim();
+  if(!value)markMissingAnswer(el);
+  return value;
+}
+
+function requireLikert(id){
+  const value=checkedLikert(id);
+  if(!value)markMissingAnswer(document.getElementById(id));
+  return value;
+}
+
 $('q-form').addEventListener('submit',async e=>{
   e.preventDefault();
-  const f=new FormData();f.append('session_id',currentSessionId);
-  for(let i=1;i<=10;i++){
-    const v=document.querySelector(`input[name="likert-q${i}"]:checked`)?.value;
-    if(!v){toast('请完成所有 10 道题目。');return;}
-    f.append(`q${i}`,v);
+
+  const qFields=Array.from({length:10},(_,i)=>[`q${i+1}`,`likert-q${i+1}`]);
+  const postFields=[
+    ['u1','likert-post-u1'],['u2','likert-post-u2'],['u3','likert-post-u3'],['u4','likert-post-u4'],['u5','likert-post-u5'],
+    ['s1','likert-post-s1'],['s2','likert-post-s2'],['s3','likert-post-s3'],['s4','likert-post-s4'],['s5','likert-post-s5'],
+    ['sp1','likert-post-sp1'],['sp2','likert-post-sp2'],['sp3','likert-post-sp3'],
+    ['cp1','likert-post-cp1'],['cp2','likert-post-cp2'],['cp3','likert-post-cp3'],
+    ['r1','likert-post-r1'],['r2','likert-post-r2'],['r3','likert-post-r3'],['r4','likert-post-r4'],['r5','likert-post-r5'],
+    ['e1','likert-post-e1'],['e2','likert-post-e2'],['e3','likert-post-e3'],['e4','likert-post-e4'],['e5','likert-post-e5'],
+    ['f1','likert-post-f1'],['f2','likert-post-f2'],['f3','likert-post-f3'],['f4','likert-post-f4'],['f5','likert-post-f5'],
+    ['m1','likert-post-m1'],['m2','likert-post-m2'],['m3','likert-post-m3'],
+  ];
+
+  const questionnaireData=new URLSearchParams();
+  questionnaireData.append('session_id',currentSessionId);
+  for(const [key,id] of qFields){
+    const value=requireLikert(id);
+    if(!value)return;
+    questionnaireData.append(key,value);
   }
-  await fetch('/api/questionnaire',{method:'POST',body:f});
-  setStage('post-survey-view');
+
+  const postData=new URLSearchParams();
+  postData.append('session_id',currentSessionId);
+  for(const [key,id] of postFields){
+    const value=requireLikert(id);
+    if(!value)return;
+    postData.append(key,value);
+  }
+  postData.append('m4',document.querySelector('[name="post-m4"]')?.value||'');
+  postData.append('m5',document.querySelector('[name="post-m5"]')?.value||'');
+
+  try{
+    const questionnaireR=await fetch('/api/questionnaire',{method:'POST',body:questionnaireData});
+    if(!questionnaireR.ok){const d=await questionnaireR.json();throw new Error(d.detail||questionnaireR.statusText)}
+    const postR=await fetch('/api/post-survey',{method:'POST',body:postData});
+    if(!postR.ok){const d=await postR.json();throw new Error(d.detail||postR.statusText)}
+  }catch(err){
+    toast('保存问卷失败，请重试。' + (err.message ? ` ${err.message}` : ''),5000);
+    return;
+  }
+  setStage('complete-view');
+  writeProgress({completed:true});
 });
 
 // ── Pre-Survey Submit ──
@@ -1530,9 +1600,17 @@ document.getElementById('pre-survey-form').addEventListener('submit', async e =>
   e.preventDefault();
   const f = new FormData();
   f.append('participant_id', participantId);
+  const age=requireInput('[name="pre-a1_age"]');
+  if(!age)return;
+  const gender=requireInput('[name="pre-a2_gender"]');
+  if(!gender)return;
+  const aiFrequency=requireInput('[name="pre-a3_ai_frequency"]');
+  if(!aiFrequency)return;
+  f.append('a1_age', age);
+  f.append('a2_gender', gender);
+  f.append('a3_ai_frequency', aiFrequency);
   const preFields = {
-    a1_age: 'pre-a1_age', a2_gender: 'pre-a2_gender', a3_ai_frequency: 'pre-a3_ai_frequency',
-    a4_ai_experience: 'likert-pre-a4', a5_writing_confidence: 'likert-pre-a5',
+    a4_ai_experience: 'likert-pre-a4',
     a6_ai_tool_confidence: 'likert-pre-a6', a7_email_familiarity: 'likert-pre-a7',
     b1_calm: 'likert-pre-b1', b2_stressed: 'likert-pre-b2', b3_uncertain: 'likert-pre-b3',
     b4_confident: 'likert-pre-b4', b5_ready: 'likert-pre-b5', b6_webcam_comfort: 'likert-pre-b6',
@@ -1545,14 +1623,10 @@ document.getElementById('pre-survey-form').addEventListener('submit', async e =>
     if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
       f.append(key, el.value);
     } else {
-      const checked = el.querySelector('input:checked');
-      f.append(key, checked ? checked.value : '');
+      const value = requireLikert(elementId);
+      if(!value)return;
+      f.append(key, value);
     }
-  }
-  // Also get text input/select values for A1-A3
-  for (const name of ['pre-a1_age', 'pre-a2_gender', 'pre-a3_ai_frequency']) {
-    const el = document.querySelector(`[name="${name}"]`);
-    if (el) f.append(name.replace('pre-', ''), el.value);
   }
   try {
     const r = await fetch('/api/pre-survey', {method:'POST', body: new URLSearchParams(f)});
@@ -1566,44 +1640,6 @@ document.getElementById('pre-survey-form').addEventListener('submit', async e =>
   }catch(err){
     toast('无法进入实验队列，请稍后重试。' + (err.message ? ` ${err.message}` : ''), 5000);
   }
-});
-
-// ── Post-Survey Submit ──
-document.getElementById('post-survey-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const f = new FormData();
-  f.append('session_id', currentSessionId);
-  const postFields = [
-    'u1','u2','u3','u4','u5',
-    's1','s2','s3','s4','s5',
-    'sp1','sp2','sp3',
-    'cp1','cp2','cp3',
-    'r1','r2','r3','r4','r5',
-    'e1','e2','e3','e4','e5',
-    'f1','f2','f3','f4','f5',
-    'm1','m2','m3','m4','m5'
-  ];
-  for (const key of postFields) {
-    const el = document.querySelector(`[name="post-${key}"]`);
-    if (el) {
-      f.append(key, el.value || '');
-      continue;
-    }
-    const likertEl = document.getElementById('likert-post-' + key);
-    if (likertEl) {
-      const checked = likertEl.querySelector('input:checked');
-      f.append(key, checked ? checked.value : '');
-    }
-  }
-  try {
-    const r = await fetch('/api/post-survey', {method:'POST', body: new URLSearchParams(f)});
-    if (!r.ok) { const d = await r.json(); throw new Error(d.detail || r.statusText); }
-  } catch(err) {
-    toast('保存结束问卷失败，请重试。' + (err.message ? ` ${err.message}` : ''), 5000);
-    return;
-  }
-  setStage('complete-view');
-  writeProgress({completed:true});
 });
 
 // ── Setup ──

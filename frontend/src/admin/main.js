@@ -1,7 +1,7 @@
 import './style.css';
 import { $, escapeHtml as escHtml } from '../shared/dom.js';
 import { createDebugConsole } from './debugConsole.js';
-import { renderBaseline, renderChat, renderExpression, renderOverview } from './sessionViews.js';
+import { renderBaseline, renderChat, renderExpression, renderOverview, renderSurvey } from './sessionViews.js';
 import { createSessionActions } from './sessionActions.js';
 
 let sessions = [];
@@ -286,6 +286,7 @@ function renderActiveTab() {
   if (activeTab === 'chat') renderChat(exp);
   if (activeTab === 'expression') renderExpression(exp, st);
   if (activeTab === 'baseline') renderBaseline(exp);
+  if (activeTab === 'survey') renderSurvey(exp);
 }
 
 function bindAdminEvents() {

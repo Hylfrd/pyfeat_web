@@ -332,7 +332,7 @@ def create_experiment_router(
         f1: int = Form(None), f2: int = Form(None), f3: int = Form(None),
         f4: int = Form(None), f5: int = Form(None),
         m1: int = Form(None), m2: int = Form(None), m3: int = Form(None),
-        m4: int = Form(None), m5: str = Form(""),
+        m4: str = Form(""), m5: str = Form(""),
     ):
         """Submit post-task survey."""
         values = {

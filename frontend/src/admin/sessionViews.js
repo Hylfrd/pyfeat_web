@@ -16,7 +16,6 @@ function writeDetail(html){
 export function renderOverview(exp,st){
   const s=exp.session;
   const p=exp.participant||{};
-  const q=exp.questionnaire;
   const evals=exp.evaluations||[];
   const dur=s.duration_ms?Math.floor(s.duration_ms/1000):0;
   const durStr=dur?`${Math.floor(dur/60)}分${dur%60}秒`:'-';
@@ -85,24 +84,6 @@ export function renderOverview(exp,st){
     html+=`</div></div>`;
   }
 
-  // Questionnaire
-  if(q){
-    html+=`<div class="detail-section"><h3>问卷结果</h3>
-      <div class="info-grid">
-        <div class="info-card"><div class="lbl">Q1 理解目标</div><div class="val mono">${q.q1||'-'}</div></div>
-        <div class="info-card"><div class="lbl">Q2 同一频道</div><div class="val mono">${q.q2||'-'}</div></div>
-        <div class="info-card"><div class="lbl">Q3 了解需求</div><div class="val mono">${q.q3||'-'}</div></div>
-        <div class="info-card"><div class="lbl">Q4 连接感</div><div class="val mono">${q.q4||'-'}</div></div>
-        <div class="info-card"><div class="lbl">Q5 有收获</div><div class="val mono">${q.q5||'-'}</div></div>
-        <div class="info-card"><div class="lbl">Q6 有兴趣</div><div class="val mono">${q.q6||'-'}</div></div>
-        <div class="info-card"><div class="lbl">Q7 值得</div><div class="val mono">${q.q7||'-'}</div></div>
-        <div class="info-card"><div class="lbl">Q8 沮丧 [R]</div><div class="val mono">${q.q8||'-'}</div></div>
-        <div class="info-card"><div class="lbl">Q9 困惑 [R]</div><div class="val mono">${q.q9||'-'}</div></div>
-        <div class="info-card"><div class="lbl">Q10 费力 [R]</div><div class="val mono">${q.q10||'-'}</div></div>
-      </div>
-    </div>`;
-  }
-
   // Final email
   if(s.final_email){
     html+=`<div class="detail-section"><h3>最终草稿</h3>
@@ -125,6 +106,76 @@ export function renderOverview(exp,st){
     html+=`</div>`;
   }
 
+  writeDetail(html);
+}
+
+const PRE_SURVEY_ITEMS = [
+  ['a1_age','1. 年龄'],
+  ['a2_gender','2. 性别'],
+  ['a3_ai_frequency','3. 你使用 ChatGPT 或类似 AI 工具的频率是？'],
+  ['a4_ai_experience','4. 我有使用 AI 工具进行写作或修改文本的经验。'],
+  ['a6_ai_tool_confidence','5. 我有信心使用 AI 工具来辅助写作任务。'],
+  ['a7_email_familiarity','6. 我熟悉如何给教授或授课教师写邮件。'],
+  ['b1_calm','7. 我现在感到平静。'],
+  ['b2_stressed','8. 我现在感到精神压力较大。'],
+  ['b3_uncertain','9. 我对即将开始的写作任务感到不确定。'],
+  ['b4_confident','10. 我有信心成功完成这项写作任务。'],
+  ['b5_ready','11. 我已经做好开始任务的心理准备。'],
+  ['b6_webcam_comfort','12. 我能接受在本研究过程中开启摄像头。'],
+  ['c1_expect_helpful','13. 我预计 AI 系统能有效帮助我完成写作任务。'],
+  ['c2_expect_understand','14. 我预计 AI 系统能理解我的写作需求。'],
+  ['c3_expect_easy','15. 我预计 AI 系统能让写作过程变得更轻松。'],
+  ['c4_expect_collaborative','16. 我预计与 AI 的互动会有协作感。'],
+];
+
+const POST_SURVEY_ITEMS = [
+  ['q1','1. AI 理解了我试图达成的目标。'],['q2','2. AI 和我在同一频道上。'],['q3','3. AI 知道我在交互中需要什么。'],['q4','4. AI 与我建立了连接感。'],
+  ['q5','5. 这次体验让我感到有收获。'],['q6','6. 我对这次体验感到有兴趣。'],['q7','7. 这次体验是值得的。'],
+  ['q8','8. 使用这个助手让我感到沮丧。'],['q9','9. 我觉得这个助手让人困惑。'],['q10','10. 使用这个助手让我感到脑力消耗很大。'],
+  ['u1','11. AI 系统似乎理解我在写作任务中的需求。'],['u2','12. AI 似乎意识到了我在写作过程中的困难、犹豫或困惑。'],['u3','13. AI 的回应方式符合我的写作意图。'],['u4','14. 当我卡住或需要其他帮助时，AI 注意到了这一点。'],['u5','15. AI 的回复与我当时的想法和意图保持一致。'],
+  ['s1','16. 在写作过程中，我感到受到了 AI 的支持。'],['s2','17. 当我不确定如何继续时，AI 提供了有用的指导。'],['s3','18. AI 帮助我减少了修改邮件所需的精力。'],['s4','19. AI 提供了具体建议，帮助改进了我的草稿。'],['s5','20. AI 帮助我高效完成了写作任务。'],
+  ['sp1','21. AI 在互动中显得具有社交回应性。'],['sp2','22. AI 给人的感觉更像是积极的互动伙伴，而不仅仅是文本生成器。'],['sp3','23. 与 AI 的互动让我感到有社交参与感。'],
+  ['cp1','24. 我感觉 AI 在写作任务中是“和我一起”的。'],['cp2','25. AI 似乎意识到我正在如何推进任务。'],['cp3','26. 我感到自己和 AI 之间存在一种相互感知。'],
+  ['r1','27. 当我遇到困难或似乎卡住时，AI 对此作出了回应。'],['r2','28. AI 清楚地表明它注意到了我的不确定、困惑或沮丧。'],['r3','29. 在回应我的困难之后，AI 用不同方式帮助了我。'],['r4','30. AI 的修复或澄清信息让互动感觉更有支持性。'],['r5','31. AI 对我状态的回应是恰当的，而不是令人不适的。'],
+  ['e1','32. AI 的支持程度与它表现出的感知能力相匹配。'],['e2','33. AI 满足了我对写作支持的期待。'],['e3','34. AI 表现出的情感感知强于它实际提供的帮助。'],['e4','35. 当 AI 没有提供我期待的帮助时，我感到失望。'],['e5','36. AI 的社交回应性让我期待它能提供更好的写作帮助。'],
+  ['f1','37. 与 AI 协作时，我感到沮丧。'],['f2','38. 与这个 AI 写作助手协作的过程很顺畅。'],['f3','39. 我对通过 AI 完成的最终邮件草稿感到满意。'],['f4','40. 总体而言，我对这次 AI 写作体验感到满意。'],['f5','41. 未来我愿意使用以这种方式互动的写作工具。'],
+  ['m1','42. AI 似乎会回应我的情绪或面部表情线索。'],['m2','43. 我认为摄像头被用于调整 AI 的回应。'],['m3','44. 当我看起来困惑、犹豫或沮丧时，AI 似乎会改变策略。'],
+  ['m4','45. 在某个具体时刻，你是否意识到或怀疑 AI 正在回应你的面部表情？如果有，请描述。','text'],
+  ['m5','46. 当你看起来困惑、犹豫或沮丧之后，AI 做了什么？','text'],
+];
+
+function surveyValue(data,key){
+  const value=data?.[key];
+  return value===undefined||value===null||value==='' ? '' : String(value);
+}
+
+function renderSurveyItems(items,data){
+  return items.map(([key,question,type])=>{
+    const value=surveyValue(data,key);
+    if(type==='text'){
+      return `<div class="survey-item open">
+        <div class="survey-question">${escHtml(question)}</div>
+        <div class="survey-text-answer ${value?'':'empty'}">${escHtml(value)}</div>
+      </div>`;
+    }
+    return `<div class="survey-item">
+      <div class="survey-question">${escHtml(question)}</div>
+      <div class="survey-answer">${value?escHtml(value):'-'}</div>
+    </div>`;
+  }).join('');
+}
+
+export function renderSurvey(exp){
+  const pre=exp.pre_survey||null;
+  const post={...(exp.questionnaire||{}),...(exp.post_survey||{})};
+  const html=`<div class="detail-section survey-results">
+    <h3>问卷前</h3>
+    ${pre?renderSurveyItems(PRE_SURVEY_ITEMS,pre):'<div class="loading">暂无问卷前数据</div>'}
+  </div>
+  <div class="detail-section survey-results">
+    <h3>问卷后</h3>
+    ${(exp.questionnaire||exp.post_survey)?renderSurveyItems(POST_SURVEY_ITEMS,post):'<div class="loading">暂无问卷后数据</div>'}
+  </div>`;
   writeDetail(html);
 }
 
