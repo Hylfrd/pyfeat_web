@@ -12,21 +12,7 @@ let refreshTimer = null;
 
 const THEME_KEY = 'admin-theme';
 
-function showDeviceNoticeIfNeeded() {
-  const ua = navigator.userAgent || '';
-  const platform = navigator.platform || '';
-  const touchPoints = navigator.maxTouchPoints || 0;
-  const mobileLike = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua);
-  const iPadDesktopUa = /Macintosh/i.test(ua) && touchPoints > 1;
-  const desktopPlatform = /Win32|Win64|Windows|MacIntel|Linux x86_64|Linux i686/i.test(platform);
-  const isDesktop = desktopPlatform && !mobileLike && !iPadDesktopUa;
-  if (!isDesktop) {
-    document.documentElement.classList.add('device-blocked');
-    $('device-notice')?.classList.remove('hidden');
-    return true;
-  }
-  return false;
-}
+const DEVICE_BLOCKED = window.matchMedia('(max-width: 899px), (hover: none) and (pointer: coarse)').matches;
 
 function setTheme(theme) {
   const next = theme === 'dark' ? 'dark' : 'light';
@@ -366,7 +352,6 @@ function handleAdminChange(e) {
   }
 }
 
-const DEVICE_BLOCKED = showDeviceNoticeIfNeeded();
 if (!DEVICE_BLOCKED) {
   bindAdminEvents();
   initTheme();

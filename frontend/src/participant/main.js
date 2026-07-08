@@ -36,22 +36,7 @@ let draftActionCounter=0;
 const draftActionText=new Map();
 document.documentElement.dataset.stage=currentStage;
 
-function showDeviceNoticeIfNeeded(){
-  const ua=navigator.userAgent||'';
-  const platform=navigator.platform||'';
-  const touchPoints=navigator.maxTouchPoints||0;
-  const mobileLike=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua);
-  const iPadDesktopUa=/Macintosh/i.test(ua)&&touchPoints>1;
-  const desktopPlatform=/Win32|Win64|Windows|MacIntel|Linux x86_64|Linux i686/i.test(platform);
-  const isDesktop=desktopPlatform&&!mobileLike&&!iPadDesktopUa;
-  if(!isDesktop){
-    document.documentElement.classList.add('device-blocked');
-    $('device-notice')?.classList.remove('hidden');
-    return true;
-  }
-  return false;
-}
-const DEVICE_BLOCKED=showDeviceNoticeIfNeeded();
+const DEVICE_BLOCKED=window.matchMedia('(max-width: 899px), (hover: none) and (pointer: coarse)').matches;
 
 function readProgress(){
   try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){return null}
