@@ -19,7 +19,7 @@ from sqlalchemy import (
     Column, Integer, String, Float, Boolean, Text, DateTime,
     ForeignKey, create_engine, event, text,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, relationship, sessionmaker
 
 
 # ── Base ────────────────────────────────────────────────────────────
@@ -302,17 +302,27 @@ class PostTaskSurvey(Base):
 
 # ── Engine helper ──────────────────────────────────────────────────
 
-def init_db(db_path: str = "data/experiment.db") -> Session:
-    """Create tables and return a session. Overwrite-safe (create_all is idempotent)."""
+def init_session_factory(db_path: str = "data/experiment.db"):
+    """Create tables and return a session factory.
+
+    SQLAlchemy Session objects are not safe to share between concurrent requests,
+    so the FastAPI app keeps this factory globally and opens short-lived sessions
+    around each database operation.
+    """
     import os
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
-    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        echo=False,
+        connect_args={"timeout": 30},
+    )
 
     # Enable WAL mode for concurrent reads
     @event.listens_for(engine, "connect")
     def _set_wal(dbapi_conn, _):
         dbapi_conn.execute("PRAGMA journal_mode=WAL")
+        dbapi_conn.execute("PRAGMA busy_timeout=30000")
 
     Base.metadata.create_all(engine)
     # Small migrations for existing SQLite databases.
@@ -329,5 +339,9 @@ def init_db(db_path: str = "data/experiment.db") -> Session:
                 conn.commit()
     except Exception:
         pass  # non-critical migration
-    from sqlalchemy.orm import Session as DBSession
-    return DBSession(engine)
+    return sessionmaker(bind=engine, expire_on_commit=False)
+
+
+def init_db(db_path: str = "data/experiment.db") -> Session:
+    """Create tables and return a standalone session for compatibility."""
+    return init_session_factory(db_path)()

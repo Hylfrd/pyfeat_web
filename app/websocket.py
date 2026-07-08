@@ -25,7 +25,7 @@ from .websocket_utils import (
 )
 
 
-def create_websocket_router(db_session, expression_engine, selectors, ai_client) -> APIRouter:
+def create_websocket_router(db_session_factory, expression_engine, selectors, ai_client) -> APIRouter:
     router = APIRouter()
     active_connections: dict[str, WebSocket] = {}
 
@@ -49,6 +49,7 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
         unreliable_frames: int = 0
         no_face_prompt_sent: bool = False
         socket_alive: bool = True
+        pending_expression_frames: list[ExpressionFrame] = []
 
         async def safe_send(payload: dict) -> bool:
             nonlocal socket_alive
@@ -64,10 +65,20 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
         async def ensure_session_exists() -> bool:
             if not current_session_id:
                 return True
-            if db_session.query(Session).get(current_session_id):
+            with db_session_factory() as db_session:
+                exists = db_session.query(Session).get(current_session_id) is not None
+            if exists:
                 return True
             await safe_send({"type": "session_missing"})
             return False
+
+        def flush_expression_frames() -> None:
+            if not pending_expression_frames:
+                return
+            with db_session_factory() as db_session:
+                db_session.add_all(pending_expression_frames)
+                db_session.commit()
+            pending_expression_frames.clear()
 
         try:
             while True:
@@ -78,23 +89,28 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
 
                     if msg_type == "session_init":
                         current_session_id = msg.get("session_id")
-                        session = db_session.query(Session).get(current_session_id)
-                        if not session:
-                            await safe_send({"type": "session_missing"})
-                            continue
+                        with db_session_factory() as db_session:
+                            session = db_session.query(Session).get(current_session_id)
+                            if not session:
+                                await safe_send({"type": "session_missing"})
+                                continue
+                            logs = (
+                                db_session.query(ChatLog)
+                                .filter(ChatLog.session_id == current_session_id)
+                                .order_by(ChatLog.seq)
+                                .all()
+                            )
+                            chat_history, turn_counter, revision_counter = chat_state_from_logs(logs)
+                            sync_payload = chat_sync_payload(
+                                logs,
+                                session,
+                                turn_counter,
+                                revision_counter,
+                                current_session_id,
+                            )
                         touch_session(participant_id, current_session_id)
-                        logs = (
-                            db_session.query(ChatLog)
-                            .filter(ChatLog.session_id == current_session_id)
-                            .order_by(ChatLog.seq)
-                            .all()
-                        )
-                        chat_history, turn_counter, revision_counter = chat_state_from_logs(logs)
                         await websocket.send_text(json.dumps({"type": "ready"}))
-                        await websocket.send_text(json.dumps(
-                            chat_sync_payload(logs, session, turn_counter, revision_counter, current_session_id),
-                            ensure_ascii=False,
-                        ))
+                        await websocket.send_text(json.dumps(sync_payload, ensure_ascii=False))
 
                     elif msg_type == "baseline_reset":
                         baseline_count = 0
@@ -150,15 +166,16 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             })
                             continue
 
-                        p = db_session.query(Participant).get(participant_id)
-                        if p:
-                            p.baseline_au1 = baseline.au1_mean
-                            p.baseline_au4 = baseline.au4_mean
-                            p.baseline_au7 = baseline.au7_mean
-                            p.baseline_au12 = baseline.au12_mean
-                            p.baseline_frame_count = baseline.frame_count
-                            p.baseline_artifact_count = baseline.artifact_count
-                            db_session.commit()
+                        with db_session_factory() as db_session:
+                            p = db_session.query(Participant).get(participant_id)
+                            if p:
+                                p.baseline_au1 = baseline.au1_mean
+                                p.baseline_au4 = baseline.au4_mean
+                                p.baseline_au7 = baseline.au7_mean
+                                p.baseline_au12 = baseline.au12_mean
+                                p.baseline_frame_count = baseline.frame_count
+                                p.baseline_artifact_count = baseline.artifact_count
+                                db_session.commit()
 
                         baseline_count = 0
                         await safe_send({
@@ -238,7 +255,7 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             })
 
                         if current_session_id and au_frame:
-                            db_session.add(ExpressionFrame(
+                            pending_expression_frames.append(ExpressionFrame(
                                 session_id=current_session_id,
                                 timestamp=au_frame.timestamp,
                                 au1=au_frame.au1, au4=au_frame.au4,
@@ -249,8 +266,8 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                                 face_detected=au_frame.face_detected,
                                 reliable=au_frame.reliable,
                             ))
-                            if total_frames % 10 == 0:
-                                db_session.commit()
+                            if len(pending_expression_frames) >= 10:
+                                flush_expression_frames()
 
                     elif msg_type == "chat":
                         if not await ensure_session_exists():
@@ -305,15 +322,16 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             })
 
                         if current_session_id:
-                            db_session.add(ChatLog(
-                                session_id=current_session_id,
-                                seq=turn_counter * 2 - 1,
-                                role="user",
-                                content=user_text,
-                                timestamp=utc_timestamp(),
-                                expression_label=expression_engine.get_expression_label(participant_id),
-                            ))
-                            db_session.commit()
+                            with db_session_factory() as db_session:
+                                db_session.add(ChatLog(
+                                    session_id=current_session_id,
+                                    seq=turn_counter * 2 - 1,
+                                    role="user",
+                                    content=user_text,
+                                    timestamp=utc_timestamp(),
+                                    expression_label=expression_engine.get_expression_label(participant_id),
+                                ))
+                                db_session.commit()
 
                         ai_started = time.perf_counter()
                         try:
@@ -377,15 +395,16 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
                             revision_counter += 1
 
                         if current_session_id:
-                            db_session.add(ChatLog(
-                                session_id=current_session_id,
-                                seq=turn_counter * 2,
-                                role="ai",
-                                content=ai_response_text,
-                                timestamp=utc_timestamp(),
-                                strategy_applied=strategy_name,
-                            ))
-                            db_session.commit()
+                            with db_session_factory() as db_session:
+                                db_session.add(ChatLog(
+                                    session_id=current_session_id,
+                                    seq=turn_counter * 2,
+                                    role="ai",
+                                    content=ai_response_text,
+                                    timestamp=utc_timestamp(),
+                                    strategy_applied=strategy_name,
+                                ))
+                                db_session.commit()
 
                         chat_history.append(ChatMessage(role="user", content=user_text))
                         chat_history.append(ChatMessage(role="ai", content=ai_response_text))
@@ -422,7 +441,7 @@ def create_websocket_router(db_session, expression_engine, selectors, ai_client)
         finally:
 
             try:
-                db_session.commit()
+                flush_expression_frames()
             except Exception:
                 pass
             active_connections.pop(participant_id, None)

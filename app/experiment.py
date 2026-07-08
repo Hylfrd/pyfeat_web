@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from sqlalchemy.exc import IntegrityError
 
 from .database import (
     ChatLog, Participant, PostTaskSurvey, PreTaskSurvey, Questionnaire, Session,
@@ -17,7 +18,7 @@ from .strategy import StrategySelector
 
 def create_experiment_router(
     root_dir: Path,
-    db_session,
+    db_session_factory,
     expression_engine,
     selectors,
     eval_ai_client,
@@ -27,67 +28,74 @@ def create_experiment_router(
     GROUPS = ["A", "B"]
     FIFTEEN_MINUTES = 15 * 60
 
-    def _generate_participant_id() -> tuple[str, str]:
+    def _generate_participant_id(db_session) -> tuple[str, str]:
         """Auto-generate sequential participant ID and balanced order group.
 
         Returns (participant_id, order_group).
         Groups are assigned cyclically across the two retained conditions.
         """
-        last = db_session.query(Participant).order_by(Participant.id.desc()).first()
-        if last and last.id.startswith("P"):
+        participant_ids = db_session.query(Participant.id).filter(Participant.id.like("P%")).all()
+        numbers = []
+        for (participant_id,) in participant_ids:
             try:
-                n = int(last.id[1:]) + 1
-            except ValueError:
-                n = 1
-        else:
-            n = 1
+                numbers.append(int(participant_id[1:]))
+            except (TypeError, ValueError):
+                continue
+        n = (max(numbers) + 1) if numbers else 1
         order_group = GROUPS[(n - 1) % len(GROUPS)]
         return f"P{n:03d}", order_group
 
     @router.post("/api/session/start")
     async def start_session():
         """Create a new participant (auto-generated ID + balanced group) and session."""
-        participant_id, order_group = _generate_participant_id()
+        for _ in range(5):
+            with db_session_factory() as db_session:
+                participant_id, order_group = _generate_participant_id(db_session)
+                p = Participant(id=participant_id, order_group=order_group, language="zh")
+                db_session.add(p)
 
-        p = Participant(id=participant_id, order_group=order_group, language="zh")
-        db_session.add(p)
+                assigned_condition = "text-only" if order_group == "A" else "affect-aware"
 
-        assigned_condition = "text-only" if order_group == "A" else "affect-aware"
+                session = Session(
+                    participant_id=participant_id,
+                    task_scenario="A",
+                    condition=assigned_condition,
+                    condition_order=1,
+                    start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                )
+                db_session.add(session)
+                try:
+                    db_session.commit()
+                except IntegrityError:
+                    db_session.rollback()
+                    continue
 
-        session = Session(
-            participant_id=participant_id,
-            task_scenario="A",
-            condition=assigned_condition,
-            condition_order=1,
-            start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        )
-        db_session.add(session)
-        db_session.commit()
+                selectors[participant_id] = StrategySelector()
+                return {
+                    "participant_id": participant_id,
+                    "session_id": session.id,
+                    "condition": assigned_condition,
+                    "time_limit_s": FIFTEEN_MINUTES,
+                }
 
-        selectors[participant_id] = StrategySelector()
-
-        return {
-            "participant_id": participant_id,
-            "session_id": session.id,
-            "condition": assigned_condition,
-            "time_limit_s": FIFTEEN_MINUTES,
-        }
+        raise HTTPException(503, "Failed to allocate participant ID. Please retry.")
 
     @router.get("/api/session/status/{session_id}")
     async def session_status(
         session_id: int,
         participant_id: str,
     ):
-        session = db_session.query(Session).get(session_id)
-        if not session or session.participant_id != participant_id:
-            raise HTTPException(404, "Session not found")
-        return {
-            "ok": True,
-            "session_id": session.id,
-            "participant_id": session.participant_id,
-            "completed": session.completed,
-            "activity": get_session_activity(session.id),
-        }
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session or session.participant_id != participant_id:
+                raise HTTPException(404, "Session not found")
+            return {
+                "ok": True,
+                "session_id": session.id,
+                "participant_id": session.participant_id,
+                "completed": session.completed,
+                "activity": get_session_activity(session.id),
+            }
 
     @router.post("/api/session/complete")
     async def complete_session(
@@ -101,20 +109,21 @@ def create_experiment_router(
         unreliable_frames: int = Form(0),
     ):
         """Mark a session as complete and store the final email."""
-        session = db_session.query(Session).get(session_id)
-        if not session:
-            raise HTTPException(404, "Session not found")
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session:
+                raise HTTPException(404, "Session not found")
 
-        session.end_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        session.duration_ms = duration_ms
-        session.completion_type = completion_type
-        session.final_email = final_email
-        session.total_turns = total_turns
-        session.total_revisions = total_revisions
-        session.total_frames = total_frames
-        session.unreliable_frames = unreliable_frames
-        session.completed = True
-        db_session.commit()
+            session.end_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            session.duration_ms = duration_ms
+            session.completion_type = completion_type
+            session.final_email = final_email
+            session.total_turns = total_turns
+            session.total_revisions = total_revisions
+            session.total_frames = total_frames
+            session.unreliable_frames = unreliable_frames
+            session.completed = True
+            db_session.commit()
 
         if eval_ai_client and final_email.strip():
             asyncio.create_task(run_posthoc_evaluation(root_dir, eval_ai_client, session_id, final_email))
@@ -132,14 +141,15 @@ def create_experiment_router(
         q8: int = Form(...), q9: int = Form(...), q10: int = Form(...),
     ):
         """Submit post-task questionnaire."""
-        q = Questionnaire(
-            session_id=session_id,
-            q1_understood=q1, q2_same_page=q2, q3_aware=q3, q4_connected=q4,
-            q5_rewarding=q5, q6_interested=q6, q7_worthwhile=q7,
-            q8_frustrated=q8, q9_confusing=q9, q10_taxing=q10,
-        )
-        db_session.merge(q)
-        db_session.commit()
+        with db_session_factory() as db_session:
+            q = Questionnaire(
+                session_id=session_id,
+                q1_understood=q1, q2_same_page=q2, q3_aware=q3, q4_connected=q4,
+                q5_rewarding=q5, q6_interested=q6, q7_worthwhile=q7,
+                q8_frustrated=q8, q9_confusing=q9, q10_taxing=q10,
+            )
+            db_session.merge(q)
+            db_session.commit()
         return {"ok": True}
 
     @router.get("/api/session/sync/{session_id}")
@@ -148,30 +158,31 @@ def create_experiment_router(
         participant_id: str,
     ):
         """Return the current chat state for participant-side recovery."""
-        session = db_session.query(Session).get(session_id)
-        if not session or session.participant_id != participant_id:
-            raise HTTPException(404, "Session not found")
-        logs = (
-            db_session.query(ChatLog)
-            .filter(ChatLog.session_id == session_id)
-            .order_by(ChatLog.seq)
-            .all()
-        )
-        return {
-            "type": "chat_sync",
-            "messages": [
-                {"role": log.role, "text": log.content}
-                for log in logs
-                if log.role in ("user", "ai")
-            ],
-            "turn": sum(1 for log in logs if log.role == "user"),
-            "revision": sum(
-                1 for log in logs
-                if log.role == "ai" and "[DRAFT_START]" in log.content
-            ),
-            "session_id": session.id,
-            "condition": session.condition,
-        }
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session or session.participant_id != participant_id:
+                raise HTTPException(404, "Session not found")
+            logs = (
+                db_session.query(ChatLog)
+                .filter(ChatLog.session_id == session_id)
+                .order_by(ChatLog.seq)
+                .all()
+            )
+            return {
+                "type": "chat_sync",
+                "messages": [
+                    {"role": log.role, "text": log.content}
+                    for log in logs
+                    if log.role in ("user", "ai")
+                ],
+                "turn": sum(1 for log in logs if log.role == "user"),
+                "revision": sum(
+                    1 for log in logs
+                    if log.role == "ai" and "[DRAFT_START]" in log.content
+                ),
+                "session_id": session.id,
+                "condition": session.condition,
+            }
 
     @router.post("/api/baseline-calibrate")
     async def baseline_calibrate(participant_id: str = Form(...)):
@@ -180,15 +191,16 @@ def create_experiment_router(
         if baseline is None:
             raise HTTPException(400, "No baseline frames collected. Ensure baseline recording completed.")
 
-        p = db_session.query(Participant).get(participant_id)
-        if p:
-            p.baseline_au1 = baseline.au1_mean
-            p.baseline_au4 = baseline.au4_mean
-            p.baseline_au7 = baseline.au7_mean
-            p.baseline_au12 = baseline.au12_mean
-            p.baseline_frame_count = baseline.frame_count
-            p.baseline_artifact_count = baseline.artifact_count
-            db_session.commit()
+        with db_session_factory() as db_session:
+            p = db_session.query(Participant).get(participant_id)
+            if p:
+                p.baseline_au1 = baseline.au1_mean
+                p.baseline_au4 = baseline.au4_mean
+                p.baseline_au7 = baseline.au7_mean
+                p.baseline_au12 = baseline.au12_mean
+                p.baseline_frame_count = baseline.frame_count
+                p.baseline_artifact_count = baseline.artifact_count
+                db_session.commit()
 
         return {
             "ok": True,
@@ -209,9 +221,6 @@ def create_experiment_router(
         c3_expect_easy: int = Form(None), c4_expect_collaborative: int = Form(None),
     ):
         """Submit pre-task survey."""
-        p = db_session.query(Participant).filter(Participant.id == participant_id).first()
-        if not p:
-            raise HTTPException(400, "Participant not found. Complete setup first.")
         values = {
             "a1_age": a1_age, "a2_gender": a2_gender, "a3_ai_frequency": a3_ai_frequency,
             "a4_ai_experience": a4_ai_experience, "a5_writing_confidence": a5_writing_confidence,
@@ -221,18 +230,22 @@ def create_experiment_router(
             "c1_expect_helpful": c1_expect_helpful, "c2_expect_understand": c2_expect_understand,
             "c3_expect_easy": c3_expect_easy, "c4_expect_collaborative": c4_expect_collaborative,
         }
-        s = db_session.query(PreTaskSurvey).filter(PreTaskSurvey.participant_id == participant_id).first()
-        if s:
-            for key, value in values.items():
-                setattr(s, key, value)
-        else:
-            s = PreTaskSurvey(participant_id=participant_id, **values)
-            db_session.add(s)
-        try:
-            db_session.commit()
-        except Exception as e:
-            db_session.rollback()
-            raise HTTPException(400, f"Failed to save pre-task survey: {e}")
+        with db_session_factory() as db_session:
+            p = db_session.query(Participant).filter(Participant.id == participant_id).first()
+            if not p:
+                raise HTTPException(400, "Participant not found. Complete setup first.")
+            s = db_session.query(PreTaskSurvey).filter(PreTaskSurvey.participant_id == participant_id).first()
+            if s:
+                for key, value in values.items():
+                    setattr(s, key, value)
+            else:
+                s = PreTaskSurvey(participant_id=participant_id, **values)
+                db_session.add(s)
+            try:
+                db_session.commit()
+            except Exception as e:
+                db_session.rollback()
+                raise HTTPException(400, f"Failed to save pre-task survey: {e}")
         return {"ok": True}
 
     @router.post("/api/post-survey")
@@ -254,9 +267,6 @@ def create_experiment_router(
         m4: int = Form(None), m5: str = Form(""),
     ):
         """Submit post-task survey."""
-        sess = db_session.query(Session).filter(Session.id == session_id).first()
-        if not sess:
-            raise HTTPException(400, "Session not found.")
         values = {
             "u1_understood_needs": u1, "u2_aware_difficulty": u2, "u3_matched_intent": u3,
             "u4_noticed_stuck": u4, "u5_aligned_thoughts": u5,
@@ -274,18 +284,22 @@ def create_experiment_router(
             "m1_responded_to_emotion": m1, "m2_webcam_adapted": m2, "m3_changed_strategy": m3,
             "m4_suspected_adaptation": m4, "m5_open_response": m5,
         }
-        s = db_session.query(PostTaskSurvey).filter(PostTaskSurvey.session_id == session_id).first()
-        if s:
-            for key, value in values.items():
-                setattr(s, key, value)
-        else:
-            s = PostTaskSurvey(session_id=session_id, **values)
-            db_session.add(s)
-        try:
-            db_session.commit()
-        except Exception as e:
-            db_session.rollback()
-            raise HTTPException(400, f"Failed to save post-task survey: {e}")
+        with db_session_factory() as db_session:
+            sess = db_session.query(Session).filter(Session.id == session_id).first()
+            if not sess:
+                raise HTTPException(400, "Session not found.")
+            s = db_session.query(PostTaskSurvey).filter(PostTaskSurvey.session_id == session_id).first()
+            if s:
+                for key, value in values.items():
+                    setattr(s, key, value)
+            else:
+                s = PostTaskSurvey(session_id=session_id, **values)
+                db_session.add(s)
+            try:
+                db_session.commit()
+            except Exception as e:
+                db_session.rollback()
+                raise HTTPException(400, f"Failed to save post-task survey: {e}")
         return {"ok": True}
 
     @router.post("/api/debrief")

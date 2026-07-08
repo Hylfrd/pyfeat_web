@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from .auth import router as auth_router
-from .database import init_db
+from .database import init_session_factory
 from .expression import ExpressionEngine
 from .strategy import StrategySelector
 from .ai_client import (
@@ -29,7 +29,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(pages_router)
 app.include_router(auth_router)
 
-db_session = init_db(str(ROOT_DIR / "data" / "experiment.db"))
+db_session_factory = init_session_factory(str(ROOT_DIR / "data" / "experiment.db"))
 expression_engine = ExpressionEngine()
 ai_client = AIClient()
 
@@ -41,12 +41,12 @@ if EVALUATOR_API_KEY:
         base_url=EVALUATOR_BASE_URL,
     )
 
-app.include_router(create_admin_router(db_session, expression_engine))
+app.include_router(create_admin_router(db_session_factory, expression_engine))
 app.include_router(create_evaluation_router(eval_ai_client))
 
 selectors: dict[str, StrategySelector] = {}
-app.include_router(create_experiment_router(ROOT_DIR, db_session, expression_engine, selectors, eval_ai_client))
-app.include_router(create_websocket_router(db_session, expression_engine, selectors, ai_client))
+app.include_router(create_experiment_router(ROOT_DIR, db_session_factory, expression_engine, selectors, eval_ai_client))
+app.include_router(create_websocket_router(db_session_factory, expression_engine, selectors, ai_client))
 
 
 @app.on_event("startup")
@@ -56,7 +56,6 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    db_session.close()
     expression_engine.stop()
 
 @app.get("/api/model-health")

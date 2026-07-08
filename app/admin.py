@@ -18,107 +18,112 @@ from .expression import PYFEAT_API_TIMEOUT
 from .session_activity import forget_session, get_session_activity, is_session_active
 
 
-def create_admin_router(db_session, expression_engine) -> APIRouter:
+def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
     router = APIRouter()
 
     @router.get("/api/admin/sessions")
     async def admin_sessions(_: None = Depends(require_admin)):
         """Return all sessions for the dashboard."""
-        sessions = db_session.query(Session).order_by(Session.id.desc()).all()
-        return [
-            {
-                "id": s.id,
-                "participant_id": s.participant_id,
-                "condition": s.condition,
-                "completed": s.completed,
-                "completion_type": s.completion_type,
-                "total_turns": s.total_turns,
-                "total_revisions": s.total_revisions,
-                "duration_ms": s.duration_ms,
-                "frame_loss_ratio": round(s.frame_loss_ratio, 3),
-                "excluded": s.excluded,
-                "excluded_by_frame_loss": s.excluded_by_frame_loss,
-                "exclusion_override": s.exclusion_override,
-                "activity": get_session_activity(s.id),
-            }
-            for s in sessions
-        ]
+        with db_session_factory() as db_session:
+            sessions = db_session.query(Session).order_by(Session.id.desc()).all()
+            return [
+                {
+                    "id": s.id,
+                    "participant_id": s.participant_id,
+                    "condition": s.condition,
+                    "completed": s.completed,
+                    "completion_type": s.completion_type,
+                    "total_turns": s.total_turns,
+                    "total_revisions": s.total_revisions,
+                    "duration_ms": s.duration_ms,
+                    "frame_loss_ratio": round(s.frame_loss_ratio, 3),
+                    "excluded": s.excluded,
+                    "excluded_by_frame_loss": s.excluded_by_frame_loss,
+                    "exclusion_override": s.exclusion_override,
+                    "activity": get_session_activity(s.id),
+                }
+                for s in sessions
+            ]
 
     @router.get("/api/admin/chat-logs/{session_id}")
     async def admin_chat_logs(session_id: int, _: None = Depends(require_admin)):
         """Return chat logs for a specific session."""
-        logs = (
-            db_session.query(ChatLog)
-            .filter(ChatLog.session_id == session_id)
-            .order_by(ChatLog.seq)
-            .all()
-        )
-        return [
-            {
-                "seq": log.seq,
-                "role": log.role,
-                "content": log.content,
-                "timestamp": log.timestamp,
-                "expression_label": log.expression_label,
-                "strategy_applied": log.strategy_applied,
-                "is_hidden": log.is_hidden,
-            }
-            for log in logs
-        ]
+        with db_session_factory() as db_session:
+            logs = (
+                db_session.query(ChatLog)
+                .filter(ChatLog.session_id == session_id)
+                .order_by(ChatLog.seq)
+                .all()
+            )
+            return [
+                {
+                    "seq": log.seq,
+                    "role": log.role,
+                    "content": log.content,
+                    "timestamp": log.timestamp,
+                    "expression_label": log.expression_label,
+                    "strategy_applied": log.strategy_applied,
+                    "is_hidden": log.is_hidden,
+                }
+                for log in logs
+            ]
 
     @router.get("/api/admin/expression/{session_id}")
     async def admin_expression(session_id: int, _: None = Depends(require_admin)):
         """Return expression timeline for a session."""
-        frames = (
-            db_session.query(ExpressionFrame)
-            .filter(ExpressionFrame.session_id == session_id)
-            .order_by(ExpressionFrame.timestamp)
-            .all()
-        )
-        return [
-            {
-                "timestamp": f.timestamp,
-                "au1": f.au1, "au4": f.au4, "au7": f.au7, "au12": f.au12,
-                "reliable": f.reliable,
-                "head_yaw": f.head_yaw, "head_pitch": f.head_pitch,
-            }
-            for f in frames
-        ]
+        with db_session_factory() as db_session:
+            frames = (
+                db_session.query(ExpressionFrame)
+                .filter(ExpressionFrame.session_id == session_id)
+                .order_by(ExpressionFrame.timestamp)
+                .all()
+            )
+            return [
+                {
+                    "timestamp": f.timestamp,
+                    "au1": f.au1, "au4": f.au4, "au7": f.au7, "au12": f.au12,
+                    "reliable": f.reliable,
+                    "head_yaw": f.head_yaw, "head_pitch": f.head_pitch,
+                }
+                for f in frames
+            ]
 
     @router.get("/api/admin/participants/{participant_id}/baseline")
     async def admin_baseline(participant_id: str, _: None = Depends(require_admin)):
         """Return baseline AU data for a participant."""
-        p = db_session.query(Participant).get(participant_id)
-        if not p:
-            raise HTTPException(404, "Participant not found")
-        return {
-            "participant_id": p.id,
-            "order_group": p.order_group,
-            "language": p.language,
-            "baseline_au1": p.baseline_au1,
-            "baseline_au4": p.baseline_au4,
-            "baseline_au7": p.baseline_au7,
-            "baseline_au12": p.baseline_au12,
-            "frame_count": p.baseline_frame_count,
-            "artifact_count": p.baseline_artifact_count,
-        }
+        with db_session_factory() as db_session:
+            p = db_session.query(Participant).get(participant_id)
+            if not p:
+                raise HTTPException(404, "Participant not found")
+            return {
+                "participant_id": p.id,
+                "order_group": p.order_group,
+                "language": p.language,
+                "baseline_au1": p.baseline_au1,
+                "baseline_au4": p.baseline_au4,
+                "baseline_au7": p.baseline_au7,
+                "baseline_au12": p.baseline_au12,
+                "frame_count": p.baseline_frame_count,
+                "artifact_count": p.baseline_artifact_count,
+            }
 
     @router.delete("/api/admin/sessions/{session_id}")
     async def admin_delete_session(session_id: int, _: None = Depends(require_admin)):
         """Delete a session and all its related data."""
-        session = db_session.query(Session).get(session_id)
-        if not session:
-            raise HTTPException(404, "Session not found")
         if is_session_active(session_id):
             raise HTTPException(409, "用户正在实验中")
 
-        db_session.query(Evaluation).filter(Evaluation.session_id == session_id).delete()
-        db_session.query(PostTaskSurvey).filter(PostTaskSurvey.session_id == session_id).delete()
-        db_session.query(Questionnaire).filter(Questionnaire.session_id == session_id).delete()
-        db_session.query(ExpressionFrame).filter(ExpressionFrame.session_id == session_id).delete()
-        db_session.query(ChatLog).filter(ChatLog.session_id == session_id).delete()
-        db_session.delete(session)
-        db_session.commit()
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session:
+                raise HTTPException(404, "Session not found")
+            db_session.query(Evaluation).filter(Evaluation.session_id == session_id).delete()
+            db_session.query(PostTaskSurvey).filter(PostTaskSurvey.session_id == session_id).delete()
+            db_session.query(Questionnaire).filter(Questionnaire.session_id == session_id).delete()
+            db_session.query(ExpressionFrame).filter(ExpressionFrame.session_id == session_id).delete()
+            db_session.query(ChatLog).filter(ChatLog.session_id == session_id).delete()
+            db_session.delete(session)
+            db_session.commit()
         forget_session(session_id)
         return {"ok": True, "deleted_session_id": session_id}
 
@@ -129,50 +134,52 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
         _: None = Depends(require_admin),
     ):
         """Manually include or exclude a session from analysis."""
-        session = db_session.query(Session).get(session_id)
-        if not session:
-            raise HTTPException(404, "Session not found")
-        session.exclusion_override = "exclude" if excluded else "include"
-        db_session.commit()
-        return {
-            "ok": True,
-            "session_id": session.id,
-            "excluded": session.excluded,
-            "excluded_by_frame_loss": session.excluded_by_frame_loss,
-            "exclusion_override": session.exclusion_override,
-        }
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session:
+                raise HTTPException(404, "Session not found")
+            session.exclusion_override = "exclude" if excluded else "include"
+            db_session.commit()
+            return {
+                "ok": True,
+                "session_id": session.id,
+                "excluded": session.excluded,
+                "excluded_by_frame_loss": session.excluded_by_frame_loss,
+                "exclusion_override": session.exclusion_override,
+            }
 
     @router.get("/api/admin/sessions/{session_id}/export")
     async def admin_export_session(session_id: int, _: None = Depends(require_admin)):
         """Export a single session as JSON including chat, expression, questionnaire, evaluations."""
-        session = db_session.query(Session).get(session_id)
-        if not session:
-            raise HTTPException(404, "Session not found")
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session:
+                raise HTTPException(404, "Session not found")
 
-        participant = db_session.query(Participant).get(session.participant_id)
+            participant = db_session.query(Participant).get(session.participant_id)
 
-        chat_logs = (
-            db_session.query(ChatLog)
-            .filter(ChatLog.session_id == session_id)
-            .order_by(ChatLog.seq)
-            .all()
-        )
-        expression_frames = (
-            db_session.query(ExpressionFrame)
-            .filter(ExpressionFrame.session_id == session_id)
-            .order_by(ExpressionFrame.timestamp)
-            .all()
-        )
-        questionnaire = (
-            db_session.query(Questionnaire)
-            .filter(Questionnaire.session_id == session_id)
-            .first()
-        )
-        evaluations = (
-            db_session.query(Evaluation)
-            .filter(Evaluation.session_id == session_id)
-            .all()
-        )
+            chat_logs = (
+                db_session.query(ChatLog)
+                .filter(ChatLog.session_id == session_id)
+                .order_by(ChatLog.seq)
+                .all()
+            )
+            expression_frames = (
+                db_session.query(ExpressionFrame)
+                .filter(ExpressionFrame.session_id == session_id)
+                .order_by(ExpressionFrame.timestamp)
+                .all()
+            )
+            questionnaire = (
+                db_session.query(Questionnaire)
+                .filter(Questionnaire.session_id == session_id)
+                .first()
+            )
+            evaluations = (
+                db_session.query(Evaluation)
+                .filter(Evaluation.session_id == session_id)
+                .all()
+            )
 
         return {
             "session": {
@@ -252,12 +259,13 @@ def create_admin_router(db_session, expression_engine) -> APIRouter:
     @router.get("/api/admin/expression/{session_id}/stats")
     async def admin_expression_stats(session_id: int, _: None = Depends(require_admin)):
         """Return aggregated expression statistics for a session."""
-        frames = (
-            db_session.query(ExpressionFrame)
-            .filter(ExpressionFrame.session_id == session_id)
-            .order_by(ExpressionFrame.timestamp)
-            .all()
-        )
+        with db_session_factory() as db_session:
+            frames = (
+                db_session.query(ExpressionFrame)
+                .filter(ExpressionFrame.session_id == session_id)
+                .order_by(ExpressionFrame.timestamp)
+                .all()
+            )
         if not frames:
             return {"session_id": session_id, "total_frames": 0}
 
