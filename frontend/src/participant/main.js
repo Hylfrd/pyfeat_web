@@ -36,6 +36,22 @@ let draftActionCounter=0;
 const draftActionText=new Map();
 document.documentElement.dataset.stage=currentStage;
 
+function showDeviceNoticeIfNeeded(){
+  const ua=navigator.userAgent||'';
+  const platform=navigator.platform||'';
+  const touchPoints=navigator.maxTouchPoints||0;
+  const mobileLike=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua);
+  const iPadDesktopUa=/Macintosh/i.test(ua)&&touchPoints>1;
+  const desktopPlatform=/Win32|Win64|Windows|MacIntel|Linux x86_64|Linux i686/i.test(platform);
+  const isDesktop=desktopPlatform&&!mobileLike&&!iPadDesktopUa;
+  if(!isDesktop){
+    $('device-notice')?.classList.remove('hidden');
+    return true;
+  }
+  return false;
+}
+showDeviceNoticeIfNeeded();
+
 function readProgress(){
   try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){return null}
 }
@@ -494,6 +510,9 @@ function connectWS(){
       }
       if(msg.type==='prompt'){
         toast(msg.message,4000);
+      }
+      if(msg.type==='slot_status'){
+        handleSlotStatus(msg);
       }
       if(msg.type==='face_status'){
         expressionFramePending=false;
@@ -1013,6 +1032,21 @@ function renderQueueStatus(data={}){
 }
 function stopQueuePolling(){
   if(queuePollTimer){clearInterval(queuePollTimer);queuePollTimer=null}
+}
+async function handleSlotStatus(data={}){
+  baselineFramePending=false;
+  expressionFramePending=false;
+  expressionFramePendingAt=0;
+  clearInterval(baselineInterval);baselineInterval=null;
+  pauseTaskCapture();
+  if(!['queue-view','baseline-view','task-view'].includes(currentStage))return;
+  if(data.state==='queued'){
+    await startQueuePolling(data);
+    return;
+  }
+  if(data.state!=='active'){
+    await requestExperimentSlot();
+  }
 }
 async function fetchQueueStatus(){
   if(!participantId||!currentSessionId)return null;

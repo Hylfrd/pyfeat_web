@@ -12,6 +12,17 @@ let refreshTimer = null;
 
 const THEME_KEY = 'admin-theme';
 
+function showDeviceNoticeIfNeeded() {
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const touchPoints = navigator.maxTouchPoints || 0;
+  const mobileLike = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua);
+  const iPadDesktopUa = /Macintosh/i.test(ua) && touchPoints > 1;
+  const desktopPlatform = /Win32|Win64|Windows|MacIntel|Linux x86_64|Linux i686/i.test(platform);
+  const isDesktop = desktopPlatform && !mobileLike && !iPadDesktopUa;
+  if (!isDesktop) $('device-notice')?.classList.remove('hidden');
+}
+
 function setTheme(theme) {
   const next = theme === 'dark' ? 'dark' : 'light';
   document.documentElement.classList.toggle('dark', next === 'dark');
@@ -351,5 +362,6 @@ function handleAdminChange(e) {
 }
 
 bindAdminEvents();
+showDeviceNoticeIfNeeded();
 initTheme();
 initAuth();

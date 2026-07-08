@@ -12,7 +12,7 @@ from . import debug_log
 from .ai_client import ChatMessage
 from .database import ChatLog, ExpressionFrame, Participant, Session
 from .expression import AUFrame
-from .experiment_slots import touch_experiment_slot
+from .experiment_slots import get_experiment_slot_status, touch_experiment_slot
 from .session_activity import mark_disconnected, touch_session
 from .strategy import Strategy, UserTurn
 from .websocket_utils import (
@@ -109,6 +109,15 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                 db_session.commit()
             pending_expression_frames.clear()
 
+        async def ensure_active_experiment_slot() -> bool:
+            if not current_session_id:
+                return False
+            status = get_experiment_slot_status(current_session_id)
+            if status.get("state") == "active":
+                return True
+            await safe_send({"type": "slot_status", **status})
+            return False
+
         try:
             while True:
                 try:
@@ -142,6 +151,8 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                         await websocket.send_text(json.dumps(sync_payload, ensure_ascii=False))
 
                     elif msg_type == "baseline_reset":
+                        if not await ensure_active_experiment_slot():
+                            continue
                         touch_experiment_slot(current_session_id, "baseline")
                         baseline_count = 0
                         expression_engine.clear_baseline_buffer(participant_id)
@@ -152,6 +163,8 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
 
                     elif msg_type == "baseline_frame":
                         if not await ensure_session_exists():
+                            continue
+                        if not await ensure_active_experiment_slot():
                             continue
                         touch_session(participant_id, current_session_id)
                         touch_experiment_slot(current_session_id, "baseline")
@@ -199,6 +212,8 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                             break
 
                     elif msg_type == "baseline_calibrate":
+                        if not await ensure_active_experiment_slot():
+                            continue
                         touch_experiment_slot(current_session_id, "baseline")
                         baseline = expression_engine.calibrate_from_buffer(participant_id)
                         if baseline is None:
@@ -232,12 +247,16 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                     elif msg_type == "task_started":
                         if not await ensure_session_exists():
                             continue
+                        if not await ensure_active_experiment_slot():
+                            continue
                         touch_session(participant_id, current_session_id)
                         touch_experiment_slot(current_session_id, "task")
                         await safe_send({"type": "task_started_ack"})
 
                     elif msg_type == "expression_frame":
                         if not await ensure_session_exists():
+                            continue
+                        if not await ensure_active_experiment_slot():
                             continue
                         touch_session(participant_id, current_session_id)
                         touch_experiment_slot(current_session_id, "task")

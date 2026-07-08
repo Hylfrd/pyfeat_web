@@ -85,6 +85,13 @@ body {
   letter-spacing: 0;
 }
 
+.device-notice {
+  margin: 10px 0;
+  color: var(--muted-soft);
+  font-size: 14px;
+  text-align: center;
+}
+
 button,
 input,
 select,
