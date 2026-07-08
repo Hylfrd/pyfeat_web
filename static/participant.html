@@ -45,6 +45,26 @@
 
 <div id="toast-container"></div>
 
+<aside id="participant-debug" class="participant-debug" aria-label="实验调试窗口">
+  <button id="participant-debug-toggle" class="participant-debug-head" type="button">
+    <span>Debug</span>
+    <strong id="debug-status-pill">idle</strong>
+  </button>
+  <div id="participant-debug-body" class="participant-debug-body">
+    <div class="debug-kv">
+      <span>Participant</span><strong id="debug-participant">-</strong>
+      <span>Session</span><strong id="debug-session">-</strong>
+      <span>Stage</span><strong id="debug-stage">setup</strong>
+      <span>Slot</span><strong id="debug-slot">-</strong>
+      <span>Wait</span><strong id="debug-wait">-</strong>
+      <span>Active</span><strong id="debug-active">-</strong>
+      <span>Queue</span><strong id="debug-queue">-</strong>
+    </div>
+    <div class="debug-lanes" id="debug-lanes">No active experiment slots.</div>
+    <div class="debug-log" id="debug-log"></div>
+  </div>
+</aside>
+
 <footer class="site-footer">
   <a href="https://github.com/Hylfrd/pyfeat_web" target="_blank" rel="noopener noreferrer">Developed by Hylfrd</a>
   <span class="sep">|</span>

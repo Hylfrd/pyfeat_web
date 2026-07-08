@@ -81,7 +81,7 @@ def _position(session_id: int) -> int:
 
 
 def _active_payload(slot: ExperimentSlot, now: float) -> dict:
-    return {
+    payload = {
         "ok": True,
         "state": "active",
         "participant_id": slot.participant_id,
@@ -94,10 +94,12 @@ def _active_payload(slot: ExperimentSlot, now: float) -> dict:
         "remaining_s": _remaining_s(slot, now),
         "estimated_wait_s": 0,
     }
+    payload.update(_debug_payload(now))
+    return payload
 
 
 def _queued_payload(slot: ExperimentSlot, now: float) -> dict:
-    return {
+    payload = {
         "ok": True,
         "state": "queued",
         "participant_id": slot.participant_id,
@@ -109,6 +111,32 @@ def _queued_payload(slot: ExperimentSlot, now: float) -> dict:
         "max_active": MAX_ACTIVE_EXPERIMENTS,
         "remaining_s": None,
         "estimated_wait_s": _estimate_for(slot.session_id, now),
+    }
+    payload.update(_debug_payload(now))
+    return payload
+
+
+def _debug_payload(now: float) -> dict:
+    return {
+        "active_slots": [
+            {
+                "participant_id": slot.participant_id,
+                "session_id": slot.session_id,
+                "phase": slot.phase,
+                "remaining_s": _remaining_s(slot, now),
+            }
+            for slot in sorted(_active.values(), key=lambda s: s.active_at or s.requested_at)
+        ],
+        "queued_slots": [
+            {
+                "participant_id": slot.participant_id,
+                "session_id": slot.session_id,
+                "phase": slot.phase,
+                "position": index + 1,
+                "estimated_wait_s": _estimate_for(slot.session_id, now),
+            }
+            for index, slot in enumerate(_queue)
+        ],
     }
 
 
@@ -157,7 +185,7 @@ def get_experiment_slot_status(session_id: int) -> dict:
             slot.last_seen = now
             return _queued_payload(slot, now)
 
-    return {
+    payload = {
         "ok": True,
         "state": "none",
         "session_id": session_id,
@@ -169,6 +197,8 @@ def get_experiment_slot_status(session_id: int) -> dict:
         "remaining_s": None,
         "estimated_wait_s": 0,
     }
+    payload.update(_debug_payload(now))
+    return payload
 
 
 def touch_experiment_slot(session_id: int | None, phase: str | None = None) -> None:

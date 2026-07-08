@@ -193,6 +193,8 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                             "face_detected": vector is not None,
                             "reliable": vector is not None,
                             "drop_reason": result.drop_reason,
+                            "elapsed_ms": elapsed_ms,
+                            "queued_ms": result.queued_ms,
                         }))
 
                     elif msg_type == "baseline_calibrate":
@@ -270,6 +272,9 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                             "face_detected": au_frame.face_detected if au_frame else False,
                             "reliable": au_frame.reliable if au_frame else False,
                             "drop_reason": au_frame.drop_reason if au_frame else "pyfeat_error",
+                            "elapsed_ms": elapsed_ms,
+                            "queued_ms": au_frame.queued_ms if au_frame else 0.0,
+                            "frame_index": total_frames,
                         }))
                         if debug_log.is_enabled():
                             api_response = (

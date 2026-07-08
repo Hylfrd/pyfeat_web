@@ -13,6 +13,8 @@ function setStage(id){
   currentStage=id;
   showView(id);
   writeProgress();
+  refreshDebugStatus();
+  startDebugStatus();
   if(currentSessionId&&id!=='complete-view')startSessionStatusCheck();
   if(id==='complete-view')stopSessionStatusCheck();
   if(id!=='queue-view')stopQueuePolling();
@@ -99,6 +101,7 @@ let lastCaptureNoticeAt = 0;
 let captureState = '';
 let sessionStatusTimer = null;
 let queuePollTimer = null;
+let debugStatusTimer = null;
 let pendingResumeProgress = null;
 const AI_WAIT_TIMEOUT_MS = 75000;
 const AI_RECOVERY_GRACE_MS = 12000;
@@ -206,6 +209,70 @@ function clearToasts(kind){
   document.querySelectorAll(selector).forEach(el=>el.remove());
 }
 
+// ── Participant debug panel ──
+function debugEl(id){return document.getElementById(id)}
+function debugTime(){
+  const d=new Date();
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+}
+function setDebugStatus(text,tone=''){
+  const el=debugEl('debug-status-pill');
+  if(!el)return;
+  el.textContent=text;
+  el.className=tone;
+}
+function appendDebugLog(kind,msg={}){
+  const log=debugEl('debug-log');
+  if(!log)return;
+  const queued=Number(msg.queued_ms||0).toFixed(1);
+  const elapsed=Number(msg.elapsed_ms||0).toFixed(1);
+  const reason=msg.drop_reason?` ${msg.drop_reason}`:'';
+  const ok=msg.reliable!==false&&!msg.drop_reason;
+  const line=document.createElement('div');
+  line.className=`debug-line ${ok?'ok':'warn'}`;
+  line.innerHTML=`
+    <span>${debugTime()}</span>
+    <strong>${kind}</strong>
+    <span>wait ${queued}ms · run ${elapsed}ms${reason}</span>
+  `;
+  log.prepend(line);
+  while(log.children.length>80)log.lastElementChild.remove();
+  setDebugStatus(ok?'ok':'warn',ok?'ok':'warn');
+}
+function renderDebugSlot(data={}){
+  debugEl('debug-participant').textContent=participantId||'-';
+  debugEl('debug-session').textContent=currentSessionId?`#${currentSessionId}`:'-';
+  debugEl('debug-stage').textContent=currentStage||'-';
+  debugEl('debug-slot').textContent=data.state||'-';
+  debugEl('debug-wait').textContent=data.estimated_wait_s!==undefined?formatWait(data.estimated_wait_s):'-';
+  debugEl('debug-active').textContent=`${data.active_count??0}/${data.max_active??2}`;
+  debugEl('debug-queue').textContent=String(data.queue_length??0);
+  const active=Array.isArray(data.active_slots)?data.active_slots:[];
+  const queued=Array.isArray(data.queued_slots)?data.queued_slots:[];
+  const activeText=active.map(s=>`${s.participant_id} #${s.session_id} ${s.phase} ${formatWait(s.remaining_s)}`);
+  const queuedText=queued.map(s=>`Q${s.position} ${s.participant_id} #${s.session_id} wait ${formatWait(s.estimated_wait_s)}`);
+  debugEl('debug-lanes').textContent=[...activeText,...queuedText].join(' | ')||'No active experiment slots.';
+}
+async function refreshDebugStatus(){
+  renderDebugSlot({});
+  if(!participantId||!currentSessionId)return;
+  try{
+    const data=await fetchQueueStatus();
+    if(data)renderDebugSlot(data);
+  }catch(err){}
+}
+function startDebugStatus(){
+  if(debugStatusTimer)return;
+  refreshDebugStatus();
+  debugStatusTimer=setInterval(refreshDebugStatus,1000);
+}
+function stopDebugStatus(){
+  if(debugStatusTimer){clearInterval(debugStatusTimer);debugStatusTimer=null}
+}
+debugEl('participant-debug-toggle')?.addEventListener('click',()=>{
+  debugEl('participant-debug')?.classList.toggle('collapsed');
+});
+
 // ── Build Likert ──
 document.querySelectorAll('.likert-line').forEach(row=>{
   for(let v=1;v<=7;v++){
@@ -258,6 +325,7 @@ function connectWS(){
     ws.onmessage = e => {
       const msg = JSON.parse(e.data);
       if(msg.type==='baseline_ack'){
+        appendDebugLog('base',msg);
         baselineAckedCount=msg.collected;
         const pct=Math.min(100,(msg.collected/10)*100);
         $('baseline-bar').style.width=pct+'%';
@@ -315,6 +383,7 @@ function connectWS(){
         toast(msg.message,4000);
       }
       if(msg.type==='face_status'){
+        appendDebugLog('expr',msg);
         captureState='';
         if(msg.face_detected&&msg.reliable){
           setFaceStatus('found','面部已检测');
@@ -584,6 +653,7 @@ async function verifySessionExists(){
 function forceRestartExperiment(){
   stopSessionStatusCheck();
   stopQueuePolling();
+  stopDebugStatus();
   stopAiSyncPolling();
   clearAiWaitTimeout();
   isAiWaiting=false;
@@ -736,6 +806,7 @@ function formatWait(seconds){
   return `${m}:${String(s).padStart(2,'0')}`;
 }
 function renderQueueStatus(data={}){
+  renderDebugSlot(data);
   $('queue-estimate').textContent=formatWait(data.estimated_wait_s);
   $('queue-position').textContent=data.position||'-';
   $('queue-active').textContent=`${data.active_count||0}/${data.max_active||2}`;
@@ -1298,6 +1369,7 @@ $('setup-form').addEventListener('submit',async e=>{
   peekRecordingDrawer();
 });
 
+startDebugStatus();
 initProgressRecovery();
 
 

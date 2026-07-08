@@ -256,6 +256,118 @@ button:not(:disabled):hover,
   text-decoration: none;
 }
 
+.participant-debug {
+  position: fixed;
+  right: 14px;
+  bottom: 62px;
+  z-index: 130;
+  width: min(390px, calc(100vw - 28px));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 70%, #000);
+  border-radius: 8px;
+  background: color-mix(in srgb, #111827 94%, transparent);
+  color: #e5e7eb;
+  box-shadow: 0 18px 46px rgb(0 0 0 / 22%);
+  font-size: 12px;
+}
+
+.participant-debug.collapsed .participant-debug-body {
+  display: none;
+}
+
+.participant-debug-head {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 0;
+  background: #0f172a;
+  color: #f8fafc;
+  box-shadow: none;
+}
+
+.participant-debug-head strong {
+  min-width: 66px;
+  border-radius: 999px;
+  background: #334155;
+  padding: 4px 8px;
+  color: #f8fafc;
+  font-size: 11px;
+  text-align: center;
+}
+
+.participant-debug-head strong.warn {
+  background: #92400e;
+}
+
+.participant-debug-head strong.ok {
+  background: #166534;
+}
+
+.participant-debug-body {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.debug-kv {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 4px 8px;
+}
+
+.debug-kv span,
+.debug-lanes {
+  color: #94a3b8;
+}
+
+.debug-kv strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f8fafc;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-lanes {
+  max-height: 58px;
+  overflow: auto;
+  border-top: 1px solid #334155;
+  padding-top: 8px;
+  line-height: 1.45;
+}
+
+.debug-log {
+  display: flex;
+  max-height: 210px;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+  border-top: 1px solid #334155;
+  padding-top: 8px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+}
+
+.debug-line {
+  display: grid;
+  grid-template-columns: 54px 66px 1fr;
+  gap: 6px;
+  align-items: center;
+  color: #cbd5e1;
+  line-height: 1.35;
+}
+
+.debug-line.warn {
+  color: #fbbf24;
+}
+
+.debug-line.ok {
+  color: #86efac;
+}
+
 .steps {
   display: flex;
   align-items: center;
