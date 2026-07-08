@@ -12,8 +12,6 @@ let refreshTimer = null;
 
 const THEME_KEY = 'admin-theme';
 
-const DEVICE_BLOCKED = window.matchMedia('(max-width: 899px), (hover: none) and (pointer: coarse)').matches;
-
 function setTheme(theme) {
   const next = theme === 'dark' ? 'dark' : 'light';
   document.documentElement.classList.toggle('dark', next === 'dark');
@@ -352,8 +350,6 @@ function handleAdminChange(e) {
   }
 }
 
-if (!DEVICE_BLOCKED) {
-  bindAdminEvents();
-  initTheme();
-  initAuth();
-}
+bindAdminEvents();
+initTheme();
+initAuth();

@@ -36,8 +36,6 @@ let draftActionCounter=0;
 const draftActionText=new Map();
 document.documentElement.dataset.stage=currentStage;
 
-const DEVICE_BLOCKED=window.matchMedia('(max-width: 899px), (hover: none) and (pointer: coarse)').matches;
-
 function readProgress(){
   try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){return null}
 }
@@ -1646,10 +1644,8 @@ $('setup-form').addEventListener('submit',async e=>{
   peekRecordingDrawer();
 });
 
-if(!DEVICE_BLOCKED){
-  startDebugStatus();
-  initProgressRecovery();
-}
+startDebugStatus();
+initProgressRecovery();
 
 
 function bindParticipantEvents(){
@@ -1678,7 +1674,5 @@ function bindParticipantEvents(){
   });
 }
 
-if(!DEVICE_BLOCKED){
-  bindParticipantEvents();
-  initRecordingDrawer();
-}
+bindParticipantEvents();
+initRecordingDrawer();
