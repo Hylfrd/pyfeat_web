@@ -19,6 +19,7 @@ from .admin import create_admin_router
 from .evaluation import create_evaluation_router
 from .experiment import create_experiment_router
 from .pages import router as pages_router
+from .pyfeat_scheduler import PyFeatScheduler
 from .websocket import create_websocket_router
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -31,6 +32,7 @@ app.include_router(auth_router)
 
 db_session_factory = init_session_factory(str(ROOT_DIR / "data" / "experiment.db"))
 expression_engine = ExpressionEngine()
+pyfeat_scheduler = PyFeatScheduler()
 ai_client = AIClient()
 
 eval_ai_client = None
@@ -46,16 +48,18 @@ app.include_router(create_evaluation_router(eval_ai_client))
 
 selectors: dict[str, StrategySelector] = {}
 app.include_router(create_experiment_router(ROOT_DIR, db_session_factory, expression_engine, selectors, eval_ai_client))
-app.include_router(create_websocket_router(db_session_factory, expression_engine, selectors, ai_client))
+app.include_router(create_websocket_router(db_session_factory, expression_engine, pyfeat_scheduler, selectors, ai_client))
 
 
 @app.on_event("startup")
 async def startup():
     expression_engine.start()
+    pyfeat_scheduler.start()
     print("ExpressionEngine started.")
 
 @app.on_event("shutdown")
 async def shutdown():
+    await pyfeat_scheduler.stop()
     expression_engine.stop()
 
 @app.get("/api/model-health")

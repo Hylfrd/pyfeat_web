@@ -27,9 +27,9 @@ export function createSessionActions({adminFetch, toast, getSessionCache, onDele
     const r=await adminFetch(`/api/admin/expression/${sid}/stats`);
     const st=await r.json();
     const frames=st.frames||[];
-    let csv='time_s,au1,au4,au7,au12,head_yaw,head_pitch,face_detected,reliable\n';
+    let csv='time_s,au1,au4,au7,au12,head_yaw,head_pitch,queued_ms,drop_reason,face_detected,reliable\n';
     for(const f of frames){
-      csv+=`${f.t},${f.au1},${f.au4},${f.au7},${f.au12},${f.yaw},${f.pitch},${f.face},${f.ok}\n`;
+      csv+=`${f.t},${f.au1},${f.au4},${f.au7},${f.au12},${f.yaw},${f.pitch},${f.queued_ms||0},"${(f.drop_reason||'').replace(/"/g,'""')}",${f.face},${f.ok}\n`;
     }
     const blob=new Blob([csv],{type:'text/csv'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`session_${sid}_expression.csv`;a.click();

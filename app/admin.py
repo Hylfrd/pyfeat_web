@@ -84,6 +84,9 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                     "au1": f.au1, "au4": f.au4, "au7": f.au7, "au12": f.au12,
                     "reliable": f.reliable,
                     "head_yaw": f.head_yaw, "head_pitch": f.head_pitch,
+                    "face_detected": f.face_detected,
+                    "drop_reason": f.drop_reason,
+                    "queued_ms": f.queued_ms,
                 }
                 for f in frames
             ]
@@ -229,6 +232,8 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                     "au1": f.au1, "au4": f.au4, "au7": f.au7, "au12": f.au12,
                     "head_yaw": f.head_yaw, "head_pitch": f.head_pitch, "head_roll": f.head_roll,
                     "face_detected": f.face_detected, "reliable": f.reliable,
+                    "drop_reason": f.drop_reason,
+                    "queued_ms": f.queued_ms,
                 }
                 for f in expression_frames
             ],
@@ -273,6 +278,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
         reliable = sum(1 for f in frames if f.reliable)
         face_detected = sum(1 for f in frames if f.face_detected)
         face_lost = total - face_detected
+        queue_timeout = sum(1 for f in frames if f.drop_reason == "queue_timeout")
 
         def _mean(values):
             return sum(values) / len(values) if values else 0.0
@@ -299,6 +305,8 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
             "face_detected_frames": face_detected,
             "face_lost_frames": face_lost,
             "face_lost_pct": _pct(face_lost),
+            "queue_timeout_frames": queue_timeout,
+            "queue_timeout_pct": _pct(queue_timeout),
             "means": {
                 "au1": round(_mean(au1_vals), 3),
                 "au4": round(_mean(au4_vals), 3),
@@ -328,6 +336,8 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                     "pitch": round(f.head_pitch, 1),
                     "face": f.face_detected,
                     "ok": f.reliable,
+                    "drop_reason": f.drop_reason,
+                    "queued_ms": round(f.queued_ms or 0.0, 1),
                 }
                 for f in frames
             ],

@@ -2,7 +2,7 @@ import './style.css';
 import { $, escapeHtml } from '../shared/dom.js';
 
 // ── DOM refs ──
-const views = ['setup-view','pre-survey-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view'];
+const views = ['setup-view','pre-survey-view','queue-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view'];
 function showView(id){
   views.forEach(v=>$(v).classList.add('hidden'));
   $(id).classList.remove('hidden');
@@ -15,6 +15,7 @@ function setStage(id){
   writeProgress();
   if(currentSessionId&&id!=='complete-view')startSessionStatusCheck();
   if(id==='complete-view')stopSessionStatusCheck();
+  if(id!=='queue-view')stopQueuePolling();
 }
 const STORAGE_KEY='hmcl-helper-progress-v1';
 let currentStage='setup-view';
@@ -97,6 +98,7 @@ let lastExpressionSentAt = 0;
 let lastCaptureNoticeAt = 0;
 let captureState = '';
 let sessionStatusTimer = null;
+let queuePollTimer = null;
 let pendingResumeProgress = null;
 const AI_WAIT_TIMEOUT_MS = 75000;
 const AI_RECOVERY_GRACE_MS = 12000;
@@ -581,6 +583,7 @@ async function verifySessionExists(){
 }
 function forceRestartExperiment(){
   stopSessionStatusCheck();
+  stopQueuePolling();
   stopAiSyncPolling();
   clearAiWaitTimeout();
   isAiWaiting=false;
@@ -610,8 +613,14 @@ async function resumeProgress(saved){
   chatTranscript=Array.isArray(saved.chatTranscript)?saved.chatTranscript:[];
   restoreFormValues(saved.forms||{});
   let cameraReady=true;
-  if(['pre-survey-view','baseline-view','task-view'].includes(currentStage)){
+  if(['pre-survey-view','queue-view','baseline-view','task-view'].includes(currentStage)){
     try{await startWebcam();}catch(err){cameraReady=false;toast('无法访问摄像头。请允许摄像头权限并确保没有其他程序占用摄像头。',6000);}
+  }
+  if(currentStage==='queue-view'){
+    showView(currentStage);
+    await startQueuePolling();
+    writeProgress();
+    return;
   }
   if(currentStage==='baseline-view'&&cameraReady){
     await startBaseline();
@@ -719,6 +728,73 @@ function captureFrame(){
   return c.toDataURL('image/jpeg',0.7);
 }
 
+// ── Experiment queue ──
+function formatWait(seconds){
+  const total=Math.max(0,Math.ceil(Number(seconds)||0));
+  const m=Math.floor(total/60);
+  const s=total%60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+function renderQueueStatus(data={}){
+  $('queue-estimate').textContent=formatWait(data.estimated_wait_s);
+  $('queue-position').textContent=data.position||'-';
+  $('queue-active').textContent=`${data.active_count||0}/${data.max_active||2}`;
+  $('queue-length').textContent=data.queue_length||0;
+  const wait=Number(data.estimated_wait_s)||0;
+  const pct=wait>0?Math.max(4,Math.min(96,100-(wait/900*100))):100;
+  $('queue-bar').style.width=`${pct}%`;
+  $('queue-note').textContent=data.state==='queued'
+    ? '等待信息每秒自动更新，轮到您时会自动开始基线校准。'
+    : '正在为您准备基线校准。';
+}
+function stopQueuePolling(){
+  if(queuePollTimer){clearInterval(queuePollTimer);queuePollTimer=null}
+}
+async function fetchQueueStatus(){
+  if(!participantId||!currentSessionId)return null;
+  const params=new URLSearchParams({participant_id:participantId});
+  const r=await fetch(`/api/session/slot/status/${currentSessionId}?${params.toString()}`,{cache:'no-store'});
+  if(r.status===404){forceRestartExperiment();return null;}
+  if(!r.ok)return null;
+  return await r.json();
+}
+async function startQueuePolling(initial=null){
+  if(initial)renderQueueStatus(initial);
+  setStage('queue-view');
+  stopQueuePolling();
+  const tick=async()=>{
+    try{
+      const data=await fetchQueueStatus();
+      if(!data)return;
+      renderQueueStatus(data);
+      if(data.state==='active'){
+        stopQueuePolling();
+        await startBaseline();
+      }
+    }catch(err){
+      $('queue-note').textContent='等待信息暂时无法刷新，系统会继续重试。';
+    }
+  };
+  queuePollTimer=setInterval(tick,1000);
+  await tick();
+}
+async function requestExperimentSlot(){
+  const f=new FormData();
+  f.append('participant_id',participantId);
+  f.append('session_id',currentSessionId);
+  const r=await fetch('/api/session/slot/request',{method:'POST',body:f});
+  if(!r.ok){
+    const d=await r.json().catch(()=>({}));
+    throw new Error(d.detail||`slot request failed: ${r.status}`);
+  }
+  const data=await r.json();
+  if(data.state==='active'){
+    await startBaseline();
+  }else{
+    await startQueuePolling(data);
+  }
+}
+
 // ── Baseline ──
 let baselineSentCount = 0;
 let baselineAckedCount = 0;
@@ -734,6 +810,7 @@ function showBaselineFaceToast(){
 }
 async function startBaseline(){
   if(!await checkModelReady())return;
+  stopQueuePolling();
   setStage('baseline-view');
   try{
     await connectWS();
@@ -790,6 +867,7 @@ async function startTask(){
   }
   if(!webcamLive())await startWebcam();
   ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
+  ws.send(JSON.stringify({type:'task_started'}));
 
   // Update UI
   $('task-label').textContent='写作任务';
@@ -1066,6 +1144,7 @@ async function doFinalSubmit(isTimeout){
   pauseTaskCapture();
   stopAiSyncPolling();
   closeWS();
+  await new Promise(resolve=>setTimeout(resolve,250));
   const draftText=$('draft-text').textContent||'';
   const f=new FormData();
   f.append('session_id',currentSessionId);
@@ -1137,7 +1216,11 @@ document.getElementById('pre-survey-form').addEventListener('submit', async e =>
     toast('保存开场问卷失败，请重试。' + (err.message ? ` ${err.message}` : ''), 5000);
     return;
   }
-  await startBaseline();
+  try{
+    await requestExperimentSlot();
+  }catch(err){
+    toast('无法进入实验队列，请稍后重试。' + (err.message ? ` ${err.message}` : ''), 5000);
+  }
 });
 
 // ── Post-Survey Submit ──

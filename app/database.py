@@ -125,6 +125,8 @@ class ExpressionFrame(Base):
     head_roll: Mapped[float] = Column(Float, default=0.0)
     face_detected: Mapped[bool] = Column(Boolean, default=True)
     reliable: Mapped[bool] = Column(Boolean, default=True)
+    drop_reason: Mapped[Optional[str]] = Column(String, nullable=True)
+    queued_ms: Mapped[Optional[float]] = Column(Float, nullable=True)
 
     session: Mapped[Session] = relationship(back_populates="expression_frames")
 
@@ -336,6 +338,14 @@ def init_session_factory(db_path: str = "data/experiment.db"):
                     conn.execute(text("ALTER TABLE sessions ADD COLUMN unreliable_frames INTEGER DEFAULT 0"))
                 if "exclusion_override" not in cols:
                     conn.execute(text("ALTER TABLE sessions ADD COLUMN exclusion_override VARCHAR"))
+                conn.commit()
+        if "expression_frames" in insp.get_table_names():
+            cols = [c["name"] for c in insp.get_columns("expression_frames")]
+            with engine.connect() as conn:
+                if "drop_reason" not in cols:
+                    conn.execute(text("ALTER TABLE expression_frames ADD COLUMN drop_reason VARCHAR"))
+                if "queued_ms" not in cols:
+                    conn.execute(text("ALTER TABLE expression_frames ADD COLUMN queued_ms FLOAT"))
                 conn.commit()
     except Exception:
         pass  # non-critical migration

@@ -127,6 +127,43 @@
   </div>
 </div>
 
+<!-- QUEUE VIEW                                     -->
+<div id="queue-view" class="view hidden">
+  <div class="steps">
+    <div class="step-dot done"></div>
+    <div class="step-line"></div>
+    <div class="step-dot active"></div>
+    <div class="step-line"></div>
+    <div class="step-dot"></div>
+    <div class="step-line"></div>
+    <div class="step-dot"></div>
+  </div>
+  <div class="card queue-card">
+    <h1>实验等待中</h1>
+    <p class="subtitle">当前已有实验者正在进行基线校准或写作任务。请保持此页面开启，轮到您时系统会自动开始。</p>
+    <div class="queue-metric">
+      <span class="queue-label">预计等待</span>
+      <strong id="queue-estimate">--:--</strong>
+    </div>
+    <div class="queue-grid">
+      <div>
+        <span>当前位置</span>
+        <strong id="queue-position">-</strong>
+      </div>
+      <div>
+        <span>实验中</span>
+        <strong id="queue-active">-</strong>
+      </div>
+      <div>
+        <span>排队人数</span>
+        <strong id="queue-length">-</strong>
+      </div>
+    </div>
+    <div class="progress-bar"><div id="queue-bar" class="progress-fill queue-fill" style="width:0%"></div></div>
+    <p id="queue-note" class="queue-note">等待信息每秒自动更新。</p>
+  </div>
+</div>
+
 <!-- BASELINE VIEW                                  -->
 <div id="baseline-view" class="view hidden">
   <div class="steps">

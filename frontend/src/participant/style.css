@@ -375,6 +375,62 @@ button:not(:disabled):hover,
   font-weight: 780;
 }
 
+.queue-card {
+  text-align: center;
+}
+
+.queue-metric {
+  display: grid;
+  gap: 4px;
+  margin: 30px auto 22px;
+}
+
+.queue-label,
+.queue-grid span,
+.queue-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+#queue-estimate {
+  color: var(--accent);
+  font-size: 46px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.queue-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 auto 22px;
+}
+
+.queue-grid > div {
+  display: grid;
+  gap: 4px;
+  min-height: 78px;
+  align-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.queue-grid strong {
+  color: var(--text-strong);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-fill {
+  background: var(--green);
+}
+
+.queue-note {
+  margin-top: 12px;
+}
+
 html.task-page,
 html.task-page body {
   min-height: 100%;

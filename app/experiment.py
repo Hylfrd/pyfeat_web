@@ -9,9 +9,14 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from sqlalchemy.exc import IntegrityError
 
 from .database import (
-    ChatLog, Participant, PostTaskSurvey, PreTaskSurvey, Questionnaire, Session,
+    ChatLog, ExpressionFrame, Participant, PostTaskSurvey, PreTaskSurvey, Questionnaire, Session,
 )
 from .evaluation import run_posthoc_evaluation
+from .experiment_slots import (
+    get_experiment_slot_status,
+    release_experiment_slot,
+    request_experiment_slot,
+)
 from .session_activity import get_session_activity
 from .strategy import StrategySelector
 
@@ -95,7 +100,32 @@ def create_experiment_router(
                 "participant_id": session.participant_id,
                 "completed": session.completed,
                 "activity": get_session_activity(session.id),
+                "slot": get_experiment_slot_status(session.id),
             }
+
+    @router.post("/api/session/slot/request")
+    async def request_session_slot(
+        participant_id: str = Form(...),
+        session_id: int = Form(...),
+    ):
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session or session.participant_id != participant_id:
+                raise HTTPException(404, "Session not found")
+            if session.completed:
+                raise HTTPException(400, "Session already completed")
+        return request_experiment_slot(participant_id, session_id)
+
+    @router.get("/api/session/slot/status/{session_id}")
+    async def session_slot_status(
+        session_id: int,
+        participant_id: str,
+    ):
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session or session.participant_id != participant_id:
+                raise HTTPException(404, "Session not found")
+        return get_experiment_slot_status(session_id)
 
     @router.post("/api/session/complete")
     async def complete_session(
@@ -120,10 +150,21 @@ def create_experiment_router(
             session.final_email = final_email
             session.total_turns = total_turns
             session.total_revisions = total_revisions
-            session.total_frames = total_frames
-            session.unreliable_frames = unreliable_frames
+            stored_frames = (
+                db_session.query(ExpressionFrame)
+                .filter(ExpressionFrame.session_id == session_id)
+                .all()
+            )
+            if stored_frames:
+                session.total_frames = len(stored_frames)
+                session.unreliable_frames = sum(1 for frame in stored_frames if not frame.reliable)
+            else:
+                session.total_frames = total_frames
+                session.unreliable_frames = unreliable_frames
             session.completed = True
             db_session.commit()
+
+        release_experiment_slot(session_id)
 
         if eval_ai_client and final_email.strip():
             asyncio.create_task(run_posthoc_evaluation(root_dir, eval_ai_client, session_id, final_email))

@@ -43,6 +43,8 @@ class AUFrame:
     head_roll: float = 0.0
     face_detected: bool = True
     reliable: bool = True
+    drop_reason: str = ""
+    queued_ms: float = 0.0
 
     @property
     def delta_au1(self) -> float:

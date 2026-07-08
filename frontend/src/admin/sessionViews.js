@@ -58,6 +58,7 @@ export function renderOverview(exp,st){
         <div class="info-card"><div class="lbl">总帧数</div><div class="val mono">${st.total_frames||0}</div></div>
         <div class="info-card"><div class="lbl">检测到面部</div><div class="val" style="color:#22c55e">${framesOk} (${faceOkPct}%)</div></div>
         <div class="info-card"><div class="lbl">面部丢失</div><div class="val" style="color:#ef4444">${st.face_lost_frames||0} (${st.face_lost_pct||0}%)</div></div>
+        <div class="info-card"><div class="lbl">队列丢弃</div><div class="val" style="color:#b45309">${st.queue_timeout_frames||0} (${st.queue_timeout_pct||0}%)</div></div>
         <div class="info-card"><div class="lbl">均值 AU4 (困惑)</div><div class="val mono">${st.means?.au4||'-'}</div></div>
         <div class="info-card"><div class="lbl">均值 AU12 (正向)</div><div class="val mono">${st.means?.au12||'-'}</div></div>
         <div class="info-card"><div class="lbl">触发帧 (AU4≥2)</div><div class="val mono">${st.triggers_above_2?.au4||0} / ${st.total_frames||0}</div></div>
@@ -78,7 +79,8 @@ export function renderOverview(exp,st){
       const reliable=frameReliable(f);
       const face=frameFace(f);
       const cls=!face?'face-lost':(reliable?'face-ok':'face-unreliable');
-      html+=`<div class="cell ${cls}" title="t=${f.t}s AU4:${f.au4} AU12:${f.au12} ${face&&reliable?'✅':'⚠️'}"></div>`;
+      const reason=f.drop_reason?` reason:${f.drop_reason}`:'';
+      html+=`<div class="cell ${cls}" title="t=${f.t}s AU4:${f.au4} AU12:${f.au12} queued:${f.queued_ms||0}ms${reason} ${face&&reliable?'✅':'⚠️'}"></div>`;
     }
     html+=`</div></div>`;
   }
@@ -183,7 +185,7 @@ export function renderExpression(exp,st){
     else if(f.au7>=2)tone='au7';
     else if(f.au1>=1.5)tone='au1';
     html+=`<div class="cell ${tone}"
-      title="t=${f.t}s AU1:${f.au1} AU4:${f.au4} AU7:${f.au7} AU12:${f.au12} ${face&&reliable?'有效':'不可靠'}"></div>`;
+      title="t=${f.t}s AU1:${f.au1} AU4:${f.au4} AU7:${f.au7} AU12:${f.au12} queued:${f.queued_ms||0}ms ${f.drop_reason||''} ${face&&reliable?'有效':'不可靠'}"></div>`;
   }
   html+=`</div>`;
 
@@ -192,7 +194,7 @@ export function renderExpression(exp,st){
   html+=`<div class="detail-section"><h3>帧数据表 (显示前 ${show.length} 帧, 共 ${frames.length})</h3>
     <div class="frame-table-wrap">
     <table class="frame-table">
-      <thead><tr><th>时间(s)</th><th>AU1</th><th>AU4</th><th>AU7</th><th>AU12</th><th>Yaw°</th><th>Pitch°</th><th>面部</th><th>可靠</th></tr></thead>
+      <thead><tr><th>时间(s)</th><th>AU1</th><th>AU4</th><th>AU7</th><th>AU12</th><th>Yaw°</th><th>Pitch°</th><th>排队(ms)</th><th>原因</th><th>面部</th><th>可靠</th></tr></thead>
       <tbody>`;
   for(const f of show){
     const reliable=frameReliable(f);
@@ -207,6 +209,7 @@ export function renderExpression(exp,st){
       <td class="${f.au7>=2?'trigger':''}">${f.au7}</td>
       <td class="${au12ok?'trigger':''}">${f.au12}</td>
       <td>${f.yaw}</td><td>${f.pitch}</td>
+      <td>${f.queued_ms||0}</td><td>${escHtml(f.drop_reason||'')}</td>
       <td>${face?'✅':'❌'}</td><td>${reliable?'✅':'⚠️'}</td>
     </tr>`;
   }

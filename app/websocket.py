@@ -12,6 +12,7 @@ from . import debug_log
 from .ai_client import ChatMessage
 from .database import ChatLog, ExpressionFrame, Participant, Session
 from .expression import AUFrame
+from .experiment_slots import touch_experiment_slot
 from .session_activity import mark_disconnected, touch_session
 from .strategy import Strategy, UserTurn
 from .websocket_utils import (
@@ -25,12 +26,40 @@ from .websocket_utils import (
 )
 
 
-def create_websocket_router(db_session_factory, expression_engine, selectors, ai_client) -> APIRouter:
+def create_websocket_router(db_session_factory, expression_engine, pyfeat_scheduler, selectors, ai_client) -> APIRouter:
     router = APIRouter()
     active_connections: dict[str, WebSocket] = {}
 
-    async def _detect_frame(participant_id: str, image_base64: str) -> AUFrame:
-        return await asyncio.to_thread(expression_engine.process_frame, image_base64, participant_id)
+    async def _detect_frame(participant_id: str, session_id: int | None, image_base64: str) -> tuple[AUFrame, float]:
+        result = await pyfeat_scheduler.submit(
+            participant_id,
+            session_id,
+            "expression",
+            expression_engine.process_frame,
+            image_base64,
+            participant_id,
+        )
+        if result.dropped:
+            frame = AUFrame(
+                timestamp=time.time(),
+                au1=0.0,
+                au4=0.0,
+                au7=0.0,
+                au12=0.0,
+                face_detected=False,
+                reliable=False,
+                drop_reason=result.drop_reason,
+                queued_ms=result.queued_ms,
+            )
+            expression_engine._store_frame(participant_id, frame)
+            return frame, result.elapsed_ms
+
+        frame = result.value
+        if frame:
+            frame.queued_ms = result.queued_ms
+            if not frame.reliable and not frame.drop_reason:
+                frame.drop_reason = "pose_unreliable" if frame.face_detected else "no_face"
+        return frame, result.elapsed_ms
 
     @router.websocket("/ws/{participant_id}")
     async def websocket_endpoint(websocket: WebSocket, participant_id: str):
@@ -113,6 +142,7 @@ def create_websocket_router(db_session_factory, expression_engine, selectors, ai
                         await websocket.send_text(json.dumps(sync_payload, ensure_ascii=False))
 
                     elif msg_type == "baseline_reset":
+                        touch_experiment_slot(current_session_id, "baseline")
                         baseline_count = 0
                         expression_engine.clear_baseline_buffer(participant_id)
                         await safe_send({
@@ -124,15 +154,19 @@ def create_websocket_router(db_session_factory, expression_engine, selectors, ai
                         if not await ensure_session_exists():
                             continue
                         touch_session(participant_id, current_session_id)
+                        touch_experiment_slot(current_session_id, "baseline")
 
                         frame_b64 = msg.get("frame", "")
-                        started = time.perf_counter()
-                        vector = await asyncio.to_thread(
+                        result = await pyfeat_scheduler.submit(
+                            participant_id,
+                            current_session_id,
+                            "baseline",
                             expression_engine.collect_baseline_frames,
                             frame_b64,
                             participant_id,
                         )
-                        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+                        vector = None if result.dropped else result.value
+                        elapsed_ms = result.elapsed_ms
                         if vector is not None:
                             baseline_count += 1
                         if debug_log.is_enabled():
@@ -142,20 +176,27 @@ def create_websocket_router(db_session_factory, expression_engine, selectors, ai
                                 "session_id": current_session_id,
                                 "bytes": debug_log._frame_bytes(frame_b64),
                                 "elapsed_ms": elapsed_ms,
+                                "queued_ms": result.queued_ms,
+                                "drop_reason": result.drop_reason,
                                 "face_detected": vector is not None,
                                 "reliable": vector is not None,
                                 "image": debug_log._debug_image(frame_b64),
-                                "api_response": expression_engine.get_last_api_response(),
-                                "message": f"baseline frame {baseline_count}: {elapsed_ms} ms",
+                                "api_response": None if result.dropped else expression_engine.get_last_api_response(),
+                                "message": (
+                                    f"baseline frame dropped: {result.drop_reason}"
+                                    if result.dropped else f"baseline frame {baseline_count}: {elapsed_ms} ms"
+                                ),
                             })
                         await websocket.send_text(json.dumps({
                             "type": "baseline_ack",
                             "collected": baseline_count,
                             "face_detected": vector is not None,
                             "reliable": vector is not None,
+                            "drop_reason": result.drop_reason,
                         }))
 
                     elif msg_type == "baseline_calibrate":
+                        touch_experiment_slot(current_session_id, "baseline")
                         baseline = expression_engine.calibrate_from_buffer(participant_id)
                         if baseline is None:
                             baseline_count = 0
@@ -185,15 +226,21 @@ def create_websocket_router(db_session_factory, expression_engine, selectors, ai
                             "artifact_count": baseline.artifact_count,
                         })
 
+                    elif msg_type == "task_started":
+                        if not await ensure_session_exists():
+                            continue
+                        touch_session(participant_id, current_session_id)
+                        touch_experiment_slot(current_session_id, "task")
+                        await safe_send({"type": "task_started_ack"})
+
                     elif msg_type == "expression_frame":
                         if not await ensure_session_exists():
                             continue
                         touch_session(participant_id, current_session_id)
+                        touch_experiment_slot(current_session_id, "task")
 
                         frame_b64 = msg.get("frame", "")
-                        started = time.perf_counter()
-                        au_frame = await _detect_frame(participant_id, frame_b64)
-                        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+                        au_frame, elapsed_ms = await _detect_frame(participant_id, current_session_id, frame_b64)
                         total_frames += 1
 
                         face_ok = au_frame and au_frame.face_detected and au_frame.reliable
@@ -206,7 +253,9 @@ def create_websocket_router(db_session_factory, expression_engine, selectors, ai
 
                             if not no_face_prompt_sent:
                                 reason = "请面对摄像头。"
-                                if au_frame and au_frame.face_detected and not au_frame.reliable:
+                                if au_frame and au_frame.drop_reason == "queue_timeout":
+                                    reason = "模型队列繁忙，正在自动跳过延迟帧。"
+                                elif au_frame and au_frame.face_detected and not au_frame.reliable:
                                     reason = "检测到面部角度不佳，请正对摄像头。"
                                 elif not au_frame or not au_frame.face_detected:
                                     reason = "未检测到面部，请面对摄像头。"
@@ -220,9 +269,14 @@ def create_websocket_router(db_session_factory, expression_engine, selectors, ai
                             "type": "face_status",
                             "face_detected": au_frame.face_detected if au_frame else False,
                             "reliable": au_frame.reliable if au_frame else False,
+                            "drop_reason": au_frame.drop_reason if au_frame else "pyfeat_error",
                         }))
                         if debug_log.is_enabled():
-                            api_response = expression_engine.get_last_api_response()
+                            api_response = (
+                                {"ok": False, "drop_reason": au_frame.drop_reason}
+                                if au_frame and au_frame.drop_reason == "queue_timeout"
+                                else expression_engine.get_last_api_response()
+                            )
                             selector = selectors.get(participant_id)
                             if selector:
                                 preview_turn = UserTurn(
@@ -247,11 +301,17 @@ def create_websocket_router(db_session_factory, expression_engine, selectors, ai
                                 "session_id": current_session_id,
                                 "bytes": debug_log._frame_bytes(frame_b64),
                                 "elapsed_ms": elapsed_ms,
+                                "queued_ms": au_frame.queued_ms if au_frame else 0.0,
+                                "drop_reason": au_frame.drop_reason if au_frame else "pyfeat_error",
                                 "face_detected": au_frame.face_detected if au_frame else False,
                                 "reliable": au_frame.reliable if au_frame else False,
                                 "image": debug_log._debug_image(frame_b64),
                                 "api_response": api_response,
-                                "message": f"expression frame {total_frames}: {elapsed_ms} ms",
+                                "message": (
+                                    f"expression frame {total_frames}: {au_frame.drop_reason}"
+                                    if au_frame and au_frame.drop_reason
+                                    else f"expression frame {total_frames}: {elapsed_ms} ms"
+                                ),
                             })
 
                         if current_session_id and au_frame:
@@ -265,6 +325,8 @@ def create_websocket_router(db_session_factory, expression_engine, selectors, ai
                                 head_roll=au_frame.head_roll,
                                 face_detected=au_frame.face_detected,
                                 reliable=au_frame.reliable,
+                                drop_reason=au_frame.drop_reason or None,
+                                queued_ms=au_frame.queued_ms,
                             ))
                             if len(pending_expression_frames) >= 10:
                                 flush_expression_frames()
