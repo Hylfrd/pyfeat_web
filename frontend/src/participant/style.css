@@ -94,6 +94,10 @@ a {
   padding: clamp(30px, 5vw, 48px);
 }
 
+.single-tab-card {
+  margin-top: clamp(48px, 12vh, 120px);
+}
+
 .center {
   text-align: center;
 }

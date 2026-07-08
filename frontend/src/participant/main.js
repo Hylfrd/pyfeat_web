@@ -2,7 +2,7 @@ import './style.css';
 import { $, escapeHtml } from '../shared/dom.js';
 
 // ── DOM refs ──
-const views = ['setup-view','pre-survey-view','queue-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view'];
+const views = ['setup-view','pre-survey-view','queue-view','baseline-view','task-view','questionnaire-view','post-survey-view','complete-view','duplicate-tab-view'];
 function showView(id){
   views.forEach(v=>$(v).classList.add('hidden'));
   $(id).classList.remove('hidden');
@@ -20,6 +20,16 @@ function setStage(id){
   if(id!=='queue-view')stopQueuePolling();
 }
 const STORAGE_KEY='hmcl-helper-progress-v1';
+const ACTIVE_TAB_KEY='hmcl-helper-active-tab-v1';
+const TAB_ID_KEY='hmcl-helper-tab-id-v1';
+const TAB_CHANNEL_NAME='hmcl-helper-tab-control';
+let tabId=sessionStorage.getItem(TAB_ID_KEY);
+if(!tabId){
+  tabId=(window.crypto&&crypto.randomUUID&&crypto.randomUUID())||`${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  sessionStorage.setItem(TAB_ID_KEY,tabId);
+}
+let tabChannel=null;
+try{tabChannel=new BroadcastChannel(TAB_CHANNEL_NAME)}catch(e){tabChannel=null}
 let currentStage='setup-view';
 let chatTranscript=[];
 let draftActionCounter=0;
@@ -28,6 +38,54 @@ document.documentElement.dataset.stage=currentStage;
 
 function readProgress(){
   try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){return null}
+}
+function readActiveTab(){
+  try{return JSON.parse(localStorage.getItem(ACTIVE_TAB_KEY)||'null')}catch(e){return null}
+}
+function sameSession(a,b){
+  return a&&b&&String(a.participantId)===String(b.participantId)&&String(a.sessionId)===String(b.sessionId);
+}
+function currentSessionRef(){
+  return participantId&&currentSessionId?{participantId,sessionId:currentSessionId}:null;
+}
+function progressSessionRef(progress){
+  return progress&&progress.participantId&&progress.currentSessionId
+    ? {participantId:progress.participantId,sessionId:progress.currentSessionId}
+    : null;
+}
+function releaseSessionSlot(ref, beacon=false){
+  if(!ref||!ref.participantId||!ref.sessionId)return Promise.resolve();
+  const body=new URLSearchParams({participant_id:ref.participantId,session_id:String(ref.sessionId)});
+  if(beacon&&navigator.sendBeacon){
+    const blob=new Blob([body.toString()],{type:'application/x-www-form-urlencoded'});
+    navigator.sendBeacon('/api/session/slot/release',blob);
+    return Promise.resolve();
+  }
+  return fetch('/api/session/slot/release',{method:'POST',body,keepalive:true}).catch(()=>{});
+}
+function postTabControl(message){
+  const payload={...message,tabId,nonce:`${Date.now()}-${Math.random().toString(16).slice(2)}`};
+  try{tabChannel?.postMessage(payload)}catch(e){}
+  try{localStorage.setItem(ACTIVE_TAB_KEY,JSON.stringify({...payload,updatedAt:Date.now()}))}catch(e){}
+}
+function claimTabOwnership(reason){
+  const next=currentSessionRef();
+  const previous=readActiveTab();
+  const saved=progressSessionRef(readProgress());
+  const releaseList=[];
+  if(previous?.participantId&&previous?.sessionId&&!sameSession(previous,next)){
+    releaseList.push({participantId:previous.participantId,sessionId:previous.sessionId});
+  }
+  if(saved&&!sameSession(saved,next)&&!releaseList.some(item=>sameSession(item,saved))){
+    releaseList.push(saved);
+  }
+  for(const ref of releaseList)releaseSessionSlot(ref);
+  postTabControl({
+    type:'takeover',
+    reason,
+    participantId:next?.participantId||'',
+    sessionId:next?.sessionId||0,
+  });
 }
 function writeProgress(extra={}){
   if(!participantId)return;
@@ -55,6 +113,19 @@ function writeProgress(extra={}){
   localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
 }
 function clearProgress(){localStorage.removeItem(STORAGE_KEY)}
+async function discardSavedProgress(){
+  const saved=pendingResumeProgress||readProgress();
+  const ref=progressSessionRef(saved);
+  if(ref)await releaseSessionSlot(ref);
+  pendingResumeProgress=null;
+  clearProgress();
+  postTabControl({
+    type:'takeover',
+    reason:'discard',
+    participantId:'',
+    sessionId:0,
+  });
+}
 function collectFormValues(){
   const values={};
   document.querySelectorAll('input,select,textarea').forEach(el=>{
@@ -688,6 +759,12 @@ function closeWS(){
   }
   ws=null;
 }
+function releaseCurrentSlotOnLeave(){
+  if(['queue-view','baseline-view','task-view'].includes(currentStage)){
+    releaseSessionSlot(currentSessionRef(),true);
+  }
+}
+window.addEventListener('pagehide',releaseCurrentSlotOnLeave);
 function stopSessionStatusCheck(){
   if(sessionStatusTimer){clearInterval(sessionStatusTimer);sessionStatusTimer=null}
 }
@@ -751,9 +828,44 @@ function forceRestartExperiment(){
   clearProgress();
   location.replace(location.pathname);
 }
+function stopForOtherTabOwner(message={}){
+  if(message.tabId===tabId)return;
+  const next={participantId:message.participantId,sessionId:message.sessionId};
+  const own=currentSessionRef()||progressSessionRef(pendingResumeProgress)||progressSessionRef(readProgress());
+  stopSessionStatusCheck();
+  stopQueuePolling();
+  stopDebugStatus();
+  clearTimeoutSubmitRetry();
+  stopAiSyncPolling();
+  clearAiWaitTimeout();
+  clearInterval(timerInterval);
+  clearInterval(baselineInterval);
+  pauseTaskCapture();
+  closeWS();
+  if(webcamStream){
+    webcamStream.getTracks().forEach(track=>track.stop());
+    webcamStream=null;
+  }
+  if(own&&!sameSession(own,next))releaseSessionSlot(own);
+  pendingResumeProgress=null;
+  $('resume-overlay')?.classList.add('hidden');
+  currentStage='duplicate-tab-view';
+  showView('duplicate-tab-view');
+}
+function handleTabControlMessage(message={}){
+  if(message.type==='takeover')stopForOtherTabOwner(message);
+}
+if(tabChannel){
+  tabChannel.onmessage=e=>handleTabControlMessage(e.data||{});
+}
+window.addEventListener('storage',e=>{
+  if(e.key!==ACTIVE_TAB_KEY||!e.newValue)return;
+  try{handleTabControlMessage(JSON.parse(e.newValue))}catch(err){}
+});
 async function resumeProgress(saved){
   participantId=saved.participantId;
   currentSessionId=saved.currentSessionId;
+  claimTabOwnership('resume');
   if(currentSessionId)startSessionStatusCheck();
   currentCondition=saved.currentCondition;
   currentStage=saved.currentStage||'setup-view';
@@ -1443,6 +1555,7 @@ $('setup-form').addEventListener('submit',async e=>{
     currentSessionId=d.session_id;
     currentCondition=d.condition;
     currentStage='pre-survey-view';
+    claimTabOwnership('start');
     writeProgress();
   } catch(err) {
     toast('无法创建实验会话，请刷新页面重试。', 0);
@@ -1475,7 +1588,7 @@ function bindParticipantEvents(){
   $('eval-overlay')?.addEventListener('click',e=>{
     if(e.target===$('eval-overlay'))closeEvalModal();
   });
-  document.addEventListener('click',e=>{
+  document.addEventListener('click',async e=>{
     const el=e.target.closest('[data-action]');
     if(!el)return;
     if(el.dataset.action==='apply-draft')return extractDraft(draftActionText.get(el.dataset.draftId)||'');
@@ -1492,8 +1605,7 @@ function bindParticipantEvents(){
     }
     if(el.dataset.action==='discard-progress'){
       $('resume-overlay')?.classList.add('hidden');
-      pendingResumeProgress=null;
-      clearProgress();
+      await discardSavedProgress();
     }
   });
 }

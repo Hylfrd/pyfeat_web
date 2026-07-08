@@ -127,6 +127,18 @@ def create_experiment_router(
                 raise HTTPException(404, "Session not found")
         return get_experiment_slot_status(session_id)
 
+    @router.post("/api/session/slot/release")
+    async def release_session_slot(
+        participant_id: str = Form(...),
+        session_id: int = Form(...),
+    ):
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session or session.participant_id != participant_id:
+                return {"ok": True, "released": False}
+        release_experiment_slot(session_id)
+        return {"ok": True, "released": True}
+
     @router.post("/api/session/complete")
     async def complete_session(
         session_id: int = Form(...),
