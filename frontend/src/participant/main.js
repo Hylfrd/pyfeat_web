@@ -102,6 +102,7 @@ let captureState = '';
 let sessionStatusTimer = null;
 let queuePollTimer = null;
 let debugStatusTimer = null;
+let timeoutSubmitRetryTimer = null;
 let pendingResumeProgress = null;
 const AI_WAIT_TIMEOUT_MS = 75000;
 const AI_RECOVERY_GRACE_MS = 12000;
@@ -210,7 +211,6 @@ function clearToasts(kind){
 }
 
 // ── Participant debug panel ──
-const DEBUG_METRIC_LIMIT = 240;
 let debugFrameStats = [];
 function debugEl(id){return document.getElementById(id)}
 function debugTime(){
@@ -257,9 +257,6 @@ function appendDebugLog(kind,msg={}){
     elapsed_ms: elapsedRaw,
     drop_reason: msg.drop_reason||'',
   });
-  if(debugFrameStats.length>DEBUG_METRIC_LIMIT){
-    debugFrameStats=debugFrameStats.slice(-DEBUG_METRIC_LIMIT);
-  }
   updateDebugMetrics();
   const line=document.createElement('div');
   line.className=`debug-line ${ok?'ok':'warn'}`;
@@ -681,12 +678,37 @@ async function verifySessionExists(){
     const params=new URLSearchParams({participant_id:participantId});
     const r=await fetch(`/api/session/status/${currentSessionId}?${params.toString()}`,{cache:'no-store'});
     if(r.status===404)forceRestartExperiment();
+    if(!r.ok)return;
+    const data=await r.json();
+    if(data.completed&&currentStage==='task-view'){
+      finalSubmitting=false;
+      clearTimeoutSubmitRetry();
+      clearInterval(timerInterval);timerInterval=null;
+      clearInterval(expressionInterval);expressionInterval=null;
+      pauseTaskCapture();
+      stopAiSyncPolling();
+      closeWS();
+      setStage('questionnaire-view');
+    }
   }catch(err){}
+}
+function clearTimeoutSubmitRetry(){
+  if(timeoutSubmitRetryTimer){clearTimeout(timeoutSubmitRetryTimer);timeoutSubmitRetryTimer=null}
+}
+function scheduleTimeoutSubmitRetry(){
+  if(timeoutSubmitRetryTimer||currentStage!=='task-view')return;
+  timeoutSubmitRetryTimer=setTimeout(()=>{
+    timeoutSubmitRetryTimer=null;
+    if(currentStage==='task-view'&&!finalSubmitting){
+      doFinalSubmit(true);
+    }
+  },3000);
 }
 function forceRestartExperiment(){
   stopSessionStatusCheck();
   stopQueuePolling();
   stopDebugStatus();
+  clearTimeoutSubmitRetry();
   debugFrameStats=[];
   updateDebugMetrics();
   stopAiSyncPolling();
@@ -983,6 +1005,7 @@ async function startTask(){
   $('task-prompt').innerHTML=TASK_PROMPT_HTML;
 
   setStage('task-view');
+  clearTimeoutSubmitRetry();
   turnCounter=0;revisionCounter=0;taskStartTime=Date.now();
   lastExpressionSentAt=Date.now();
   captureState='';
@@ -1003,7 +1026,7 @@ function updateTimer(){
   const el=$('timer');el.textContent=`${m}:${String(s).padStart(2,'0')}`;
   if(remaining<60)el.classList.add('warn');
   if(remaining<=0&&!finalSubmitting){
-    clearInterval(timerInterval);
+    clearInterval(timerInterval);timerInterval=null;
     doFinalSubmit(true);
   }
 }
@@ -1245,7 +1268,9 @@ async function doFinalSubmit(isTimeout){
   aiWaitStartedAt=0;
   aiWaitDeadlineAt=0;
   clearAiWaitTimeout();
-  clearInterval(timerInterval);clearInterval(expressionInterval);
+  clearTimeoutSubmitRetry();
+  clearInterval(timerInterval);timerInterval=null;
+  clearInterval(expressionInterval);expressionInterval=null;
   removeThinking();
   pauseTaskCapture();
   stopAiSyncPolling();
@@ -1266,10 +1291,16 @@ async function doFinalSubmit(isTimeout){
     if(!r.ok)throw new Error(`complete failed: ${r.status}`);
   }catch(e){
     finalSubmitting=false;
-    resumeTaskCapture();
-    toast('提交失败，请重试。',4000);
+    if(isTimeout){
+      toast('时间已到，提交失败，正在自动重试。',4000);
+      scheduleTimeoutSubmitRetry();
+    }else{
+      resumeTaskCapture();
+      toast('提交失败，请重试。',4000);
+    }
     return;
   }
+  clearTimeoutSubmitRetry();
   setStage('questionnaire-view');
 }
 
