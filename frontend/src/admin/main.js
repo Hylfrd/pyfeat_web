@@ -20,7 +20,12 @@ function showDeviceNoticeIfNeeded() {
   const iPadDesktopUa = /Macintosh/i.test(ua) && touchPoints > 1;
   const desktopPlatform = /Win32|Win64|Windows|MacIntel|Linux x86_64|Linux i686/i.test(platform);
   const isDesktop = desktopPlatform && !mobileLike && !iPadDesktopUa;
-  if (!isDesktop) $('device-notice')?.classList.remove('hidden');
+  if (!isDesktop) {
+    document.documentElement.classList.add('device-blocked');
+    $('device-notice')?.classList.remove('hidden');
+    return true;
+  }
+  return false;
 }
 
 function setTheme(theme) {
@@ -361,7 +366,9 @@ function handleAdminChange(e) {
   }
 }
 
-bindAdminEvents();
-showDeviceNoticeIfNeeded();
-initTheme();
-initAuth();
+const DEVICE_BLOCKED = showDeviceNoticeIfNeeded();
+if (!DEVICE_BLOCKED) {
+  bindAdminEvents();
+  initTheme();
+  initAuth();
+}

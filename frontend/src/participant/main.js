@@ -45,12 +45,13 @@ function showDeviceNoticeIfNeeded(){
   const desktopPlatform=/Win32|Win64|Windows|MacIntel|Linux x86_64|Linux i686/i.test(platform);
   const isDesktop=desktopPlatform&&!mobileLike&&!iPadDesktopUa;
   if(!isDesktop){
+    document.documentElement.classList.add('device-blocked');
     $('device-notice')?.classList.remove('hidden');
     return true;
   }
   return false;
 }
-showDeviceNoticeIfNeeded();
+const DEVICE_BLOCKED=showDeviceNoticeIfNeeded();
 
 function readProgress(){
   try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch(e){return null}
@@ -1660,8 +1661,10 @@ $('setup-form').addEventListener('submit',async e=>{
   peekRecordingDrawer();
 });
 
-startDebugStatus();
-initProgressRecovery();
+if(!DEVICE_BLOCKED){
+  startDebugStatus();
+  initProgressRecovery();
+}
 
 
 function bindParticipantEvents(){
@@ -1690,5 +1693,7 @@ function bindParticipantEvents(){
   });
 }
 
-bindParticipantEvents();
-initRecordingDrawer();
+if(!DEVICE_BLOCKED){
+  bindParticipantEvents();
+  initRecordingDrawer();
+}
