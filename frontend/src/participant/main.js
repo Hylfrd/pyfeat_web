@@ -97,6 +97,8 @@ let reconnectTimer = null;
 let reconnectAttempts = 0;
 let intentionalWsClose = false;
 let lastExpressionSentAt = 0;
+let expressionFramePending = false;
+let expressionFramePendingAt = 0;
 let lastCaptureNoticeAt = 0;
 let captureState = '';
 let sessionStatusTimer = null;
@@ -269,13 +271,16 @@ function appendDebugLog(kind,msg={}){
   while(log.children.length>80)log.lastElementChild.remove();
   setDebugStatus(ok?'ok':'warn',ok?'ok':'warn');
 }
+function isDroppedFrameStatus(msg={}){
+  return ['queue_timeout','scheduler_stop'].includes(msg.drop_reason||'');
+}
 function renderDebugSlot(data={}){
   debugEl('debug-participant').textContent=participantId||'-';
   debugEl('debug-session').textContent=currentSessionId?`#${currentSessionId}`:'-';
   debugEl('debug-stage').textContent=currentStage||'-';
   debugEl('debug-slot').textContent=data.state||'-';
   debugEl('debug-wait').textContent=data.estimated_wait_s!==undefined?formatWait(data.estimated_wait_s):'-';
-  debugEl('debug-active').textContent=`${data.active_count??0}/${data.max_active??3}`;
+  debugEl('debug-active').textContent=`${data.active_count??0}/${data.max_active??2}`;
   debugEl('debug-queue').textContent=String(data.queue_length??0);
   const active=Array.isArray(data.active_slots)?data.active_slots:[];
   const queued=Array.isArray(data.queued_slots)?data.queued_slots:[];
@@ -322,6 +327,9 @@ function connectWS(){
     ws.onopen = () => {
       console.log('[WS] Connected');
       intentionalWsClose=false;
+      expressionFramePending=false;
+      expressionFramePendingAt=0;
+      baselineFramePending=false;
       reconnectAttempts=0;
       clearToasts('connection');
       if(currentSessionId)ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
@@ -338,6 +346,9 @@ function connectWS(){
     };
     ws.onclose = (e) => {
       console.log('[WS] Closed:', e.code, e.reason);
+      expressionFramePending=false;
+      expressionFramePendingAt=0;
+      baselineFramePending=false;
       const intentional= intentionalWsClose || e.reason==='task complete';
       intentionalWsClose=false;
       if(intentional){
@@ -355,12 +366,13 @@ function connectWS(){
     ws.onmessage = e => {
       const msg = JSON.parse(e.data);
       if(msg.type==='baseline_ack'){
+        baselineFramePending=false;
         appendDebugLog('base',msg);
         baselineAckedCount=msg.collected;
         const pct=Math.min(100,(msg.collected/10)*100);
         $('baseline-bar').style.width=pct+'%';
         $('baseline-count').textContent=msg.collected;
-        if(currentStage==='baseline-view'&&(msg.face_detected===false||msg.reliable===false)){
+        if(currentStage==='baseline-view'&&!isDroppedFrameStatus(msg)&&(msg.face_detected===false||msg.reliable===false)){
           showBaselineFaceToast();
         }
         if(msg.collected>=10 && !baselineDone && !baselineCalibrating){
@@ -413,7 +425,12 @@ function connectWS(){
         toast(msg.message,4000);
       }
       if(msg.type==='face_status'){
+        expressionFramePending=false;
+        expressionFramePendingAt=0;
         appendDebugLog('expr',msg);
+        if(isDroppedFrameStatus(msg)){
+          return;
+        }
         captureState='';
         if(msg.face_detected&&msg.reliable){
           setFaceStatus('found','面部已检测');
@@ -508,6 +525,9 @@ function startExpressionCapture(){
   clearInterval(expressionInterval);
   expressionInterval=setInterval(()=>{
     if(currentStage!=='task-view')return;
+    if(expressionFramePending){
+      return;
+    }
     if(isAiWaiting){
       setFaceStatus('found','面部已检测');
       return;
@@ -522,6 +542,8 @@ function startExpressionCapture(){
       setCapturePaused('摄像头中断',true);
       return;
     }
+    expressionFramePending=true;
+    expressionFramePendingAt=Date.now();
     ws.send(JSON.stringify({type:'expression_frame',frame}));
     lastExpressionSentAt=Date.now();
   },500);
@@ -537,6 +559,8 @@ function pauseTaskCapture(){
     mediaRecorder.stop();
   }
   mediaRecorder=null;
+  expressionFramePending=false;
+  expressionFramePendingAt=0;
 }
 function resumeTaskCapture(){
   startRecordingCapture();
@@ -866,7 +890,7 @@ function renderQueueStatus(data={}){
   renderDebugSlot(data);
   $('queue-estimate').textContent=formatWait(data.estimated_wait_s);
   $('queue-position').textContent=data.position||'-';
-  $('queue-active').textContent=`${data.active_count||0}/${data.max_active||3}`;
+  $('queue-active').textContent=`${data.active_count||0}/${data.max_active||2}`;
   $('queue-length').textContent=data.queue_length||0;
   const wait=Number(data.estimated_wait_s)||0;
   const pct=wait>0?Math.max(4,Math.min(96,100-(wait/900*100))):100;
@@ -930,6 +954,7 @@ let baselineDone = false;
 let baselineSendComplete = false;
 let baselineCalibrating = false;
 let baselineFaceToastVisible = false;
+let baselineFramePending = false;
 function showBaselineFaceToast(){
   if(baselineFaceToastVisible)return;
   baselineFaceToastVisible=true;
@@ -948,14 +973,21 @@ async function startBaseline(){
     return;
   }
   clearInterval(baselineInterval);
-  baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false; baselineCalibrating=false; baselineFaceToastVisible=false;
+  baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false; baselineCalibrating=false; baselineFaceToastVisible=false; baselineFramePending=false;
   if(ws.readyState===WebSocket.OPEN){
     ws.send(JSON.stringify({type:'baseline_reset'}));
   }
   baselineInterval=setInterval(()=>{
     if(baselineDone||baselineCalibrating) return;
+    if(baselineFramePending) return;
     if(ws.readyState===WebSocket.OPEN){
-      ws.send(JSON.stringify({type:'baseline_frame',frame:captureFrame()}));
+      const frame=captureFrame();
+      if(!frame){
+        showBaselineFaceToast();
+        return;
+      }
+      baselineFramePending=true;
+      ws.send(JSON.stringify({type:'baseline_frame',frame}));
       baselineSentCount++;
       if(baselineSentCount>=20 && baselineAckedCount===0){
         showBaselineFaceToast();

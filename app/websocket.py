@@ -187,7 +187,7 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                                     if result.dropped else f"baseline frame {baseline_count}: {elapsed_ms} ms"
                                 ),
                             })
-                        await websocket.send_text(json.dumps({
+                        if not await safe_send({
                             "type": "baseline_ack",
                             "collected": baseline_count,
                             "face_detected": vector is not None,
@@ -195,7 +195,8 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                             "drop_reason": result.drop_reason,
                             "elapsed_ms": elapsed_ms,
                             "queued_ms": result.queued_ms,
-                        }))
+                        }):
+                            break
 
                     elif msg_type == "baseline_calibrate":
                         touch_experiment_slot(current_session_id, "baseline")
@@ -253,21 +254,23 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                         else:
                             unreliable_frames += 1
 
-                            if not no_face_prompt_sent:
+                            internal_drop = au_frame and au_frame.drop_reason in {"queue_timeout", "scheduler_stop"}
+                            if internal_drop:
+                                pass
+                            elif not no_face_prompt_sent:
                                 reason = "请面对摄像头。"
-                                if au_frame and au_frame.drop_reason == "queue_timeout":
-                                    reason = "模型队列繁忙，正在自动跳过延迟帧。"
-                                elif au_frame and au_frame.face_detected and not au_frame.reliable:
+                                if au_frame and au_frame.face_detected and not au_frame.reliable:
                                     reason = "检测到面部角度不佳，请正对摄像头。"
                                 elif not au_frame or not au_frame.face_detected:
                                     reason = "未检测到面部，请面对摄像头。"
-                                await websocket.send_text(json.dumps({
+                                if not await safe_send({
                                     "type": "prompt",
                                     "message": reason,
-                                }))
+                                }):
+                                    break
                                 no_face_prompt_sent = True
 
-                        await websocket.send_text(json.dumps({
+                        if not await safe_send({
                             "type": "face_status",
                             "face_detected": au_frame.face_detected if au_frame else False,
                             "reliable": au_frame.reliable if au_frame else False,
@@ -275,7 +278,8 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                             "elapsed_ms": elapsed_ms,
                             "queued_ms": au_frame.queued_ms if au_frame else 0.0,
                             "frame_index": total_frames,
-                        }))
+                        }):
+                            break
                         if debug_log.is_enabled():
                             api_response = (
                                 {"ok": False, "drop_reason": au_frame.drop_reason}
