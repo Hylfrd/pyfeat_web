@@ -29,7 +29,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(pages_router)
 app.include_router(auth_router)
 
-db_session_factory = init_session_factory()
+db_session_factory = init_session_factory(str(ROOT_DIR / "data" / "experiment.db"))
 expression_engine = ExpressionEngine()
 ai_client = AIClient()
 

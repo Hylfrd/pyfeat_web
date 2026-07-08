@@ -154,7 +154,7 @@ async def run_posthoc_evaluation(root_dir: Path, eval_ai_client, session_id: int
         result = await evaluate_email(eval_ai_client, final_email)
 
         from .database import init_db as _init_bg_db
-        bg_db = _init_bg_db()
+        bg_db = _init_bg_db(str(root_dir / "data" / "experiment.db"))
         from .database import Evaluation as Eval
 
         bg_db.add(Eval(session_id=session_id, run_number=0, layer="deterministic",
