@@ -463,11 +463,11 @@ button:not(:disabled):hover,
 }
 
 .required-star {
-  display: block;
+  display: inline;
   color: var(--red);
   font-size: 16px;
   line-height: 1;
-  text-align: center;
+  margin-left: 4px;
 }
 
 .likert-line {
