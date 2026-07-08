@@ -1421,14 +1421,16 @@ async function doFinalSubmit(isTimeout){
   closeWS();
   await new Promise(resolve=>setTimeout(resolve,250));
   const draftText=$('draft-text').textContent||'';
+  const elapsedMs=Number.isFinite(taskStartTime)&&taskStartTime>0?Date.now()-taskStartTime:0;
+  const safeDuration=Math.max(0,Math.round(elapsedMs));
   const f=new FormData();
-  f.append('session_id',currentSessionId);
+  f.append('session_id',String(currentSessionId||''));
   f.append('final_email',draftText);
-  f.append('duration_ms',Date.now()-taskStartTime);
+  f.append('duration_ms',String(safeDuration));
   f.append('completion_type',isTimeout?'timeout':'manual');
-  f.append('total_turns',turnCounter);
-  f.append('total_revisions',revisionCounter);
-  f.append('total_frames',Math.floor((Date.now()-taskStartTime)/500));
+  f.append('total_turns',String(Math.max(0,Math.round(Number(turnCounter)||0))));
+  f.append('total_revisions',String(Math.max(0,Math.round(Number(revisionCounter)||0))));
+  f.append('total_frames',String(Math.max(0,Math.floor(safeDuration/500))));
   f.append('unreliable_frames',0);
   try{
     const r=await fetch('/api/session/complete',{method:'POST',body:f});

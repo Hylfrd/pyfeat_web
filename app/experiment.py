@@ -21,6 +21,13 @@ from .session_activity import get_session_activity
 from .strategy import StrategySelector
 
 
+def _form_int(value, default: int = 0) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
 def create_experiment_router(
     root_dir: Path,
     db_session_factory,
@@ -141,47 +148,55 @@ def create_experiment_router(
 
     @router.post("/api/session/complete")
     async def complete_session(
-        session_id: int = Form(...),
-        final_email: str = Form(...),
-        duration_ms: int = Form(...),
+        session_id: str = Form("0"),
+        final_email: str = Form(""),
+        duration_ms: str = Form("0"),
         completion_type: str = Form("manual"),
-        total_turns: int = Form(0),
-        total_revisions: int = Form(0),
-        total_frames: int = Form(0),
-        unreliable_frames: int = Form(0),
+        total_turns: str = Form("0"),
+        total_revisions: str = Form("0"),
+        total_frames: str = Form("0"),
+        unreliable_frames: str = Form("0"),
     ):
         """Mark a session as complete and store the final email."""
+        session_id_int = _form_int(session_id)
+        if session_id_int <= 0:
+            raise HTTPException(400, "Invalid session")
+        duration_ms_int = max(0, _form_int(duration_ms))
+        total_turns_int = max(0, _form_int(total_turns))
+        total_revisions_int = max(0, _form_int(total_revisions))
+        total_frames_int = max(0, _form_int(total_frames))
+        unreliable_frames_int = max(0, _form_int(unreliable_frames))
         with db_session_factory() as db_session:
-            session = db_session.query(Session).get(session_id)
+            session = db_session.query(Session).get(session_id_int)
             if not session:
                 raise HTTPException(404, "Session not found")
 
             session.end_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-            session.duration_ms = duration_ms
+            session.duration_ms = duration_ms_int
             session.completion_type = completion_type
             session.final_email = final_email
-            session.total_turns = total_turns
-            session.total_revisions = total_revisions
+            session.total_turns = total_turns_int
+            session.total_revisions = total_revisions_int
             stored_frames = (
                 db_session.query(ExpressionFrame)
-                .filter(ExpressionFrame.session_id == session_id)
+                .filter(ExpressionFrame.session_id == session_id_int)
                 .all()
             )
             if stored_frames:
                 session.total_frames = len(stored_frames)
                 session.unreliable_frames = sum(1 for frame in stored_frames if not frame.reliable)
             else:
-                session.total_frames = total_frames
-                session.unreliable_frames = unreliable_frames
+                session.total_frames = total_frames_int
+                session.unreliable_frames = unreliable_frames_int
             session.completed = True
             db_session.commit()
 
-        release_experiment_slot(session_id)
+        release_experiment_slot(session_id_int)
 
         if eval_ai_client and final_email.strip():
-            asyncio.create_task(run_posthoc_evaluation(root_dir, eval_ai_client, session_id, final_email))
+            asyncio.create_task(run_posthoc_evaluation(root_dir, eval_ai_client, session_id_int, final_email))
 
-        return {"ok": True, "session_id": session_id}
+        return {"ok": True, "session_id": session_id_int}
 
     @router.post("/api/questionnaire")
     async def submit_questionnaire(
