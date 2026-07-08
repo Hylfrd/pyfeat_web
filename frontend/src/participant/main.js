@@ -210,10 +210,31 @@ function clearToasts(kind){
 }
 
 // ── Participant debug panel ──
+const DEBUG_METRIC_LIMIT = 240;
+let debugFrameStats = [];
 function debugEl(id){return document.getElementById(id)}
 function debugTime(){
   const d=new Date();
   return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+}
+function average(values){
+  return values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;
+}
+function percentile(values,pct){
+  if(!values.length)return 0;
+  const sorted=[...values].sort((a,b)=>a-b);
+  const index=Math.min(sorted.length-1,Math.ceil(sorted.length*pct)-1);
+  return sorted[index];
+}
+function updateDebugMetrics(){
+  const waits=debugFrameStats.map(item=>item.queued_ms);
+  const runs=debugFrameStats.map(item=>item.elapsed_ms);
+  const timeouts=debugFrameStats.filter(item=>item.drop_reason==='queue_timeout').length;
+  debugEl('debug-avg-wait').textContent=waits.length?`${average(waits).toFixed(0)}ms`:'-';
+  debugEl('debug-p95-wait').textContent=waits.length?`${percentile(waits,0.95).toFixed(0)}ms`:'-';
+  debugEl('debug-avg-run').textContent=runs.length?`${average(runs).toFixed(0)}ms`:'-';
+  debugEl('debug-timeout-count').textContent=String(timeouts);
+  debugEl('debug-frame-count').textContent=String(debugFrameStats.length);
 }
 function setDebugStatus(text,tone=''){
   const el=debugEl('debug-status-pill');
@@ -224,10 +245,22 @@ function setDebugStatus(text,tone=''){
 function appendDebugLog(kind,msg={}){
   const log=debugEl('debug-log');
   if(!log)return;
-  const queued=Number(msg.queued_ms||0).toFixed(1);
-  const elapsed=Number(msg.elapsed_ms||0).toFixed(1);
+  const queuedRaw=Number(msg.queued_ms||0);
+  const elapsedRaw=Number(msg.elapsed_ms||0);
+  const queued=queuedRaw.toFixed(1);
+  const elapsed=elapsedRaw.toFixed(1);
   const reason=msg.drop_reason?` ${msg.drop_reason}`:'';
   const ok=msg.reliable!==false&&!msg.drop_reason;
+  debugFrameStats.push({
+    kind,
+    queued_ms: queuedRaw,
+    elapsed_ms: elapsedRaw,
+    drop_reason: msg.drop_reason||'',
+  });
+  if(debugFrameStats.length>DEBUG_METRIC_LIMIT){
+    debugFrameStats=debugFrameStats.slice(-DEBUG_METRIC_LIMIT);
+  }
+  updateDebugMetrics();
   const line=document.createElement('div');
   line.className=`debug-line ${ok?'ok':'warn'}`;
   line.innerHTML=`
@@ -654,6 +687,8 @@ function forceRestartExperiment(){
   stopSessionStatusCheck();
   stopQueuePolling();
   stopDebugStatus();
+  debugFrameStats=[];
+  updateDebugMetrics();
   stopAiSyncPolling();
   clearAiWaitTimeout();
   isAiWaiting=false;
