@@ -273,7 +273,7 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                         else:
                             unreliable_frames += 1
 
-                            internal_drop = au_frame and au_frame.drop_reason in {"queue_timeout", "scheduler_stop"}
+                            internal_drop = au_frame and au_frame.drop_reason in {"queue_timeout", "scheduler_stop", "pyfeat_run_timeout"}
                             if internal_drop:
                                 pass
                             elif not no_face_prompt_sent:

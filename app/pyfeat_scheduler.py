@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 
 FRAME_QUEUE_TIMEOUT_S = 1.2
+FRAME_RUN_TIMEOUT_S = 6.0
 
 
 @dataclass
@@ -135,12 +136,26 @@ class PyFeatScheduler:
 
             started = time.perf_counter()
             try:
-                value = await asyncio.to_thread(job.func, *job.args)
+                value = await asyncio.wait_for(
+                    asyncio.to_thread(job.func, *job.args),
+                    timeout=FRAME_RUN_TIMEOUT_S,
+                )
                 elapsed_ms = (time.perf_counter() - started) * 1000
                 if not job.future.done():
                     job.future.set_result(
                         PyFeatResult(
                             value=value,
+                            queued_ms=round(queued_ms, 1),
+                            elapsed_ms=round(elapsed_ms, 1),
+                        )
+                    )
+            except asyncio.TimeoutError:
+                elapsed_ms = (time.perf_counter() - started) * 1000
+                if not job.future.done():
+                    job.future.set_result(
+                        PyFeatResult(
+                            dropped=True,
+                            drop_reason="pyfeat_run_timeout",
                             queued_ms=round(queued_ms, 1),
                             elapsed_ms=round(elapsed_ms, 1),
                         )

@@ -186,6 +186,8 @@ let intentionalWsClose = false;
 let lastExpressionSentAt = 0;
 let expressionFramePending = false;
 let expressionFramePendingAt = 0;
+let baselineFramePendingAt = 0;
+let baselineRecoveryTimer = null;
 let lastCaptureNoticeAt = 0;
 let captureState = '';
 let sessionStatusTimer = null;
@@ -196,6 +198,7 @@ let pendingResumeProgress = null;
 const AI_WAIT_TIMEOUT_MS = 75000;
 const AI_RECOVERY_GRACE_MS = 12000;
 const BASELINE_FACE_TOAST_MS = 5000;
+const FRAME_ACK_TIMEOUT_MS = 8000;
 
 const TASK_PROMPT_HTML = '<strong>情境</strong><br>你的电脑意外关机，期末项目数据全部丢失，今天就是截止日。请与 AI 协作写一封邮件向教授请求短期延期。';
 const recordingDrawer = $('webcam-wrap');
@@ -359,7 +362,7 @@ function appendDebugLog(kind,msg={}){
   setDebugStatus(ok?'ok':'warn',ok?'ok':'warn');
 }
 function isDroppedFrameStatus(msg={}){
-  return ['queue_timeout','scheduler_stop'].includes(msg.drop_reason||'');
+  return ['queue_timeout','scheduler_stop','pyfeat_run_timeout'].includes(msg.drop_reason||'');
 }
 function renderDebugSlot(data={}){
   debugEl('debug-participant').textContent=participantId||'-';
@@ -417,6 +420,7 @@ function connectWS(){
       expressionFramePending=false;
       expressionFramePendingAt=0;
       baselineFramePending=false;
+      baselineFramePendingAt=0;
       reconnectAttempts=0;
       clearToasts('connection');
       if(currentSessionId)ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
@@ -436,6 +440,7 @@ function connectWS(){
       expressionFramePending=false;
       expressionFramePendingAt=0;
       baselineFramePending=false;
+      baselineFramePendingAt=0;
       const intentional= intentionalWsClose || e.reason==='task complete';
       intentionalWsClose=false;
       if(intentional){
@@ -454,6 +459,7 @@ function connectWS(){
       const msg = JSON.parse(e.data);
       if(msg.type==='baseline_ack'){
         baselineFramePending=false;
+        baselineFramePendingAt=0;
         appendDebugLog('base',msg);
         baselineAckedCount=msg.collected;
         const pct=Math.min(100,(msg.collected/10)*100);
@@ -562,6 +568,32 @@ function scheduleReconnect(){
 }
 
 // ── Webcam ──
+function recoverBaselineAckTimeout(){
+  if(currentStage!=='baseline-view'||baselineRecoveryTimer)return;
+  baselineFramePending=false;
+  baselineFramePendingAt=0;
+  clearInterval(baselineInterval);baselineInterval=null;
+  toast('基线校准响应超时，正在重新连接...',4000,'connection','info');
+  try{
+    if(ws&&ws.readyState!==WebSocket.CLOSED)ws.close(4000,'baseline ack timeout');
+  }catch(e){}
+  baselineRecoveryTimer=setTimeout(async()=>{
+    baselineRecoveryTimer=null;
+    if(currentStage==='baseline-view'){
+      await startBaseline();
+    }
+  },800);
+}
+function recoverExpressionAckTimeout(){
+  if(currentStage!=='task-view')return;
+  expressionFramePending=false;
+  expressionFramePendingAt=0;
+  setCapturePaused('连接恢复中',true);
+  try{
+    if(ws&&ws.readyState!==WebSocket.CLOSED)ws.close(4001,'expression ack timeout');
+  }catch(e){}
+  scheduleReconnect();
+}
 async function checkModelReady(){
   try{
     const r=await fetch('/api/model-health',{cache:'no-store'});
@@ -616,6 +648,9 @@ function startExpressionCapture(){
   expressionInterval=setInterval(()=>{
     if(currentStage!=='task-view')return;
     if(expressionFramePending){
+      if(Date.now()-expressionFramePendingAt>FRAME_ACK_TIMEOUT_MS){
+        recoverExpressionAckTimeout();
+      }
       return;
     }
     if(isAiWaiting){
@@ -651,6 +686,7 @@ function pauseTaskCapture(){
   mediaRecorder=null;
   expressionFramePending=false;
   expressionFramePendingAt=0;
+  baselineFramePendingAt=0;
 }
 function resumeTaskCapture(){
   startRecordingCapture();
@@ -1035,6 +1071,7 @@ function stopQueuePolling(){
 }
 async function handleSlotStatus(data={}){
   baselineFramePending=false;
+  baselineFramePendingAt=0;
   expressionFramePending=false;
   expressionFramePendingAt=0;
   clearInterval(baselineInterval);baselineInterval=null;
@@ -1111,6 +1148,7 @@ async function startBaseline(){
   if(!await checkModelReady())return;
   stopQueuePolling();
   setStage('baseline-view');
+  if(baselineRecoveryTimer){clearTimeout(baselineRecoveryTimer);baselineRecoveryTimer=null}
   try{
     await connectWS();
   }catch(err){
@@ -1119,13 +1157,18 @@ async function startBaseline(){
     return;
   }
   clearInterval(baselineInterval);
-  baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false; baselineCalibrating=false; baselineFaceToastVisible=false; baselineFramePending=false;
+  baselineSentCount=0; baselineAckedCount=0; baselineDone=false; baselineSendComplete=false; baselineCalibrating=false; baselineFaceToastVisible=false; baselineFramePending=false; baselineFramePendingAt=0;
   if(ws.readyState===WebSocket.OPEN){
     ws.send(JSON.stringify({type:'baseline_reset'}));
   }
   baselineInterval=setInterval(()=>{
     if(baselineDone||baselineCalibrating) return;
-    if(baselineFramePending) return;
+    if(baselineFramePending){
+      if(Date.now()-baselineFramePendingAt>FRAME_ACK_TIMEOUT_MS){
+        recoverBaselineAckTimeout();
+      }
+      return;
+    }
     if(ws.readyState===WebSocket.OPEN){
       const frame=captureFrame();
       if(!frame){
@@ -1133,6 +1176,7 @@ async function startBaseline(){
         return;
       }
       baselineFramePending=true;
+      baselineFramePendingAt=Date.now();
       ws.send(JSON.stringify({type:'baseline_frame',frame}));
       baselineSentCount++;
       if(baselineSentCount>=20 && baselineAckedCount===0){
