@@ -232,7 +232,7 @@ def deterministic_score(text: str) -> DeterministicResult:
 LLM_HEURISTIC_PROMPT = """You are evaluating a draft email written by a university student to a professor.
 The student claims an urgent situation (computer crash / group project issue) and needs help.
 
-Your task: check the following four patterns. For each, answer YES (pattern present) or NO (pattern absent).
+Your task: check the following Five patterns. For each, answer YES (pattern present) or NO (pattern absent).
 
 1. EMOTIONAL FLATLINE: The email describes a crisis situation without any emotional urgency.
    A stressed student's email should have some irregularity — repetition, a fragment, a rushed phrase.
@@ -250,8 +250,22 @@ Your task: check the following four patterns. For each, answer YES (pattern pres
    A student rushing to meet a deadline would NOT produce this. If the text reads like
    a professionally copy-edited document, answer YES.
 
+5. UNCTUOUS WARMTH : The email performs an inflated, saccharine friendliness that
+   a real student wouldn't use with a professor under stress — excessive gratitude stacked
+   up front ("I truly, truly appreciate your time and guidance"), flattering asides about
+   the professor's character ("I know how much you care about your students"), or a
+   forced sense of closeness/familiarity that hasn't been earned by the relationship.
+   The tone feels like it's trying to ingratiate rather than communicate. Look for:
+   compliments unrelated to the request, gratitude expressed before help has even been
+   given, or warmth that is disproportionate to the actual ask. A genuinely stressed
+   student writing to a professor tends to be more transactional and less emotionally
+   generous. If the email oozes this kind of performative warmth, answer YES.
+   
+Be Critical. Stay critical and concise, digging any potential AI-generated patterns. Do not be lenient.
+Raise the flag if you see ANY of the above patterns, even if the email is otherwise well-written.
+
 Output ONLY a JSON object with this exact structure, no other text:
-{"emotional_flatline": true/false, "hollow_empathy": true/false, "pseudo_humility": true/false, "over_polished": true/false}"""
+{"emotional_flatline": true/false, "hollow_empathy": true/false, "pseudo_humility": true/false, "over_polished": true/false, "unctuous_warmth": true/false}"""
 
 
 class LLMHeuristicResult:
@@ -263,12 +277,13 @@ class LLMHeuristicResult:
             "hollow_empathy": json_response.get("hollow_empathy", False),
             "pseudo_humility": json_response.get("pseudo_humility", False),
             "over_polished": json_response.get("over_polished", False),
+            "unctuous_warmth": json_response.get("unctuous_warmth", False),
         }
 
     @property
     def score(self) -> int:
-        """0-100: each flagged pattern = 25 points."""
-        return sum(25 for v in self.flags.values() if v)
+        """0-100: each flagged pattern = 20 points."""
+        return sum(20 for v in self.flags.values() if v)
 
 
 async def llm_heuristic_single(ai_client, email_text: str) -> LLMHeuristicResult:

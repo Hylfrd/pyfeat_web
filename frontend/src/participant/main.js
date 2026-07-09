@@ -1455,7 +1455,7 @@ function showEvalModal(result, isTimeout){
 
   // Composite info
   html += `<div style="margin-top:16px;font-size:.68em;color:#94a3b8;text-align:center">
-    确定性评分 ${result.det_score ?? score} × 60% + LLM评分 ${result.llm_score ?? 0} × 40% = ${score} 分
+    确定性评分 ${result.det_score ?? score} × 30% + LLM评分 ${result.llm_score ?? 0} × 70% = ${score} 分
   </div>`;
 
   // Actions

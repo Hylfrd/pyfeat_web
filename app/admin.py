@@ -358,10 +358,10 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
         au7_vals = [f.au7 for f in frames]
         au1_vals = [f.au1 for f in frames]
 
-        au4_triggers = sum(1 for v in au4_vals if v >= 2)
-        au12_triggers = sum(1 for v in au12_vals if v >= 2)
-        au7_triggers = sum(1 for v in au7_vals if v >= 2)
-        au1_triggers = sum(1 for v in au1_vals if v >= 1.5)
+        au4_triggers = sum(1 for v in au4_vals if v >= 0.4)
+        au12_triggers = sum(1 for v in au12_vals if v >= 0.4)
+        au7_triggers = sum(1 for v in au7_vals if v >= 0.4)
+        au1_triggers = sum(1 for v in au1_vals if v >= 0.3)
 
         return {
             "session_id": session_id,
@@ -386,7 +386,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 "au7": round(max(au7_vals), 3),
                 "au12": round(max(au12_vals), 3),
             },
-            "triggers_above_2": {
+            "triggers_above_0_4": {
                 "au1": au1_triggers,
                 "au4": au4_triggers,
                 "au7": au7_triggers,

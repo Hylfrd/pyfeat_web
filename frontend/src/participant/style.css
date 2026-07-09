@@ -90,6 +90,8 @@ a {
   box-shadow: var(--shadow);
 }
 
+#timer { display: none; }
+
 .card {
   padding: clamp(30px, 5vw, 48px);
 }

@@ -86,6 +86,7 @@ def create_evaluation_router(eval_ai_client) -> APIRouter:
                     "hollow_empathy":     ("空洞共情",   "表达了理解但没有具体行动，共情没有落到实处。"),
                     "pseudo_humility":    ("伪谦逊式",   "过度道歉或自贬（'我完全理解''我深感抱歉'），真实学生很少这样写。"),
                     "over_polished":      ("过度完美",   "每个标点都正确，没有口语的不规则，不像赶截止日的学生写出来的。"),
+                    "unctuous_warmth":    ("谄媚温情",   "过度热情和讨好（'非常感谢您的时间''我知道您多么关心学生'），真实压力下的学生不会这样写。"),
                 }
                 for key, flagged in llm_result.flags.items():
                     name, note = FLAG_LABELS.get(key, (key, ""))
@@ -124,8 +125,8 @@ def create_evaluation_router(eval_ai_client) -> APIRouter:
                 })
                 llm_flags = []
 
-        llm_score = sum(25 for f in llm_flags if f["flagged"]) if llm_flags else 0
-        composite = 0.6 * det_result.score + 0.4 * llm_score if llm_flags else det_result.score
+        llm_score = sum(20 for f in llm_flags if f["flagged"]) if llm_flags else 0
+        composite = 0.3 * det_result.score + 0.7 * llm_score if llm_flags else det_result.score
         score = round(composite)
         passed = score < PASS_THRESHOLD
 
