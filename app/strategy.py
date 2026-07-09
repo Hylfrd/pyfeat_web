@@ -175,7 +175,7 @@ def _au4_rising(frames: List[AUFrame], window_s: float = 60.0) -> bool:
     return min_au4 < 1.0 and max_au4 >= FACS_B_LEVEL and currently_elevated
 
 
-def _input_shrinking(turns: List[UserTurn], n: int = 3) -> bool:
+def _input_shrinking(turns: List[UserTurn], n: int = 2) -> bool:
     """Probe trigger: last n turns show monotonically decreasing input length."""
     if len(turns) < n:
         return False
@@ -311,7 +311,7 @@ def _trigger_checks(
     frame_history: List[AUFrame],
 ) -> Dict[str, bool]:
     frames_across_turns = [t.frames for t in all_turns]
-    probe_text = _input_shrinking(all_turns, 3)
+    probe_text = _input_shrinking(all_turns, 2)
     probe_au = _au4_present(current_turn.frames)
     esc_triggered, _ = _au4_slope(frame_history)
     release_triggered = _au4_dropping(frame_history)
