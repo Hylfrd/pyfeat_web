@@ -58,8 +58,21 @@ def create_experiment_router(
         return f"P{n:03d}", order_group
 
     @router.post("/api/session/start")
-    async def start_session():
+    async def start_session(
+        consent_agreed: bool = Form(False),
+        consent_taker_name: str = Form(""),
+        consent_signature: str = Form(""),
+    ):
         """Create a new participant (auto-generated ID + balanced group) and session."""
+        consent_taker_name = consent_taker_name.strip()
+        consent_signature = consent_signature.strip()
+        if not consent_agreed:
+            raise HTTPException(400, "Consent is required before starting the experiment.")
+        if not consent_taker_name:
+            raise HTTPException(400, "Consent taker name is required.")
+        if not consent_signature.startswith("data:image/png;base64,"):
+            raise HTTPException(400, "Experimenter signature is required.")
+
         for _ in range(5):
             with db_session_factory() as db_session:
                 participant_id, order_group = _generate_participant_id(db_session)
@@ -74,6 +87,10 @@ def create_experiment_router(
                     condition=assigned_condition,
                     condition_order=1,
                     start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    consent_agreed=True,
+                    consent_taker_name=consent_taker_name,
+                    consent_date=time.strftime("%Y-%m-%d", time.localtime()),
+                    consent_signature=consent_signature,
                 )
                 db_session.add(session)
                 try:

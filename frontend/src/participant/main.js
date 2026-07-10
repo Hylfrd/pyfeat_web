@@ -178,6 +178,148 @@ let sessionStatusTimer = null;
 let queuePollTimer = null;
 let debugStatusTimer = null;
 let timeoutSubmitRetryTimer = null;
+
+let consentSignatureSaved = false;
+let consentSignatureDrawing = false;
+let consentSignatureTouched = false;
+
+function setupConsentDate(){
+  const el=$('consent-date-display');
+  if(!el)return;
+  const now=new Date();
+  el.textContent=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}（系统自动记录）`;
+}
+
+function resizeSignatureCanvas(){
+  const canvas=$('consent-signature-pad');
+  if(!canvas)return null;
+  const rect=canvas.getBoundingClientRect();
+  const ratio=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.floor(rect.width*ratio));
+  canvas.height=Math.max(1,Math.floor(rect.height*ratio));
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(ratio,0,0,ratio,0,0);
+  ctx.fillStyle='#fff';
+  ctx.fillRect(0,0,rect.width,rect.height);
+  ctx.lineWidth=2;
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+  ctx.strokeStyle='#111827';
+  return {canvas,ctx};
+}
+
+function signaturePoint(e){
+  const canvas=$('consent-signature-pad');
+  const rect=canvas.getBoundingClientRect();
+  return {x:e.clientX-rect.left,y:e.clientY-rect.top};
+}
+
+function openConsentSignature(){
+  $('consent-signature-overlay')?.classList.remove('hidden');
+  consentSignatureTouched=false;
+  resizeSignatureCanvas();
+}
+
+function closeConsentSignature(){
+  $('consent-signature-overlay')?.classList.add('hidden');
+  consentSignatureDrawing=false;
+  consentSignatureTouched=false;
+}
+
+function clearConsentSignature(){
+  resizeSignatureCanvas();
+  consentSignatureTouched=false;
+  consentSignatureSaved=false;
+  const input=$('consent-signature-data');
+  if(input)input.value='';
+  const status=$('consent-signature-status');
+  if(status)status.textContent='尚未签名';
+  writeProgress();
+}
+
+function saveConsentSignature(){
+  const canvas=$('consent-signature-pad');
+  if(!canvas||!consentSignatureTouched){
+    toast('请先在签名区域完成签名。',4000);
+    return;
+  }
+  const input=$('consent-signature-data');
+  if(input)input.value=canvas.toDataURL('image/png');
+  consentSignatureSaved=true;
+  const status=$('consent-signature-status');
+  if(status)status.textContent='已签名';
+  closeConsentSignature();
+  writeProgress();
+}
+
+function refreshConsentSignatureStatus(){
+  const input=$('consent-signature-data');
+  const status=$('consent-signature-status');
+  consentSignatureSaved=!!input?.value;
+  if(status)status.textContent=consentSignatureSaved?'已签名':'尚未签名';
+}
+
+function initConsentSignature(){
+  setupConsentDate();
+  refreshConsentSignatureStatus();
+  $('open-consent-signature')?.addEventListener('click',openConsentSignature);
+  $('cancel-consent-signature')?.addEventListener('click',closeConsentSignature);
+  $('clear-consent-signature')?.addEventListener('click',clearConsentSignature);
+  $('save-consent-signature')?.addEventListener('click',saveConsentSignature);
+  $('consent-signature-overlay')?.addEventListener('click',e=>{
+    if(e.target===$('consent-signature-overlay'))closeConsentSignature();
+  });
+  const canvas=$('consent-signature-pad');
+  if(!canvas)return;
+  canvas.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    consentSignatureDrawing=true;
+    consentSignatureTouched=true;
+    const ctx=canvas.getContext('2d');
+    if(!ctx)return;
+    const p=signaturePoint(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x,p.y);
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(!consentSignatureDrawing)return;
+    e.preventDefault();
+    const ctx=canvas.getContext('2d');
+    const p=signaturePoint(e);
+    ctx.lineTo(p.x,p.y);
+    ctx.stroke();
+  });
+  const stop=e=>{
+    if(!consentSignatureDrawing)return;
+    consentSignatureDrawing=false;
+    try{canvas.releasePointerCapture(e.pointerId)}catch(err){}
+  };
+  canvas.addEventListener('pointerup',stop);
+  canvas.addEventListener('pointercancel',stop);
+}
+
+function validateConsentForm(){
+  const missing=[...document.querySelectorAll('[name^="consent_item_"]')].filter(el=>!el.checked);
+  if(missing.length){
+    toast('请先勾选全部知情同意条款。',5000);
+    missing[0].focus();
+    return null;
+  }
+  const takerName=($('consent-taker-name')?.value||'').trim();
+  if(!takerName){
+    toast('请填写获取同意者姓名。',5000);
+    $('consent-taker-name')?.focus();
+    return null;
+  }
+  const signature=($('consent-signature-data')?.value||'').trim();
+  if(!signature||!consentSignatureSaved){
+    toast('请先点击“签名”并保存实验者签名。',5000);
+    openConsentSignature();
+    return null;
+  }
+  return {takerName,signature};
+}
 let pendingResumeProgress = null;
 const AI_WAIT_TIMEOUT_MS = 75000;
 const AI_RECOVERY_GRACE_MS = 12000;
@@ -923,6 +1065,7 @@ async function resumeProgress(saved){
   taskStartTime=restoreTaskStartTime(saved);
   chatTranscript=Array.isArray(saved.chatTranscript)?saved.chatTranscript:[];
   restoreFormValues(saved.forms||{});
+  refreshConsentSignatureStatus();
   let cameraReady=true;
   if(['pre-survey-view','queue-view','baseline-view','task-view'].includes(currentStage)){
     try{await startWebcam();}catch(err){cameraReady=false;toast('无法访问摄像头。请允许摄像头权限并确保没有其他程序占用摄像头。',6000);}
@@ -1202,11 +1345,9 @@ async function finishBaseline(){
 // ── Task ──
 async function startTask(){
   if(!currentSessionId){
-    const f=new FormData();
-    const r=await fetch('/api/session/start',{method:'POST',body:f});
-    const d=await r.json();
-    participantId=d.participant_id;
-    currentSessionId=d.session_id;currentCondition=d.condition;
+    toast('实验会话丢失，请重新开始并完成知情同意。',6000);
+    forceRestartExperiment();
+    return;
   }
   if(!webcamLive())await startWebcam();
   ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
@@ -1646,9 +1787,14 @@ document.getElementById('pre-survey-form').addEventListener('submit', async e =>
 
 $('setup-form').addEventListener('submit',async e=>{
   e.preventDefault();
+  const consent=validateConsentForm();
+  if(!consent)return;
   if(!await checkModelReady())return;
   try {
     const f=new FormData();
+    f.append('consent_agreed','true');
+    f.append('consent_taker_name',consent.takerName);
+    f.append('consent_signature',consent.signature);
     const r=await fetch('/api/session/start',{method:'POST',body:f});
     const d=await r.json();
     participantId=d.participant_id;
@@ -1711,4 +1857,5 @@ function bindParticipantEvents(){
 }
 
 bindParticipantEvents();
+initConsentSignature();
 initRecordingDrawer();

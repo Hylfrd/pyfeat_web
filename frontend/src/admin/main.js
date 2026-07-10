@@ -329,6 +329,7 @@ function handleAdminClick(e) {
   if (action === 'export-session-csv') return sessionActions.exportSessionCSV(Number(el.dataset.sessionId));
   if (action === 'export-expression-csv') return sessionActions.exportExpressionCSV(Number(el.dataset.sessionId));
   if (action === 'set-exclusion') return sessionActions.setExclusion(Number(el.dataset.sessionId), el.dataset.excluded === '1');
+  if (action === 'view-consent-signature') return sessionActions.showConsentSignature(Number(el.dataset.sessionId));
   if (action === 'confirm-delete') return sessionActions.confirmDelete(Number(el.dataset.sessionId), el.dataset.participantId || '');
   if (action === 'close-modal') return sessionActions.closeModal();
   if (action === 'do-delete') return sessionActions.deleteSession(Number(el.dataset.sessionId));

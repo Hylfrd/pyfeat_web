@@ -65,7 +65,11 @@ class Session(Base):
     total_frames: Mapped[int] = Column(Integer, default=0)
     unreliable_frames: Mapped[int] = Column(Integer, default=0)
     exclusion_override: Mapped[Optional[str]] = Column(String, nullable=True)  # exclude / include / None
-     
+    consent_agreed: Mapped[bool] = Column(Boolean, default=False)
+    consent_taker_name: Mapped[Optional[str]] = Column(String, nullable=True)
+    consent_date: Mapped[Optional[str]] = Column(String, nullable=True)
+    consent_signature: Mapped[Optional[str]] = Column(Text, nullable=True)
+
     completed: Mapped[bool] = Column(Boolean, default=False)
     video_path: Mapped[Optional[str]] = Column(String, nullable=True)
 
@@ -338,6 +342,14 @@ def init_session_factory(db_path: str = "data/experiment.db"):
                     conn.execute(text("ALTER TABLE sessions ADD COLUMN unreliable_frames INTEGER DEFAULT 0"))
                 if "exclusion_override" not in cols:
                     conn.execute(text("ALTER TABLE sessions ADD COLUMN exclusion_override VARCHAR"))
+                if "consent_agreed" not in cols:
+                    conn.execute(text("ALTER TABLE sessions ADD COLUMN consent_agreed BOOLEAN DEFAULT 0"))
+                if "consent_taker_name" not in cols:
+                    conn.execute(text("ALTER TABLE sessions ADD COLUMN consent_taker_name VARCHAR"))
+                if "consent_date" not in cols:
+                    conn.execute(text("ALTER TABLE sessions ADD COLUMN consent_date VARCHAR"))
+                if "consent_signature" not in cols:
+                    conn.execute(text("ALTER TABLE sessions ADD COLUMN consent_signature TEXT"))
                 conn.commit()
         if "expression_frames" in insp.get_table_names():
             cols = [c["name"] for c in insp.get_columns("expression_frames")]

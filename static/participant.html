@@ -43,6 +43,19 @@
   </div>
 </div>
 
+<div id="consent-signature-overlay" class="hidden">
+  <div class="signature-modal">
+    <h3>实验者签名</h3>
+    <p>请使用鼠标或触控板在下方区域签名。签名将随本次实验记录保存，提交前请确认笔迹清晰。</p>
+    <canvas id="consent-signature-pad" width="720" height="260" aria-label="签名区域"></canvas>
+    <div class="signature-actions">
+      <button type="button" class="btn-secondary" id="clear-consent-signature">清除</button>
+      <button type="button" class="btn-secondary" id="cancel-consent-signature">取消</button>
+      <button type="button" class="btn-primary" id="save-consent-signature">保存签名</button>
+    </div>
+  </div>
+</div>
+
 <div id="duplicate-tab-view" class="view hidden">
   <div class="card center single-tab-card">
     <h1>实验已在其他标签页上开启</h1>
@@ -96,10 +109,43 @@
     <div class="step-line"></div>
     <div class="step-dot"></div>
   </div>
-  <div class="card">
-    <h1>实验设置</h1>
+  <div class="card consent-card">
+    <h1>参与者知情同意书</h1>
+    <p class="subtitle">请在开始实验前阅读以下内容。勾选全部条款并完成实验者签名后，才可以进入实验。</p>
     <form id="setup-form">
       <input type="hidden" id="order-group">
+      <input type="hidden" id="consent-signature-data" name="consent_signature">
+      <section class="consent-document" aria-label="知情同意书正文">
+        <div class="consent-meta">
+          <p><strong>研究标题：</strong>用于情感感知生成式 AI 协作写作的面部表情线索</p>
+          <p><strong>研究者姓名及联系方式：</strong>Hannah Hye Jin Kum，hannahhjkum@bnbu.edu.cn</p>
+        </div>
+        <label class="consent-item"><input type="checkbox" name="consent_item_1"> <span>我确认，我已阅读并理解上述研究的《参与者知情同意书》。</span></label>
+        <label class="consent-item"><input type="checkbox" name="consent_item_2"> <span>我已获得机会考虑所提供的信息、提出问题，并且我的问题已得到令我满意的解答。</span></label>
+        <label class="consent-item"><input type="checkbox" name="consent_item_3"> <span>我理解，我的参与是自愿的，并且我可以在任何时候要求退出研究，无需说明理由，也不会影响我的医疗护理或法律权利。</span></label>
+        <label class="consent-item"><input type="checkbox" name="consent_item_4"> <span>我理解，我的匿名化数据将至少保存 1 年，并可能用于未来经过伦理批准的研究。</span></label>
+        <label class="consent-item"><input type="checkbox" name="consent_item_5"> <span>我理解，在与我参与本研究相关的情况下，研究期间收集到的相关数据部分，可能会由赞助方北师香港浸会大学的相关人员查看。我允许这些人员访问我的数据。</span></label>
+        <label class="consent-item"><input type="checkbox" name="consent_item_6"> <span>我同意我的访谈过程被屏幕录制和视频录制。</span></label>
+        <label class="consent-item"><input type="checkbox" name="consent_item_7"> <span>我同意我被录制的音频/视频访谈资料用于面部识别。</span></label>
+        <p class="consent-final">我同意参加上述研究。</p>
+        <div class="consent-signature-lines" aria-label="参与者签署信息">
+          <div><span>给予同意者姓名</span><strong></strong></div>
+          <div><span>日期</span><strong></strong></div>
+          <div><span>签名</span><strong></strong></div>
+        </div>
+      </section>
+      <div class="consent-taker">
+        <label for="consent-taker-name">获取同意者姓名</label>
+        <input type="text" id="consent-taker-name" name="consent_taker_name" autocomplete="name" placeholder="请输入获取同意者姓名">
+        <div class="consent-date-row">
+          <span>日期</span>
+          <strong id="consent-date-display">由系统自动记录</strong>
+        </div>
+        <div class="signature-status-row">
+          <button type="button" class="btn-secondary" id="open-consent-signature">签名</button>
+          <span id="consent-signature-status">尚未签名</span>
+        </div>
+      </div>
       <button type="submit" class="btn-primary" autofocus>开始实验</button>
     </form>
   </div>

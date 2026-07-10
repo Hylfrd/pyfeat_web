@@ -1,4 +1,4 @@
-import { $, escapeHtml as escHtml } from '../shared/dom.js';
+import { $, escapeAttr as escAttr, escapeHtml as escHtml } from '../shared/dom.js';
 
 export function createSessionActions({adminFetch, toast, getSessionCache, onDeleted, onChanged}){
   function downloadJSON(data,filename){
@@ -82,6 +82,26 @@ export function createSessionActions({adminFetch, toast, getSessionCache, onDele
       toast(message,'err');
     }
   }
+  function showConsentSignature(sid){
+    const {exp}=getSessionCache()[sid]||{};
+    const session=exp?.session||{};
+    const signature=session.consent_signature||'';
+    $('modal-overlay').classList.remove('hidden');
+    $('modal-overlay').querySelector('.modal').innerHTML=signature?`
+      <h3>实验者签名</h3>
+      <p>获取同意者：<strong>${escHtml(session.consent_taker_name||'-')}</strong> · 日期：${escHtml(session.consent_date||'-')}</p>
+      <div class="signature-preview"><img src="${escAttr(signature)}" alt="实验者签名"></div>
+      <div class="modal-actions">
+        <button data-action="close-modal">关闭</button>
+      </div>
+    `:`
+      <h3>实验者签名</h3>
+      <p>此 Session 没有记录签名。</p>
+      <div class="modal-actions">
+        <button data-action="close-modal">关闭</button>
+      </div>
+    `;
+  }
 
   return {
     exportSession,
@@ -91,5 +111,6 @@ export function createSessionActions({adminFetch, toast, getSessionCache, onDele
     closeModal,
     deleteSession: doDelete,
     setExclusion,
+    showConsentSignature,
   };
 }

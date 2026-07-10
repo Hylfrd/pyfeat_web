@@ -1474,6 +1474,22 @@ pre,
   color: var(--muted);
 }
 
+.signature-preview {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 12px;
+}
+
+.signature-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+}
+
 #modal-overlay .modal .modal-actions {
   display: flex;
   justify-content: flex-end;

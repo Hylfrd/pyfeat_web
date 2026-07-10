@@ -37,11 +37,14 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                     "total_revisions": s.total_revisions,
                     "duration_ms": s.duration_ms,
                     "frame_loss_ratio": round(s.frame_loss_ratio, 3),
-                    "excluded": s.excluded,
-                    "excluded_by_frame_loss": s.excluded_by_frame_loss,
-                    "exclusion_override": s.exclusion_override,
-                    "activity": get_session_activity(s.id),
-                }
+                "excluded": s.excluded,
+                "excluded_by_frame_loss": s.excluded_by_frame_loss,
+                "exclusion_override": s.exclusion_override,
+                "consent_agreed": s.consent_agreed,
+                "consent_taker_name": s.consent_taker_name,
+                "consent_date": s.consent_date,
+                "activity": get_session_activity(s.id),
+            }
                 for s in sessions
             ]
 
@@ -214,6 +217,10 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 "excluded": session.excluded,
                 "excluded_by_frame_loss": session.excluded_by_frame_loss,
                 "exclusion_override": session.exclusion_override,
+                "consent_agreed": session.consent_agreed,
+                "consent_taker_name": session.consent_taker_name,
+                "consent_date": session.consent_date,
+                "consent_signature": session.consent_signature,
                 "activity": get_session_activity(session.id),
             },
             "participant": {

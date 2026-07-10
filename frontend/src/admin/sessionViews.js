@@ -28,6 +28,11 @@ export function renderOverview(exp,st){
     ? '手动排除'
     : (s.exclusion_override === 'include' ? '否 (手动保留)' : (s.excluded_by_frame_loss ? '是 (>30%丢失)' : '否'));
   const exclusionColor = s.excluded ? '#ef4444' : '#22c55e';
+  const consentText = s.consent_agreed ? '已同意' : '未记录';
+  const consentColor = s.consent_agreed ? '#22c55e' : '#ef4444';
+  const signatureButton = s.consent_signature
+    ? `<button data-action="view-consent-signature" data-session-id="${s.id}">查看签名</button>`
+    : '<span class="muted">无签名</span>';
 
   let html=`
     <div class="detail-section">
@@ -49,6 +54,10 @@ export function renderOverview(exp,st){
         <div class="info-card"><div class="lbl">表情帧</div><div class="val mono">${st.total_frames||0} 帧 (可靠 ${st.reliable_frames||0})</div></div>
         <div class="info-card"><div class="lbl">帧丢失率</div><div class="val" style="color:${s.frame_loss_ratio>0.3?'#ef4444':'#22c55e'}">${Math.round(s.frame_loss_ratio*100)}%</div></div>
         <div class="info-card"><div class="lbl">排除</div><div class="val" style="color:${exclusionColor}">${exclusionText}</div></div>
+        <div class="info-card"><div class="lbl">知情同意</div><div class="val" style="color:${consentColor}">${consentText}</div></div>
+        <div class="info-card"><div class="lbl">获取同意者姓名</div><div class="val">${escHtml(s.consent_taker_name||'-')}</div></div>
+        <div class="info-card"><div class="lbl">同意日期</div><div class="val mono">${escHtml(s.consent_date||'-')}</div></div>
+        <div class="info-card"><div class="lbl">实验者签名</div><div class="val">${signatureButton}</div></div>
       </div>
     </div>
 
