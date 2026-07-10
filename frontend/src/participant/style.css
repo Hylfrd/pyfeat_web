@@ -208,11 +208,12 @@ form {
   row-gap: 18px;
 }
 
-.consent-signature-lines div,
+.consent-signature-lines > div,
 .consent-field,
 .signature-status-row {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .consent-signature-lines span,
@@ -228,9 +229,28 @@ form {
 
 .consent-signature-lines strong,
 .consent-field strong {
-  display: block;
-  min-height: 36px;
+  display: flex;
+  min-height: 42px;
+  align-items: center;
   border-bottom: 1px solid var(--border-strong);
+  color: var(--text-strong);
+  font-size: 16px;
+  font-weight: 720;
+}
+
+.consent-field input[type="text"] {
+  min-height: 42px;
+  border: 0;
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.consent-field input[type="text"]:focus {
+  border-color: var(--accent);
+  box-shadow: none;
 }
 
 .consent-taker {
@@ -246,6 +266,7 @@ form {
   display: flex;
   min-height: 42px;
   align-items: center;
+  justify-content: flex-start;
   gap: 12px;
   border-bottom: 1px solid var(--border-strong);
 }
