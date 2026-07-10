@@ -267,14 +267,15 @@ form {
   min-height: 42px;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 22px;
   border-bottom: 1px solid var(--border-strong);
 }
 
 .signature-status-row .btn-secondary {
   width: 96px;
   min-width: 96px;
-  min-height: 42px;
+  min-height: 34px;
+  padding: 0 12px;
   box-shadow: none;
 }
 
