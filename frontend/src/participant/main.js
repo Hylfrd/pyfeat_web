@@ -178,6 +178,7 @@ let sessionStatusTimer = null;
 let queuePollTimer = null;
 let debugStatusTimer = null;
 let timeoutSubmitRetryTimer = null;
+let setupSubmitting = false;
 
 let consentSignatureSaved = false;
 let consentSignatureDrawing = false;
@@ -316,6 +317,14 @@ function validateConsentForm(){
     return null;
   }
   return {takerName,signature};
+}
+
+function setSetupSubmitting(active){
+  setupSubmitting=active;
+  const btn=$('setup-form')?.querySelector('button[type="submit"]');
+  if(!btn)return;
+  btn.disabled=active;
+  btn.textContent=active?'正在开始...':'开始实验';
 }
 let pendingResumeProgress = null;
 const AI_WAIT_TIMEOUT_MS = 75000;
@@ -1784,25 +1793,34 @@ document.getElementById('pre-survey-form').addEventListener('submit', async e =>
 
 $('setup-form').addEventListener('submit',async e=>{
   e.preventDefault();
+  if(setupSubmitting)return;
   const consent=validateConsentForm();
   if(!consent)return;
-  if(!await checkModelReady())return;
+  setSetupSubmitting(true);
+  if(!await checkModelReady()){
+    setSetupSubmitting(false);
+    return;
+  }
   try {
-    const f=new FormData();
-    f.append('consent_agreed','true');
-    f.append('consent_taker_name',consent.takerName);
-    f.append('consent_signature',consent.signature);
-    const r=await fetch('/api/session/start',{method:'POST',body:f});
-    const d=await r.json();
-    participantId=d.participant_id;
-    currentSessionId=d.session_id;
-    currentCondition=d.condition;
+    if(!currentSessionId){
+      const f=new FormData();
+      f.append('consent_agreed','true');
+      f.append('consent_taker_name',consent.takerName);
+      f.append('consent_signature',consent.signature);
+      const r=await fetch('/api/session/start',{method:'POST',body:f});
+      if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.detail||r.statusText)}
+      const d=await r.json();
+      participantId=d.participant_id;
+      currentSessionId=d.session_id;
+      currentCondition=d.condition;
+    }
     currentStage='pre-survey-view';
     claimTabOwnership('start');
     writeProgress();
   } catch(err) {
     toast('无法创建实验会话，请刷新页面重试。', 0);
     console.error('Session start failed:', err);
+    setSetupSubmitting(false);
     return;
   }
   try {
@@ -1810,6 +1828,7 @@ $('setup-form').addEventListener('submit',async e=>{
   } catch(err) {
     toast('无法连接到服务器，请刷新页面重试。', 0, 'connection');
     console.error('WS connect failed:', err);
+    setSetupSubmitting(false);
     return;
   }
   try {
@@ -1817,6 +1836,7 @@ $('setup-form').addEventListener('submit',async e=>{
   } catch(err) {
     toast('无法访问摄像头。请允许摄像头权限并确保没有其他程序占用摄像头。', 6000);
     console.error('Webcam failed:', err);
+    setSetupSubmitting(false);
     return;
   }
   setStage('pre-survey-view');

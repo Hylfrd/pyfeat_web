@@ -51,9 +51,12 @@ export function renderOverview(exp,st){
         <div class="info-card"><div class="lbl">条件</div><div class="val">${s.condition==='affect-aware'?'情感感知 AI':'纯文本 AI'}</div></div>
         <div class="info-card"><div class="lbl">用时</div><div class="val">${durStr}</div></div>
         <div class="info-card"><div class="lbl">对话轮次 / 修改</div><div class="val mono">${s.total_turns||0} 轮 · ${s.total_revisions||0} 修改</div></div>
-        <div class="info-card"><div class="lbl">表情帧</div><div class="val mono">${st.total_frames||0} 帧 (可靠 ${st.reliable_frames||0})</div></div>
-        <div class="info-card"><div class="lbl">帧丢失率</div><div class="val" style="color:${s.frame_loss_ratio>0.3?'#ef4444':'#22c55e'}">${Math.round(s.frame_loss_ratio*100)}%</div></div>
         <div class="info-card"><div class="lbl">排除</div><div class="val" style="color:${exclusionColor}">${exclusionText}</div></div>
+      </div>
+    </div>
+
+    <div class="detail-section"><h3>实验者信息</h3>
+      <div class="info-grid">
         <div class="info-card"><div class="lbl">知情同意</div><div class="val" style="color:${consentColor}">${consentText}</div></div>
         <div class="info-card"><div class="lbl">获取同意者姓名</div><div class="val">${escHtml(s.consent_taker_name||'-')}</div></div>
         <div class="info-card"><div class="lbl">同意日期</div><div class="val mono">${escHtml(s.consent_date||'-')}</div></div>
@@ -64,6 +67,7 @@ export function renderOverview(exp,st){
     <div class="detail-section"><h3>面部检测概况</h3>
       <div class="info-grid">
         <div class="info-card"><div class="lbl">总帧数</div><div class="val mono">${st.total_frames||0}</div></div>
+        <div class="info-card"><div class="lbl">可靠帧</div><div class="val" style="color:${(st.reliable_pct||0)<70?'#ef4444':'#22c55e'}">${st.reliable_frames||0} (${st.reliable_pct||0}%)</div></div>
         <div class="info-card"><div class="lbl">检测到面部</div><div class="val" style="color:#22c55e">${framesOk} (${faceOkPct}%)</div></div>
         <div class="info-card"><div class="lbl">面部丢失</div><div class="val" style="color:#ef4444">${st.face_lost_frames||0} (${st.face_lost_pct||0}%)</div></div>
         <div class="info-card"><div class="lbl">队列丢弃</div><div class="val" style="color:#b45309">${st.queue_timeout_frames||0} (${st.queue_timeout_pct||0}%)</div></div>
