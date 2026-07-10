@@ -204,7 +204,8 @@ form {
 .consent-signature-lines {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 18px;
 }
 
 .consent-signature-lines div,
@@ -238,14 +239,22 @@ form {
 }
 
 .signature-status-row {
-  grid-template-columns: 1fr;
-  align-items: start;
+  align-items: stretch;
+}
+
+.signature-inline {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-strong);
 }
 
 .signature-status-row .btn-secondary {
-  width: fit-content;
+  width: 96px;
   min-width: 96px;
-  margin-top: 4px;
+  min-height: 42px;
+  box-shadow: none;
 }
 
 #consent-signature-status {
