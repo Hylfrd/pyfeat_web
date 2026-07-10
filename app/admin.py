@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import calendar
+import shutil
 import time
 from pathlib import Path
 from typing import Optional
@@ -15,7 +17,94 @@ from .database import (
     ChatLog, Evaluation, ExpressionFrame, Participant, PostTaskSurvey, PreTaskSurvey, Questionnaire, Session,
 )
 from .expression import PYFEAT_API_TIMEOUT
+from .experiment_slots import peek_experiment_slot_status
 from .session_activity import forget_session, get_session_activity, is_session_active
+
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+VIDEO_ROOT = ROOT_DIR / "data" / "videos"
+
+
+def _video_dir(session: Session) -> Path:
+    return VIDEO_ROOT / session.participant_id
+
+
+def _video_chunk_paths(session: Session) -> list[Path]:
+    video_dir = _video_dir(session)
+    if not video_dir.exists():
+        return []
+    return sorted(
+        path for path in video_dir.glob(f"{session.id}_*.webm")
+        if path.is_file() and path.stem.rsplit("_", 1)[-1].isdigit()
+    )
+
+
+def _combined_video_path(session: Session) -> Path:
+    return _video_dir(session) / f"{session.id}.webm"
+
+
+def _format_bytes(value: int) -> str:
+    size = float(value or 0)
+    units = ["B", "KB", "MB", "GB"]
+    unit = 0
+    while size >= 1024 and unit < len(units) - 1:
+        size /= 1024
+        unit += 1
+    digits = 0 if unit == 0 else (1 if size >= 10 else 2)
+    return f"{size:.{digits}f} {units[unit]}"
+
+
+def _utc_iso_epoch(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return float(calendar.timegm(time.strptime(value, "%Y-%m-%dT%H:%M:%SZ")))
+    except (TypeError, ValueError):
+        return None
+
+
+def _session_stage(session: Session, slot: dict | None = None) -> str:
+    slot = slot or peek_experiment_slot_status(session.id)
+    phase = slot.get("phase")
+    if phase == "baseline":
+        return "基准测试"
+    if phase == "task":
+        return "实验中"
+    if session.completed:
+        return "实验后问卷"
+    return "实验前问卷"
+
+
+def _ensure_combined_video(session: Session) -> tuple[Path | None, list[Path]]:
+    chunks = _video_chunk_paths(session)
+    if not chunks:
+        return None, chunks
+
+    output = _combined_video_path(session)
+    latest_chunk_mtime = max(path.stat().st_mtime for path in chunks)
+    if output.exists() and output.stat().st_mtime >= latest_chunk_mtime:
+        return output, chunks
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output.with_suffix(".webm.tmp")
+    with tmp_path.open("wb") as out:
+        for chunk_path in chunks:
+            with chunk_path.open("rb") as src:
+                shutil.copyfileobj(src, out)
+    tmp_path.replace(output)
+    return output, chunks
+
+
+def _delete_video_files(session: Session) -> int:
+    deleted = 0
+    for path in [*_video_chunk_paths(session), _combined_video_path(session)]:
+        try:
+            if path.exists() and path.is_file():
+                path.unlink()
+                deleted += 1
+        except OSError:
+            pass
+    return deleted
 
 
 def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
@@ -128,10 +217,75 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
             db_session.query(Questionnaire).filter(Questionnaire.session_id == session_id).delete()
             db_session.query(ExpressionFrame).filter(ExpressionFrame.session_id == session_id).delete()
             db_session.query(ChatLog).filter(ChatLog.session_id == session_id).delete()
+            _delete_video_files(session)
             db_session.delete(session)
             db_session.commit()
         forget_session(session_id)
         return {"ok": True, "deleted_session_id": session_id}
+
+    @router.get("/api/admin/sessions/{session_id}/video/info")
+    async def admin_session_video_info(session_id: int, _: None = Depends(require_admin)):
+        """Return video metadata and current experiment stage for a session."""
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session:
+                raise HTTPException(404, "Session not found")
+            slot = peek_experiment_slot_status(session.id)
+            video_path, chunks = _ensure_combined_video(session)
+            if video_path:
+                session.video_path = str(video_path.relative_to(ROOT_DIR))
+                db_session.commit()
+            size = video_path.stat().st_size if video_path and video_path.exists() else 0
+            updated_at = None
+            if video_path and video_path.exists():
+                updated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(video_path.stat().st_mtime))
+            return {
+                "session_id": session.id,
+                "participant_id": session.participant_id,
+                "stage": _session_stage(session, slot),
+                "slot": slot,
+                "available": bool(video_path and video_path.exists()),
+                "chunk_count": len(chunks),
+                "size_bytes": size,
+                "size_human": _format_bytes(size),
+                "updated_at": updated_at,
+                "url": f"/api/admin/sessions/{session.id}/video/file",
+                "download_url": f"/api/admin/sessions/{session.id}/video/file?download=1",
+            }
+
+    @router.get("/api/admin/sessions/{session_id}/video/file")
+    async def admin_session_video_file(
+        session_id: int,
+        download: bool = Query(False),
+        _: None = Depends(require_admin),
+    ):
+        """Serve a combined WebM video for the admin player or download."""
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session:
+                raise HTTPException(404, "Session not found")
+            video_path, _ = _ensure_combined_video(session)
+            if not video_path or not video_path.exists():
+                raise HTTPException(404, "Video not found")
+            filename = f"session_{session.id}_{session.participant_id}.webm" if download else None
+            return FileResponse(
+                video_path,
+                media_type="video/webm",
+                filename=filename,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    @router.delete("/api/admin/sessions/{session_id}/video")
+    async def admin_delete_session_video(session_id: int, _: None = Depends(require_admin)):
+        """Delete recorded video chunks and the combined video for one session."""
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session:
+                raise HTTPException(404, "Session not found")
+            deleted = _delete_video_files(session)
+            session.video_path = None
+            db_session.commit()
+            return {"ok": True, "session_id": session_id, "deleted_files": deleted}
 
     @router.post("/api/admin/sessions/{session_id}/exclusion")
     async def admin_set_session_exclusion(
@@ -339,6 +493,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
     async def admin_expression_stats(session_id: int, _: None = Depends(require_admin)):
         """Return aggregated expression statistics for a session."""
         with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
             frames = (
                 db_session.query(ExpressionFrame)
                 .filter(ExpressionFrame.session_id == session_id)
@@ -369,6 +524,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
         au12_triggers = sum(1 for v in au12_vals if v >= 0.4)
         au7_triggers = sum(1 for v in au7_vals if v >= 0.4)
         au1_triggers = sum(1 for v in au1_vals if v >= 0.3)
+        video_start_epoch = _utc_iso_epoch(session.start_time if session else None) or frames[0].timestamp
 
         return {
             "session_id": session_id,
@@ -402,6 +558,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
             "frames": [
                 {
                     "t": round(f.timestamp - frames[0].timestamp, 1),
+                    "video_t": round(f.timestamp - video_start_epoch, 1),
                     "au1": round(f.au1, 2),
                     "au4": round(f.au4, 2),
                     "au7": round(f.au7, 2),

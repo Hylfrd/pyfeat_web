@@ -201,6 +201,34 @@ def get_experiment_slot_status(session_id: int) -> dict:
     return payload
 
 
+def peek_experiment_slot_status(session_id: int) -> dict:
+    now = _now()
+    _prune(now)
+
+    active_slot = _active.get(session_id)
+    if active_slot:
+        return _active_payload(active_slot, now)
+
+    for slot in _queue:
+        if slot.session_id == session_id:
+            return _queued_payload(slot, now)
+
+    payload = {
+        "ok": True,
+        "state": "none",
+        "session_id": session_id,
+        "phase": "none",
+        "position": 0,
+        "active_count": len(_active),
+        "queue_length": len(_queue),
+        "max_active": MAX_ACTIVE_EXPERIMENTS,
+        "remaining_s": None,
+        "estimated_wait_s": 0,
+    }
+    payload.update(_debug_payload(now))
+    return payload
+
+
 def touch_experiment_slot(session_id: int | None, phase: str | None = None) -> None:
     if not session_id:
         return

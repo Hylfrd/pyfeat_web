@@ -3,6 +3,7 @@ import { $, escapeHtml as escHtml } from '../shared/dom.js';
 import { createDebugConsole } from './debugConsole.js';
 import { renderBaseline, renderChat, renderExpression, renderOverview, renderSurvey } from './sessionViews.js';
 import { createSessionActions } from './sessionActions.js';
+import { createVideoConsole } from './videoConsole.js';
 
 let sessions = [];
 let activeSid = null;
@@ -116,6 +117,11 @@ function toast(msg, type = 'ok') {
 }
 
 const debugConsole = createDebugConsole({ adminFetch, toast });
+const videoConsole = createVideoConsole({
+  adminFetch,
+  toast,
+  getSessionCache: () => sessionCache,
+});
 
 const sessionActions = createSessionActions({
   adminFetch,
@@ -269,14 +275,17 @@ $('tabs')?.addEventListener('click', async (e) => {
 
 function setActiveTab(tab) {
   $('tabs')?.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  $('detail')?.classList.toggle('video-content', tab === 'video');
 }
 
 function renderActiveTab() {
   const { exp, st } = sessionCache[activeSid] || {};
   if (activeTab === 'debug') {
+    videoConsole.stopTimers();
     debugConsole.render();
     return;
   }
+  if (activeTab !== 'video') videoConsole.stopTimers();
   debugConsole.stopTimers();
   if (!exp) {
     if ($('detail')) $('detail').innerHTML = '<div class="empty-state"><p>从左侧选择一个 Session 查看详情</p></div>';
@@ -287,6 +296,7 @@ function renderActiveTab() {
   if (activeTab === 'expression') renderExpression(exp, st);
   if (activeTab === 'baseline') renderBaseline(exp);
   if (activeTab === 'survey') renderSurvey(exp);
+  if (activeTab === 'video') videoConsole.render(exp, st);
 }
 
 function bindAdminEvents() {
@@ -315,6 +325,7 @@ function handleAdminClick(e) {
   const el = e.target.closest('[data-action]');
   if (!el) return;
   const action = el.dataset.action;
+  if (videoConsole.handleAction(action, el)) return;
   if (action === 'select-session') return selectSession(Number(el.dataset.sessionId));
   if (action === 'toggle-debug') return debugConsole.toggleMode();
   if (action === 'clear-debug') return debugConsole.clearLogs();

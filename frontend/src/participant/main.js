@@ -783,6 +783,26 @@ function startRecordingCapture(){
   };
   mediaRecorder.start(10000);
 }
+function stopVideoRecording(){
+  if(!mediaRecorder)return;
+  const recorder=mediaRecorder;
+  mediaRecorder=null;
+  try{
+    if(recorder.state==='recording')recorder.requestData();
+  }catch(e){}
+  try{
+    if(recorder.state!=='inactive')recorder.stop();
+  }catch(e){}
+}
+function stopWebcamStream(){
+  stopVideoRecording();
+  if(webcamStream){
+    webcamStream.getTracks().forEach(track=>track.stop());
+    webcamStream=null;
+  }
+  const webcam=$('webcam');
+  if(webcam)webcam.srcObject=null;
+}
 function startExpressionCapture(){
   clearInterval(expressionInterval);
   expressionInterval=setInterval(()=>{
@@ -819,11 +839,6 @@ function pauseTaskCapture(){
   clearInterval(expressionWatchdogInterval);
   expressionInterval=null;
   expressionWatchdogInterval=null;
-  if(mediaRecorder&&mediaRecorder.state!=='inactive'){
-    mediaRecorder.ondataavailable=null;
-    mediaRecorder.stop();
-  }
-  mediaRecorder=null;
   expressionFramePending=false;
   expressionFramePendingAt=0;
   baselineFramePendingAt=0;
@@ -959,7 +974,10 @@ function releaseCurrentSlotOnLeave(){
     releaseSessionSlot(currentSessionRef(),true);
   }
 }
-window.addEventListener('pagehide',releaseCurrentSlotOnLeave);
+window.addEventListener('pagehide',()=>{
+  stopVideoRecording();
+  releaseCurrentSlotOnLeave();
+});
 function stopSessionStatusCheck(){
   if(sessionStatusTimer){clearInterval(sessionStatusTimer);sessionStatusTimer=null}
 }
@@ -1016,10 +1034,7 @@ function forceRestartExperiment(){
   clearInterval(baselineInterval);
   pauseTaskCapture();
   closeWS();
-  if(webcamStream){
-    webcamStream.getTracks().forEach(track=>track.stop());
-    webcamStream=null;
-  }
+  stopWebcamStream();
   clearProgress();
   location.replace(location.pathname);
 }
@@ -1037,10 +1052,7 @@ function stopForOtherTabOwner(message={}){
   clearInterval(baselineInterval);
   pauseTaskCapture();
   closeWS();
-  if(webcamStream){
-    webcamStream.getTracks().forEach(track=>track.stop());
-    webcamStream=null;
-  }
+  stopWebcamStream();
   if(own&&!sameSession(own,next))releaseSessionSlot(own);
   pendingResumeProgress=null;
   $('resume-overlay')?.classList.add('hidden');
@@ -1738,6 +1750,7 @@ $('q-form').addEventListener('submit',async e=>{
     toast('保存问卷失败，请重试。' + (err.message ? ` ${err.message}` : ''),5000);
     return;
   }
+  stopWebcamStream();
   setStage('complete-view');
   writeProgress({completed:true});
 });

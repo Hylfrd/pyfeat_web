@@ -1277,6 +1277,250 @@ pre,
   background: var(--surface);
 }
 
+.content.video-content {
+  max-width: none;
+  height: calc(100vh - 54px);
+  min-height: 680px;
+  padding: 12px;
+}
+
+.video-console {
+  display: grid;
+  grid-template-areas:
+    "overview player"
+    "chat sync";
+  grid-template-columns: minmax(300px, 360px) minmax(720px, 1fr);
+  grid-template-rows: minmax(170px, 24vh) minmax(360px, 1fr);
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.video-panel {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.video-overview-panel {
+  grid-area: overview;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.video-chat-panel {
+  grid-area: chat;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.video-player-panel {
+  grid-area: player;
+  overflow: hidden;
+  background: #101114;
+}
+
+.video-sync-panel {
+  grid-area: sync;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.video-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.video-panel-title h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.video-live-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid color-mix(in srgb, var(--green) 44%, var(--border));
+  border-radius: 999px;
+  color: var(--green);
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.video-overview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-content: start;
+}
+
+.video-info-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  padding: 7px 9px;
+}
+
+.video-info-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.video-info-card strong {
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 760;
+  text-align: right;
+}
+
+.video-action-card {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.video-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 11px;
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+
+.video-link-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.video-player-box {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #101114;
+}
+
+.video-player,
+.video-player-box .plyr,
+.video-player-box .plyr__video-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.video-player {
+  display: block;
+  object-fit: contain;
+  background: #101114;
+}
+
+.video-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #c9c9d1;
+  background: #101114;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.video-empty-line {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  color: var(--muted);
+}
+
+.video-chat-list {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.video-chat-item {
+  border-bottom: 1px solid var(--border);
+  padding: 9px 0 11px;
+}
+
+.video-chat-item:last-child {
+  border-bottom: 0;
+}
+
+.video-chat-item.synced {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: -8px 0 0 color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.video-chat-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.video-chat-content {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.video-chat-item.ai .video-chat-content {
+  color: var(--text-strong);
+}
+
+.video-frame-table-wrap {
+  min-height: 0;
+  overflow: auto;
+}
+
+.video-sync-table tr.synced td {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.video-frame-detail summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.video-frame-detail pre {
+  min-width: 260px;
+  max-height: 180px;
+  margin-top: 8px;
+}
+
 .auth-overlay {
   position: fixed;
   inset: 0;
