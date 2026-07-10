@@ -121,6 +121,7 @@ const videoConsole = createVideoConsole({
   adminFetch,
   toast,
   getSessionCache: () => sessionCache,
+  isActive: () => activeTab === 'video',
 });
 
 const sessionActions = createSessionActions({

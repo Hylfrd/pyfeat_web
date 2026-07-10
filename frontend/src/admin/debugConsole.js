@@ -1,7 +1,7 @@
 import { $, escapeAttr as escAttr, escapeHtml as escHtml } from '../shared/dom.js';
 
 const DEBUG_LIMIT=80;
-const DEBUG_POLL_MS=100;
+const DEBUG_POLL_MS=1000;
 const DEBUG_HEALTH_MS=10000;
 
 export function createDebugConsole({adminFetch, toast}){
@@ -332,7 +332,10 @@ export function createDebugConsole({adminFetch, toast}){
 
   function startDebugTimers(){
     stopDebugTimers();
-    debugPollTimer=setInterval(()=>loadDebugPage({live:true,silent:true}),DEBUG_POLL_MS);
+    debugPollTimer=setInterval(()=>{
+      if(debugExpandedIds.size)return;
+      loadDebugPage({live:true,silent:true});
+    },DEBUG_POLL_MS);
     debugHealthTimer=setInterval(refreshPyfeatStatus,DEBUG_HEALTH_MS);
     debugCacheTimer=setInterval(refreshDebugCache,DEBUG_HEALTH_MS);
   }

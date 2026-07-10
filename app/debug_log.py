@@ -208,9 +208,11 @@ def _push_debug(event: dict) -> dict:
         with open(DEBUG_LOG_PATH, "ab") as f:
             f.seek(0, os.SEEK_END)
             event_id = f.tell()
+            now = time.time()
             payload = {
                 "id": event_id,
-                "ts": time.strftime("%H:%M:%S", time.localtime()),
+                "epoch": now,
+                "ts": time.strftime("%H:%M:%S", time.localtime(now)),
                 **event,
             }
             line = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")

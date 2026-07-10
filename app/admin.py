@@ -438,6 +438,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 "c2_expect_understand": pre_survey.c2_expect_understand,
                 "c3_expect_easy": pre_survey.c3_expect_easy,
                 "c4_expect_collaborative": pre_survey.c4_expect_collaborative,
+                "created_at": pre_survey.created_at,
             } if pre_survey else None,
             "post_survey": {
                 "u1": post_survey.u1_understood_needs,
@@ -476,6 +477,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 "m3": post_survey.m3_changed_strategy,
                 "m4": post_survey.m4_suspected_adaptation,
                 "m5": post_survey.m5_open_response,
+                "created_at": post_survey.created_at,
             } if post_survey else None,
             "evaluations": [
                 {
