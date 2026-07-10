@@ -315,6 +315,10 @@ textarea,
 textarea {
   padding: 10px 12px;
   resize: vertical;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 input::placeholder,

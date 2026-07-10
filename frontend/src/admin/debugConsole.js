@@ -19,6 +19,7 @@ export function createDebugConsole({adminFetch, toast}){
   let debugAutoFollow=true;
   let debugPendingReload=false;
   let debugLastFilterKey='';
+  let debugRenderMode='replace';
 
   async function setDebugMode(enabled){
     stopDebugFollow();
@@ -190,6 +191,7 @@ export function createDebugConsole({adminFetch, toast}){
       debugEnabled=!!data.enabled;
       const events=data.events||[];
       if(reset){
+        debugRenderMode='reset';
         debugBefore=data.next_before??null;
         debugHasMore=!!data.has_more;
         debugEvents=events;
@@ -197,6 +199,7 @@ export function createDebugConsole({adminFetch, toast}){
         debugExpandedIds.clear();
         debugLastFilterKey=filterKey;
       }else if(live){
+        debugRenderMode='top-insert';
         const incomingIds=new Set(events.map(e=>String(e.id)));
         debugEvents=events.concat(debugEvents.filter(e=>!incomingIds.has(String(e.id))));
         if(debugBefore===null){
@@ -204,6 +207,7 @@ export function createDebugConsole({adminFetch, toast}){
           debugHasMore=!!data.has_more;
         }
       }else{
+        debugRenderMode='append-bottom';
         debugBefore=data.next_before??null;
         debugHasMore=!!data.has_more;
         const seen=new Set(debugEvents.map(e=>String(e.id)));
@@ -231,6 +235,8 @@ export function createDebugConsole({adminFetch, toast}){
   function renderDebugRows(){
     const scroll=$('debug-scroll');
     const keepTop=debugAutoFollow&&scroll;
+    const oldScrollTop=scroll?.scrollTop||0;
+    const oldScrollHeight=scroll?.scrollHeight||0;
     const rows=debugEvents.map(e=>{
       const kb=e.bytes?Math.round(e.bytes/1024*10)/10:'';
       const id=String(e.id??'');
@@ -255,7 +261,17 @@ export function createDebugConsole({adminFetch, toast}){
     }).join('');
     const tableBody=$('debug-rows');
     if(tableBody)tableBody.innerHTML=rows||'<tr><td colspan="10" style="text-align:center;color:#64748b;padding:24px">没有匹配的日志</td></tr>';
-    if(keepTop)scroll.scrollTop=0;
+    if(scroll){
+      if(keepTop){
+        scroll.scrollTop=0;
+      }else if(debugRenderMode==='top-insert'){
+        const addedHeight=Math.max(0,scroll.scrollHeight-oldScrollHeight);
+        scroll.scrollTop=oldScrollTop+addedHeight;
+      }else{
+        scroll.scrollTop=oldScrollTop;
+      }
+    }
+    debugRenderMode='replace';
   }
 
   async function toggleDebugDetail(ev,eventId){

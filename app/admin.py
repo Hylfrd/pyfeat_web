@@ -95,6 +95,17 @@ def _ensure_combined_video(session: Session) -> tuple[Path | None, list[Path]]:
     return output, chunks
 
 
+def _estimated_video_duration_s(session: Session, chunks: list[Path]) -> int:
+    if session.end_time and session.start_time:
+        start = _utc_iso_epoch(session.start_time)
+        end = _utc_iso_epoch(session.end_time)
+        if start is not None and end is not None and end > start:
+            return max(1, int(round(end - start)))
+    if session.duration_ms:
+        return max(1, int(round(session.duration_ms / 1000)))
+    return max(0, len(chunks) * 10)
+
+
 def _delete_video_files(session: Session) -> int:
     deleted = 0
     for path in [*_video_chunk_paths(session), _combined_video_path(session)]:
@@ -248,6 +259,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 "chunk_count": len(chunks),
                 "size_bytes": size,
                 "size_human": _format_bytes(size),
+                "estimated_duration_s": _estimated_video_duration_s(session, chunks),
                 "updated_at": updated_at,
                 "url": f"/api/admin/sessions/{session.id}/video/file",
                 "download_url": f"/api/admin/sessions/{session.id}/video/file?download=1",

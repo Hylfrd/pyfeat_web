@@ -100,6 +100,24 @@ function stageAt(currentTime, timeline, fallback = '-') {
   return fallback && fallback !== '-' ? fallback : '实验前问卷';
 }
 
+function maxTimelineTime(exp, st, debugEvents) {
+  const session = exp?.session || {};
+  return Math.max(
+    0,
+    ...((st?.frames || []).map(frameVideoTime).filter(Number.isFinite)),
+    ...((exp?.chat_logs || []).map((log) => chatTime(log, session)).filter(Number.isFinite)),
+    ...((debugEvents || []).map((event) => debugEventTime(event, session)).filter(Number.isFinite)),
+  );
+}
+
+function estimatedDuration(info, exp, st, debugEvents) {
+  return Math.max(
+    Number(info?.estimated_duration_s) || 0,
+    maxTimelineTime(exp, st, debugEvents),
+    Number(info?.chunk_count || 0) * 10,
+  );
+}
+
 export function createVideoConsole({ adminFetch, toast, getSessionCache, isActive = () => true }) {
   let pollTimer = null;
   let activeSid = null;
@@ -254,6 +272,7 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     updateChat();
     updateSyncRows();
     updateSyncTime();
+    updateDurationFallback();
   }
 
   function updateOverview() {
@@ -263,6 +282,7 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     const size = videoInfo?.size_human || '0 B';
     const chunks = Number(videoInfo?.chunk_count || 0);
     const stage = stageAt(currentTime, timeline, videoInfo?.stage || '-');
+    const duration = estimatedDuration(videoInfo, latestExp, latestSt, latestDebugEvents);
     const download = videoInfo?.available
       ? `<a class="video-link-button primary" href="${escAttr(videoInfo.download_url)}">下载视频</a>`
       : '<button disabled>下载视频</button>';
@@ -272,6 +292,7 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
       <div class="video-info-card"><span>当前阶段</span><strong>${escHtml(stage)}</strong></div>
       <div class="video-info-card"><span>视频大小</span><strong>${escHtml(size)}</strong></div>
       <div class="video-info-card"><span>视频分段</span><strong>${chunks} 段</strong></div>
+      <div class="video-info-card"><span>估算时长</span><strong>${duration ? formatSeconds(duration) : '-'}</strong></div>
       <div class="video-action-row">
         ${download}
         <button class="danger" data-action="confirm-delete-video" data-session-id="${session.id}">删除视频</button>
@@ -304,8 +325,19 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
       if (previousTime > 0 && Number.isFinite(video.duration)) {
         video.currentTime = Math.min(previousTime, Math.max(0, video.duration - 0.25));
       }
+      updateDurationFallback();
       if (!wasPaused) video.play().catch(() => {});
     }, { once: true });
+  }
+
+  function updateDurationFallback() {
+    const duration = estimatedDuration(videoInfo, latestExp, latestSt, latestDebugEvents);
+    if (!duration) return;
+    const video = $('session-video-player');
+    if (video && Number.isFinite(video.duration) && video.duration > 1) return;
+    document.querySelectorAll('.video-player-box .plyr__time--duration').forEach((el) => {
+      el.textContent = formatSeconds(duration);
+    });
   }
 
   function updateChat() {
