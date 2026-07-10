@@ -187,7 +187,7 @@ function setupConsentDate(){
   const el=$('consent-date-display');
   if(!el)return;
   const now=new Date();
-  el.textContent=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}（系统自动记录）`;
+  el.textContent=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 }
 
 function resizeSignatureCanvas(){
@@ -302,20 +302,17 @@ function initConsentSignature(){
 function validateConsentForm(){
   const missing=[...document.querySelectorAll('[name^="consent_item_"]')].filter(el=>!el.checked);
   if(missing.length){
-    toast('请先勾选全部知情同意条款。',5000);
-    missing[0].focus();
+    markMissingAnswer(missing[0]);
     return null;
   }
   const takerName=($('consent-taker-name')?.value||'').trim();
   if(!takerName){
-    toast('请填写获取同意者姓名。',5000);
-    $('consent-taker-name')?.focus();
+    markMissingAnswer($('consent-taker-name'));
     return null;
   }
   const signature=($('consent-signature-data')?.value||'').trim();
   if(!signature||!consentSignatureSaved){
-    toast('请先点击“签名”并保存实验者签名。',5000);
-    openConsentSignature();
+    markMissingAnswer($('open-consent-signature'));
     return null;
   }
   return {takerName,signature};
@@ -1664,7 +1661,7 @@ async function doFinalSubmit(isTimeout){
 
 // ── Questionnaire ──
 function markMissingAnswer(el){
-  const row=el?.closest?.('.likert-row')||el;
+  const row=el?.closest?.('.likert-row,.consent-item,.consent-field')||el;
   toast('您有未作答的题目');
   row?.classList.add('missing');
   row?.scrollIntoView({behavior:'smooth',block:'center'});

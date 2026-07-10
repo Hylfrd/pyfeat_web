@@ -46,7 +46,7 @@
 <div id="consent-signature-overlay" class="hidden">
   <div class="signature-modal">
     <h3>实验者签名</h3>
-    <p>请使用鼠标或触控板在下方区域签名。签名将随本次实验记录保存，提交前请确认笔迹清晰。</p>
+    <p>请使用鼠标或触控板在下方区域签名。提交前请确认笔迹清晰。</p>
     <canvas id="consent-signature-pad" width="720" height="260" aria-label="签名区域"></canvas>
     <div class="signature-actions">
       <button type="button" class="btn-secondary" id="clear-consent-signature">清除</button>
@@ -116,10 +116,12 @@
       <input type="hidden" id="order-group">
       <input type="hidden" id="consent-signature-data" name="consent_signature">
       <section class="consent-document" aria-label="知情同意书正文">
+        <h2 class="consent-section-title">研究信息</h2>
         <div class="consent-meta">
           <p><strong>研究标题：</strong>用于情感感知生成式 AI 协作写作的面部表情线索</p>
           <p><strong>研究者姓名及联系方式：</strong>Hannah Hye Jin Kum，hannahhjkum@bnbu.edu.cn</p>
         </div>
+        <h2 class="consent-section-title">同意条款</h2>
         <label class="consent-item"><input type="checkbox" name="consent_item_1"> <span>我确认，我已阅读并理解上述研究的《参与者知情同意书》。</span></label>
         <label class="consent-item"><input type="checkbox" name="consent_item_2"> <span>我已获得机会考虑所提供的信息、提出问题，并且我的问题已得到令我满意的解答。</span></label>
         <label class="consent-item"><input type="checkbox" name="consent_item_3"> <span>我理解，我的参与是自愿的，并且我可以在任何时候要求退出研究，无需说明理由，也不会影响我的医疗护理或法律权利。</span></label>
@@ -128,20 +130,24 @@
         <label class="consent-item"><input type="checkbox" name="consent_item_6"> <span>我同意我的访谈过程被屏幕录制和视频录制。</span></label>
         <label class="consent-item"><input type="checkbox" name="consent_item_7"> <span>我同意我被录制的音频/视频访谈资料用于面部识别。</span></label>
         <p class="consent-final">我同意参加上述研究。</p>
+        <h2 class="consent-section-title">签署信息</h2>
         <div class="consent-signature-lines" aria-label="参与者签署信息">
           <div><span>给予同意者姓名</span><strong></strong></div>
           <div><span>日期</span><strong></strong></div>
           <div><span>签名</span><strong></strong></div>
         </div>
       </section>
-      <div class="consent-taker">
-        <label for="consent-taker-name">获取同意者姓名</label>
-        <input type="text" id="consent-taker-name" name="consent_taker_name" autocomplete="name" placeholder="请输入获取同意者姓名">
-        <div class="consent-date-row">
-          <span>日期</span>
-          <strong id="consent-date-display">由系统自动记录</strong>
+      <div class="consent-taker consent-signature-lines" aria-label="获取同意者签署信息">
+        <div class="consent-field">
+          <label for="consent-taker-name">获取同意者姓名</label>
+          <input type="text" id="consent-taker-name" name="consent_taker_name" autocomplete="name" placeholder="请输入获取同意者姓名">
         </div>
-        <div class="signature-status-row">
+        <div class="consent-field">
+          <span>日期</span>
+          <strong id="consent-date-display"></strong>
+        </div>
+        <div class="signature-status-row consent-field">
+          <span>签名</span>
           <button type="button" class="btn-secondary" id="open-consent-signature">签名</button>
           <span id="consent-signature-status">尚未签名</span>
         </div>

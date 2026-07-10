@@ -140,6 +140,16 @@ form {
   margin-bottom: 22px;
 }
 
+.consent-section-title {
+  margin: 12px 0 0;
+  color: var(--text-strong);
+  font-size: 18px;
+  font-weight: 780;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .consent-meta {
   display: grid;
   gap: 6px;
@@ -173,6 +183,13 @@ form {
   text-transform: none;
 }
 
+.consent-item.missing,
+.consent-field.missing {
+  border-radius: 6px;
+  background: #fff1f2;
+  box-shadow: 0 0 0 8px #fff1f2;
+}
+
 .consent-item input {
   width: 16px;
   height: 16px;
@@ -191,42 +208,47 @@ form {
 }
 
 .consent-signature-lines div,
-.consent-date-row,
+.consent-field,
 .signature-status-row {
   display: grid;
   gap: 6px;
 }
 
 .consent-signature-lines span,
-.consent-date-row span {
+.consent-field label,
+.consent-field span {
+  margin: 0;
   color: var(--muted);
   font-size: 12px;
   font-weight: 760;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .consent-signature-lines strong,
-.consent-date-row strong {
+.consent-field strong {
   display: block;
   min-height: 36px;
   border-bottom: 1px solid var(--border-strong);
 }
 
 .consent-taker {
-  display: grid;
-  gap: 14px;
+  padding-top: 2px;
   margin-bottom: 22px;
 }
 
 .signature-status-row {
-  grid-template-columns: auto 1fr;
-  align-items: center;
+  grid-template-columns: 1fr;
+  align-items: start;
 }
 
 .signature-status-row .btn-secondary {
+  width: fit-content;
   min-width: 96px;
+  margin-top: 4px;
 }
 
-.signature-status-row span {
+#consent-signature-status {
   color: var(--muted);
   font-size: 14px;
 }
@@ -1383,7 +1405,7 @@ html[data-stage="complete-view"] .recording-drawer {
 }
 
 .signature-modal {
-  width: min(760px, 100%);
+  width: min(980px, calc(100vw - 40px));
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
@@ -1406,7 +1428,7 @@ html[data-stage="complete-view"] .recording-drawer {
 #consent-signature-pad {
   display: block;
   width: 100%;
-  height: 260px;
+  height: min(440px, 52vh);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   background: #fff;
