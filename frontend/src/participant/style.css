@@ -263,11 +263,11 @@ form {
 }
 
 .signature-inline {
-  display: flex;
+  display: grid;
+  grid-template-columns: 96px 1fr;
   min-height: 42px;
   align-items: center;
-  justify-content: flex-start;
-  gap: 22px;
+  column-gap: 12px;
   border-bottom: 1px solid var(--border-strong);
 }
 
@@ -280,6 +280,7 @@ form {
 }
 
 #consent-signature-status {
+  justify-self: center;
   color: var(--muted);
   font-size: 14px;
 }
