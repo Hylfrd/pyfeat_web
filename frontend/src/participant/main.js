@@ -160,6 +160,10 @@ let turnCounter = 0, revisionCounter = 0, taskStartTime = 0;
 let timerInterval, expressionInterval, expressionWatchdogInterval, baselineInterval;
 let aiSyncTimer = null;
 let mediaRecorder, webcamStream, chunkIndex = 0;
+let recordedVideoChunks = [];
+let finalVideoUploadStarted = false;
+let finalVideoUploadPromise = null;
+let finalVideoStopResolver = null;
 let isAiWaiting = false;
 let aiWaitStartedAt = 0;
 let aiWaitDeadlineAt = 0;
@@ -759,49 +763,85 @@ async function startWebcam(){
   });
   document.querySelector('.camera-mock')?.classList.remove('camera-off');
   document.querySelector('.camera-mock')?.classList.add('camera-on');
-  mediaRecorder=new MediaRecorder(stream,{mimeType:'video/webm'});
-  mediaRecorder.ondataavailable=async e=>{
-    if(e.data.size>0){
-      const f=new FormData();
-      f.append('participant_id',participantId);f.append('session_id',currentSessionId);
-      f.append('chunk_index',chunkIndex++);f.append('chunk',e.data);
-      fetch('/api/video-chunk',{method:'POST',body:f}).catch(()=>{});
-    }
-  };
+  mediaRecorder=createSessionMediaRecorder(stream);
   mediaRecorder.start(10000);
 }
-function startRecordingCapture(){
-  if(mediaRecorder||!webcamStream)return;
-  mediaRecorder=new MediaRecorder(webcamStream,{mimeType:'video/webm'});
-  mediaRecorder.ondataavailable=async e=>{
+
+function uploadVideoChunk(blob){
+  if(!blob?.size||!participantId||!currentSessionId)return;
+  const f=new FormData();
+  f.append('participant_id',participantId);
+  f.append('session_id',currentSessionId);
+  f.append('chunk_index',chunkIndex++);
+  f.append('chunk',blob);
+  fetch('/api/video-chunk',{method:'POST',body:f}).catch(()=>{});
+}
+
+function uploadFinalVideo(){
+  if(finalVideoUploadStarted||!recordedVideoChunks.length||!participantId||!currentSessionId){
+    return finalVideoUploadPromise||Promise.resolve();
+  }
+  finalVideoUploadStarted=true;
+  const blob=new Blob(recordedVideoChunks,{type:'video/webm'});
+  const f=new FormData();
+  f.append('participant_id',participantId);
+  f.append('session_id',currentSessionId);
+  f.append('video',blob,`session_${currentSessionId}_${participantId}.webm`);
+  finalVideoUploadPromise=fetch('/api/video-final',{method:'POST',body:f}).catch(()=>{});
+  return finalVideoUploadPromise;
+}
+
+function createSessionMediaRecorder(stream){
+  const recorder=new MediaRecorder(stream,{mimeType:'video/webm'});
+  recordedVideoChunks=[];
+  finalVideoUploadStarted=false;
+  finalVideoUploadPromise=null;
+  finalVideoStopResolver=null;
+  chunkIndex=0;
+  recorder.ondataavailable=e=>{
     if(e.data.size>0){
-      const f=new FormData();
-      f.append('participant_id',participantId);f.append('session_id',currentSessionId);
-      f.append('chunk_index',chunkIndex++);f.append('chunk',e.data);
-      fetch('/api/video-chunk',{method:'POST',body:f}).catch(()=>{});
+      recordedVideoChunks.push(e.data);
+      uploadVideoChunk(e.data);
     }
   };
+  recorder.onstop=()=>{
+    const upload=uploadFinalVideo();
+    if(finalVideoStopResolver){
+      upload.finally(finalVideoStopResolver);
+      finalVideoStopResolver=null;
+    }
+  };
+  return recorder;
+}
+
+function startRecordingCapture(){
+  if(mediaRecorder||!webcamStream)return;
+  mediaRecorder=createSessionMediaRecorder(webcamStream);
   mediaRecorder.start(10000);
 }
 function stopVideoRecording(){
-  if(!mediaRecorder)return;
+  if(!mediaRecorder)return finalVideoUploadPromise||Promise.resolve();
   const recorder=mediaRecorder;
   mediaRecorder=null;
+  const done=new Promise(resolve=>{finalVideoStopResolver=resolve;});
   try{
     if(recorder.state==='recording')recorder.requestData();
   }catch(e){}
   try{
     if(recorder.state!=='inactive')recorder.stop();
+    else uploadFinalVideo().finally(finalVideoStopResolver);
   }catch(e){}
+  return done;
 }
 function stopWebcamStream(){
-  stopVideoRecording();
+  const upload=stopVideoRecording();
   if(webcamStream){
     webcamStream.getTracks().forEach(track=>track.stop());
     webcamStream=null;
   }
   const webcam=$('webcam');
   if(webcam)webcam.srcObject=null;
+  return upload;
 }
 function startExpressionCapture(){
   clearInterval(expressionInterval);

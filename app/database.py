@@ -78,6 +78,7 @@ class Session(Base):
     expression_frames: Mapped[list["ExpressionFrame"]] = relationship(back_populates="session")
     questionnaire: Mapped[Optional["Questionnaire"]] = relationship(back_populates="session")
     evaluations: Mapped[list["Evaluation"]] = relationship(back_populates="session")
+    events: Mapped[list["SessionEvent"]] = relationship(back_populates="session")
 
     @property
     def frame_loss_ratio(self) -> float:
@@ -133,6 +134,19 @@ class ExpressionFrame(Base):
     queued_ms: Mapped[Optional[float]] = Column(Float, nullable=True)
 
     session: Mapped[Session] = relationship(back_populates="expression_frames")
+
+
+class SessionEvent(Base):
+    __tablename__ = "session_events"
+
+    id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = Column(Integer, ForeignKey("sessions.id"), nullable=False)
+    event_type: Mapped[str] = Column(String, nullable=False)
+    t_ms: Mapped[int] = Column(Integer, nullable=False, default=0)
+    timestamp: Mapped[str] = Column(String, nullable=False)
+    payload_json: Mapped[Optional[str]] = Column(Text, nullable=True)
+
+    session: Mapped[Session] = relationship(back_populates="events")
 
 
 class Questionnaire(Base):

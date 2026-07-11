@@ -1290,7 +1290,7 @@ pre,
     "overview player"
     "chat sync";
   grid-template-columns: minmax(300px, 360px) minmax(720px, 1fr);
-  grid-template-rows: minmax(360px, 42vh) minmax(320px, 1fr);
+  grid-template-rows: minmax(420px, 48vh) minmax(300px, 1fr);
   gap: 10px;
   height: 100%;
   min-height: 0;

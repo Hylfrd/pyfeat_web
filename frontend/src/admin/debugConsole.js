@@ -20,6 +20,7 @@ export function createDebugConsole({adminFetch, toast}){
   let debugPendingReload=false;
   let debugLastFilterKey='';
   let debugRenderMode='replace';
+  let debugProgrammaticScroll=false;
 
   async function setDebugMode(enabled){
     stopDebugFollow();
@@ -263,15 +264,21 @@ export function createDebugConsole({adminFetch, toast}){
     if(tableBody)tableBody.innerHTML=rows||'<tr><td colspan="10" style="text-align:center;color:#64748b;padding:24px">没有匹配的日志</td></tr>';
     if(scroll){
       if(keepTop){
-        scroll.scrollTop=0;
+        setDebugScrollTop(scroll,0);
       }else if(debugRenderMode==='top-insert'){
         const addedHeight=Math.max(0,scroll.scrollHeight-oldScrollHeight);
-        scroll.scrollTop=oldScrollTop+addedHeight;
+        setDebugScrollTop(scroll,oldScrollTop+addedHeight);
       }else{
-        scroll.scrollTop=oldScrollTop;
+        setDebugScrollTop(scroll,oldScrollTop);
       }
     }
     debugRenderMode='replace';
+  }
+
+  function setDebugScrollTop(scroll,value){
+    debugProgrammaticScroll=true;
+    scroll.scrollTop=value;
+    requestAnimationFrame(()=>{debugProgrammaticScroll=false;});
   }
 
   async function toggleDebugDetail(ev,eventId){
@@ -336,6 +343,7 @@ export function createDebugConsole({adminFetch, toast}){
       el.addEventListener(type,stopDebugFollow,{passive:true});
     });
     el.addEventListener('scroll',()=>{
+      if(!debugProgrammaticScroll)stopDebugFollow();
       if(el.scrollTop+el.clientHeight>=el.scrollHeight-120){
         loadMoreDebug();
       }

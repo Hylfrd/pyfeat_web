@@ -18,6 +18,7 @@ from .experiment_slots import (
     request_experiment_slot,
 )
 from .session_activity import get_session_activity
+from .session_events import add_session_event, add_session_event_once, parse_utc_timestamp
 from .strategy import StrategySelector
 
 
@@ -94,6 +95,14 @@ def create_experiment_router(
                 )
                 db_session.add(session)
                 try:
+                    db_session.flush()
+                    add_session_event(
+                        db_session,
+                        session,
+                        "session_started",
+                        {"participant_id": participant_id, "condition": assigned_condition},
+                        epoch=parse_utc_timestamp(session.start_time),
+                    )
                     db_session.commit()
                 except IntegrityError:
                     db_session.rollback()
@@ -138,6 +147,13 @@ def create_experiment_router(
                 raise HTTPException(404, "Session not found")
             if session.completed:
                 raise HTTPException(400, "Session already completed")
+            add_session_event_once(
+                db_session,
+                session,
+                "pre_survey_finished",
+                {"participant_id": participant_id},
+                commit=True,
+            )
         return request_experiment_slot(participant_id, session_id)
 
     @router.get("/api/session/slot/status/{session_id}")
@@ -206,6 +222,17 @@ def create_experiment_router(
                 session.total_frames = total_frames_int
                 session.unreliable_frames = unreliable_frames_int
             session.completed = True
+            add_session_event_once(
+                db_session,
+                session,
+                "task_completed",
+                {
+                    "completion_type": completion_type,
+                    "duration_ms": duration_ms_int,
+                    "turns": total_turns_int,
+                    "revisions": total_revisions_int,
+                },
+            )
             db_session.commit()
 
         release_experiment_slot(session_id_int)
@@ -234,6 +261,8 @@ def create_experiment_router(
                 q8_frustrated=q8, q9_confusing=q9, q10_taxing=q10,
             )
             db_session.merge(q)
+            session = db_session.query(Session).get(session_id)
+            add_session_event_once(db_session, session, "questionnaire_submitted")
             db_session.commit()
         return {"ok": True}
 
@@ -326,6 +355,13 @@ def create_experiment_router(
             else:
                 s = PreTaskSurvey(participant_id=participant_id, **values)
                 db_session.add(s)
+            session = (
+                db_session.query(Session)
+                .filter(Session.participant_id == participant_id)
+                .order_by(Session.id.desc())
+                .first()
+            )
+            add_session_event_once(db_session, session, "pre_survey_submitted")
             try:
                 db_session.commit()
             except Exception as e:
@@ -380,6 +416,7 @@ def create_experiment_router(
             else:
                 s = PostTaskSurvey(session_id=session_id, **values)
                 db_session.add(s)
+            add_session_event_once(db_session, sess, "post_survey_submitted")
             try:
                 db_session.commit()
             except Exception as e:
@@ -419,4 +456,39 @@ def create_experiment_router(
         chunk_path = video_dir / f"{session_id}_{chunk_index:04d}.webm"
         chunk_path.write_bytes(await chunk.read())
         return {"ok": True}
+
+    @router.post("/api/video-final")
+    async def upload_video_final(
+        participant_id: str = Form(...),
+        session_id: int = Form(...),
+        video: UploadFile = File(...),
+    ):
+        """Receive the final browser-produced WebM for playback and download."""
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session or session.participant_id != participant_id:
+                raise HTTPException(404, "Session not found")
+
+            video_dir = root_dir / "data" / "videos" / participant_id
+            video_dir.mkdir(parents=True, exist_ok=True)
+            final_path = video_dir / f"{session_id}.webm"
+            tmp_path = final_path.with_suffix(".webm.tmp")
+            size = 0
+            with tmp_path.open("wb") as out:
+                while True:
+                    data = await video.read(1024 * 1024)
+                    if not data:
+                        break
+                    size += len(data)
+                    out.write(data)
+            tmp_path.replace(final_path)
+            session.video_path = str(final_path.relative_to(root_dir))
+            add_session_event(
+                db_session,
+                session,
+                "video_final_uploaded",
+                {"bytes": size, "filename": final_path.name},
+            )
+            db_session.commit()
+        return {"ok": True, "session_id": session_id, "bytes": size}
     return router

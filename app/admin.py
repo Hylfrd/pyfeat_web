@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import base64
 import calendar
+import json
 import shutil
 import time
 from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from . import debug_log
 from .auth import require_admin
 from .database import (
     ChatLog, Evaluation, ExpressionFrame, Participant, PostTaskSurvey, PreTaskSurvey, Questionnaire, Session,
+    SessionEvent,
 )
 from .expression import PYFEAT_API_TIMEOUT
 from .experiment_slots import peek_experiment_slot_status
@@ -76,11 +78,14 @@ def _session_stage(session: Session, slot: dict | None = None) -> str:
 
 
 def _ensure_combined_video(session: Session) -> tuple[Path | None, list[Path]]:
+    final_path = _combined_video_path(session)
     chunks = _video_chunk_paths(session)
+    if final_path.exists():
+        return final_path, chunks
     if not chunks:
         return None, chunks
 
-    output = _combined_video_path(session)
+    output = final_path
     latest_chunk_mtime = max(path.stat().st_mtime for path in chunks)
     if output.exists() and output.stat().st_mtime >= latest_chunk_mtime:
         return output, chunks
@@ -104,6 +109,62 @@ def _estimated_video_duration_s(session: Session, chunks: list[Path]) -> int:
     if session.duration_ms:
         return max(1, int(round(session.duration_ms / 1000)))
     return max(0, len(chunks) * 10)
+
+
+def _file_range_iter(path: Path, start: int, end: int, chunk_size: int = 1024 * 1024):
+    with path.open("rb") as f:
+        f.seek(start)
+        remaining = end - start + 1
+        while remaining > 0:
+            data = f.read(min(chunk_size, remaining))
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
+
+
+def _video_file_response(path: Path, filename: str | None, range_header: str | None):
+    size = path.stat().st_size
+    headers = {"Accept-Ranges": "bytes", "Cache-Control": "no-store"}
+    if range_header and range_header.startswith("bytes="):
+        spec = range_header.removeprefix("bytes=").split(",", 1)[0].strip()
+        start_text, _, end_text = spec.partition("-")
+        try:
+            if start_text:
+                start = int(start_text)
+                end = int(end_text) if end_text else size - 1
+            else:
+                suffix = int(end_text)
+                start = max(0, size - suffix)
+                end = size - 1
+        except ValueError as exc:
+            raise HTTPException(416, "Invalid range") from exc
+        if start < 0 or end < start or start >= size:
+            raise HTTPException(416, "Requested range not satisfiable")
+        end = min(end, size - 1)
+        headers.update({
+            "Content-Range": f"bytes {start}-{end}/{size}",
+            "Content-Length": str(end - start + 1),
+        })
+        if filename:
+            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return StreamingResponse(
+            _file_range_iter(path, start, end),
+            status_code=206,
+            media_type="video/webm",
+            headers=headers,
+        )
+    return FileResponse(path, media_type="video/webm", filename=filename, headers=headers)
+
+
+def _event_payload(event: SessionEvent) -> dict:
+    if not event.payload_json:
+        return {}
+    try:
+        value = json.loads(event.payload_json)
+        return value if isinstance(value, dict) else {"value": value}
+    except json.JSONDecodeError:
+        return {"raw": event.payload_json}
 
 
 def _delete_video_files(session: Session) -> int:
@@ -228,6 +289,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
             db_session.query(Questionnaire).filter(Questionnaire.session_id == session_id).delete()
             db_session.query(ExpressionFrame).filter(ExpressionFrame.session_id == session_id).delete()
             db_session.query(ChatLog).filter(ChatLog.session_id == session_id).delete()
+            db_session.query(SessionEvent).filter(SessionEvent.session_id == session_id).delete()
             _delete_video_files(session)
             db_session.delete(session)
             db_session.commit()
@@ -259,7 +321,6 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 "chunk_count": len(chunks),
                 "size_bytes": size,
                 "size_human": _format_bytes(size),
-                "estimated_duration_s": _estimated_video_duration_s(session, chunks),
                 "updated_at": updated_at,
                 "url": f"/api/admin/sessions/{session.id}/video/file",
                 "download_url": f"/api/admin/sessions/{session.id}/video/file?download=1",
@@ -269,6 +330,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
     async def admin_session_video_file(
         session_id: int,
         download: bool = Query(False),
+        range_header: str | None = Header(None, alias="Range"),
         _: None = Depends(require_admin),
     ):
         """Serve a combined WebM video for the admin player or download."""
@@ -280,12 +342,37 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
             if not video_path or not video_path.exists():
                 raise HTTPException(404, "Video not found")
             filename = f"session_{session.id}_{session.participant_id}.webm" if download else None
-            return FileResponse(
-                video_path,
-                media_type="video/webm",
-                filename=filename,
-                headers={"Cache-Control": "no-store"},
+            return _video_file_response(video_path, filename, range_header)
+
+    @router.get("/api/admin/sessions/{session_id}/timeline")
+    async def admin_session_timeline(session_id: int, _: None = Depends(require_admin)):
+        """Return stored session markers for synchronized video review."""
+        with db_session_factory() as db_session:
+            session = db_session.query(Session).get(session_id)
+            if not session:
+                raise HTTPException(404, "Session not found")
+            events = (
+                db_session.query(SessionEvent)
+                .filter(SessionEvent.session_id == session_id)
+                .order_by(SessionEvent.t_ms, SessionEvent.id)
+                .all()
             )
+            return {
+                "session_id": session.id,
+                "participant_id": session.participant_id,
+                "start_time": session.start_time,
+                "events": [
+                    {
+                        "id": event.id,
+                        "type": event.event_type,
+                        "t_ms": event.t_ms,
+                        "time_s": round(event.t_ms / 1000, 3),
+                        "timestamp": event.timestamp,
+                        "payload": _event_payload(event),
+                    }
+                    for event in events
+                ],
+            }
 
     @router.delete("/api/admin/sessions/{session_id}/video")
     async def admin_delete_session_video(session_id: int, _: None = Depends(require_admin)):

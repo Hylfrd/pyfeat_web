@@ -1,7 +1,7 @@
 import { $, escapeAttr as escAttr, escapeHtml as escHtml } from '../shared/dom.js';
 
 const VIDEO_POLL_MS = 1500;
-const SYNC_WINDOW = 160;
+const SYNC_WINDOW = 180;
 
 function formatSeconds(value) {
   const total = Math.max(0, Math.floor(Number(value) || 0));
@@ -10,23 +10,12 @@ function formatSeconds(value) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function safeDateMs(value) {
-  if (!value) return null;
-  let text = String(value);
-  if (/^\d{4}-\d{2}-\d{2}T/.test(text) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
-    text = `${text}Z`;
-  }
-  const ms = Date.parse(text);
-  return Number.isFinite(ms) ? ms : null;
+function eventTime(event) {
+  return Number(event?.time_s ?? 0);
 }
 
-function offsetSeconds(atMs, startMs) {
-  if (atMs === null || startMs === null) return null;
-  return Math.max(0, (atMs - startMs) / 1000);
-}
-
-function chatTime(log, session) {
-  return offsetSeconds(safeDateMs(log?.timestamp), safeDateMs(session?.start_time));
+function frameTime(frame) {
+  return Number(frame?.video_t ?? frame?.t ?? 0);
 }
 
 function frameReliable(frame) {
@@ -37,85 +26,31 @@ function frameFace(frame) {
   return !!(frame?.face ?? frame?.face_detected);
 }
 
-function frameVideoTime(frame) {
-  return Number(frame?.video_t ?? frame?.t ?? 0);
+function firstEvent(events, types) {
+  const wanted = new Set(types);
+  const row = (events || []).find((event) => wanted.has(event.type) && Number.isFinite(eventTime(event)));
+  return row ? eventTime(row) : null;
 }
 
-function debugEventTime(event, session) {
-  const startMs = safeDateMs(session?.start_time);
-  if (startMs === null) return null;
-  if (Number.isFinite(Number(event?.epoch))) {
-    return offsetSeconds(Number(event.epoch) * 1000, startMs);
-  }
-  const match = String(event?.ts || '').match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
-  if (!match) return null;
-  const start = new Date(startMs);
-  const candidate = new Date(
-    start.getFullYear(),
-    start.getMonth(),
-    start.getDate(),
-    Number(match[1]),
-    Number(match[2]),
-    Number(match[3]),
-  );
-  let diff = (candidate.getTime() - startMs) / 1000;
-  if (diff < -12 * 3600) diff += 24 * 3600;
-  if (diff > 12 * 3600) diff -= 24 * 3600;
-  return Math.max(0, diff);
-}
-
-function minNumber(values) {
-  const filtered = values.filter((value) => Number.isFinite(value));
-  return filtered.length ? Math.min(...filtered) : null;
-}
-
-function buildTimeline(exp, st, debugEvents) {
-  const session = exp?.session || {};
-  const preDone = offsetSeconds(safeDateMs(exp?.pre_survey?.created_at), safeDateMs(session.start_time));
-  const taskEnd = offsetSeconds(safeDateMs(session.end_time), safeDateMs(session.start_time));
-  const firstFrame = minNumber((st?.frames || []).map(frameVideoTime));
-  const firstChat = minNumber((exp?.chat_logs || []).map((log) => chatTime(log, session)));
-  const firstTaskDebug = minNumber((debugEvents || [])
-    .filter((event) => ['expression', 'strategy', 'ai', 'eval'].includes(event.kind))
-    .map((event) => debugEventTime(event, session)));
-  const firstBaselineDebug = minNumber((debugEvents || [])
-    .filter((event) => event.kind === 'baseline')
-    .map((event) => debugEventTime(event, session)));
-
-  return {
-    baselineStart: minNumber([preDone, firstBaselineDebug]),
-    taskStart: minNumber([firstFrame, firstChat, firstTaskDebug]),
-    postStart: taskEnd,
-  };
-}
-
-function stageAt(currentTime, timeline, fallback = '-') {
+function stageAt(currentTime, timeline) {
   const t = Number(currentTime) || 0;
   if (Number.isFinite(timeline.postStart) && t >= timeline.postStart) return '实验后问卷';
   if (Number.isFinite(timeline.taskStart) && t >= timeline.taskStart) return '实验中';
   if (Number.isFinite(timeline.baselineStart) && t >= timeline.baselineStart) return '基准测试';
-  if ([timeline.baselineStart, timeline.taskStart, timeline.postStart].some((value) => Number.isFinite(value))) {
-    return '实验前问卷';
-  }
-  return fallback && fallback !== '-' ? fallback : '实验前问卷';
+  return '实验前问卷';
 }
 
-function maxTimelineTime(exp, st, debugEvents) {
-  const session = exp?.session || {};
-  return Math.max(
-    0,
-    ...((st?.frames || []).map(frameVideoTime).filter(Number.isFinite)),
-    ...((exp?.chat_logs || []).map((log) => chatTime(log, session)).filter(Number.isFinite)),
-    ...((debugEvents || []).map((event) => debugEventTime(event, session)).filter(Number.isFinite)),
-  );
+function buildStageTimeline(timeline) {
+  const events = timeline?.events || [];
+  return {
+    baselineStart: firstEvent(events, ['baseline_started', 'pre_survey_finished', 'pre_survey_submitted']),
+    taskStart: firstEvent(events, ['task_started']),
+    postStart: firstEvent(events, ['task_completed']),
+  };
 }
 
-function estimatedDuration(info, exp, st, debugEvents) {
-  return Math.max(
-    Number(info?.estimated_duration_s) || 0,
-    maxTimelineTime(exp, st, debugEvents),
-    Number(info?.chunk_count || 0) * 10,
-  );
+function payloadText(payload = {}) {
+  return payload.message || payload.text || payload.filename || '';
 }
 
 export function createVideoConsole({ adminFetch, toast, getSessionCache, isActive = () => true }) {
@@ -126,7 +61,7 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
   let videoInfo = null;
   let latestExp = null;
   let latestSt = null;
-  let latestDebugEvents = [];
+  let latestTimeline = null;
   let lastVideoSize = -1;
   let currentTime = 0;
   let viewToken = 0;
@@ -199,6 +134,10 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
       currentTime = video.currentTime || 0;
       updatePlaybackViews();
     });
+    video?.addEventListener('loadedmetadata', () => {
+      currentTime = video.currentTime || 0;
+      updatePlaybackViews();
+    });
     initPlayer();
   }
 
@@ -223,7 +162,7 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     const sid = exp.session.id;
     if (activeSid !== sid) {
       videoInfo = null;
-      latestDebugEvents = [];
+      latestTimeline = null;
       expandedSyncKeys.clear();
       currentTime = 0;
     }
@@ -242,19 +181,23 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     const sid = activeSid;
     loading = true;
     try {
-      const debugParams = new URLSearchParams({ limit: '300', session_id: String(sid) });
-      const [infoR, exportR, statsR, debugR] = await Promise.all([
+      const [infoR, exportR, statsR, timelineR] = await Promise.all([
         adminFetch(`/api/admin/sessions/${sid}/video/info`),
         adminFetch(`/api/admin/sessions/${sid}/export`),
         adminFetch(`/api/admin/expression/${sid}/stats`),
-        adminFetch(`/api/admin/debug?${debugParams.toString()}`),
+        adminFetch(`/api/admin/sessions/${sid}/timeline`),
       ]);
-      const [info, exp, st, debugPage] = await Promise.all([infoR.json(), exportR.json(), statsR.json(), debugR.json()]);
+      const [info, exp, st, timeline] = await Promise.all([
+        infoR.json(),
+        exportR.json(),
+        statsR.json(),
+        timelineR.json(),
+      ]);
       if (token !== viewToken || sid !== activeSid || !isActive()) return;
       videoInfo = info;
       latestExp = exp;
       latestSt = st;
-      latestDebugEvents = debugPage.events || [];
+      latestTimeline = timeline;
       getSessionCache()[sid] = { exp, st };
       ensureShell(sid);
       updatePlayer(info);
@@ -272,17 +215,16 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     updateChat();
     updateSyncRows();
     updateSyncTime();
-    updateDurationFallback();
   }
 
   function updateOverview() {
     const session = latestExp?.session || {};
-    const timeline = buildTimeline(latestExp, latestSt, latestDebugEvents);
+    const stageTimeline = buildStageTimeline(latestTimeline);
     const participant = videoInfo?.participant_id || session.participant_id || '-';
     const size = videoInfo?.size_human || '0 B';
     const chunks = Number(videoInfo?.chunk_count || 0);
-    const stage = stageAt(currentTime, timeline, videoInfo?.stage || '-');
-    const duration = estimatedDuration(videoInfo, latestExp, latestSt, latestDebugEvents);
+    const stage = stageAt(currentTime, stageTimeline);
+    const markerCount = latestTimeline?.events?.length || 0;
     const download = videoInfo?.available
       ? `<a class="video-link-button primary" href="${escAttr(videoInfo.download_url)}">下载视频</a>`
       : '<button disabled>下载视频</button>';
@@ -292,7 +234,7 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
       <div class="video-info-card"><span>当前阶段</span><strong>${escHtml(stage)}</strong></div>
       <div class="video-info-card"><span>视频大小</span><strong>${escHtml(size)}</strong></div>
       <div class="video-info-card"><span>视频分段</span><strong>${chunks} 段</strong></div>
-      <div class="video-info-card"><span>估算时长</span><strong>${duration ? formatSeconds(duration) : '-'}</strong></div>
+      <div class="video-info-card"><span>时间标记</span><strong>${markerCount} 个</strong></div>
       <div class="video-action-row">
         ${download}
         <button class="danger" data-action="confirm-delete-video" data-session-id="${session.id}">删除视频</button>
@@ -322,58 +264,53 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     video.src = `${info.url}?v=${encodeURIComponent(size || Date.now())}`;
     lastVideoSize = size;
     video.addEventListener('loadedmetadata', () => {
-      if (previousTime > 0 && Number.isFinite(video.duration)) {
+      if (previousTime > 0 && Number.isFinite(video.duration) && video.duration > 0) {
         video.currentTime = Math.min(previousTime, Math.max(0, video.duration - 0.25));
       }
-      updateDurationFallback();
       if (!wasPaused) video.play().catch(() => {});
     }, { once: true });
   }
 
-  function updateDurationFallback() {
-    const duration = estimatedDuration(videoInfo, latestExp, latestSt, latestDebugEvents);
-    if (!duration) return;
-    const video = $('session-video-player');
-    if (video && Number.isFinite(video.duration) && video.duration > 1) return;
-    document.querySelectorAll('.video-player-box .plyr__time--duration').forEach((el) => {
-      el.textContent = formatSeconds(duration);
-    });
+  function chatEvents() {
+    return (latestTimeline?.events || [])
+      .filter((event) => event.type === 'chat_user' || event.type === 'chat_ai')
+      .map((event) => ({
+        event,
+        t: eventTime(event),
+        isAi: event.type === 'chat_ai',
+        payload: event.payload || {},
+      }))
+      .filter((item) => Number.isFinite(item.t));
   }
 
   function updateChat() {
-    const logs = (latestExp?.chat_logs || []).filter((log) => !log.is_hidden);
-    const visible = logs
-      .map((log) => ({ log, t: chatTime(log, latestExp.session) }))
-      .filter((item) => Number.isFinite(item.t) && item.t <= currentTime)
-      .slice(-20);
+    const all = chatEvents();
+    const visible = all.filter((item) => item.t <= currentTime).slice(-20);
     const list = $('video-chat-list');
     const count = $('video-chat-count');
-    if (count) count.textContent = `${visible.length} / ${logs.length} 条`;
+    if (count) count.textContent = `${visible.length} / ${all.length} 条`;
     if (!list) return;
     if (!visible.length) {
       list.innerHTML = '<div class="video-empty-line">当前时间点还没有 AI 对话</div>';
       return;
     }
-    list.innerHTML = visible.map(({ log, t }) => {
-      const isAi = log.role === 'ai';
-      return `
-        <article class="video-chat-item ${isAi ? 'ai' : 'user'}">
-          <div class="video-chat-meta">
-            <span>${isAi ? 'AI' : '用户'} #${log.seq}</span>
-            <span>${formatSeconds(t)}</span>
-            ${log.strategy_applied ? `<span class="tag strat">${escHtml(log.strategy_applied)}</span>` : ''}
-            ${log.expression_label ? `<span class="tag expr">${escHtml(log.expression_label)}</span>` : ''}
-          </div>
-          <div class="video-chat-content">${escHtml(log.content || '')}</div>
-        </article>
-      `;
-    }).join('');
+    list.innerHTML = visible.map(({ event, t, isAi, payload }) => `
+      <article class="video-chat-item ${isAi ? 'ai' : 'user'} ${Math.abs(t - currentTime) <= 2 ? 'synced' : ''}">
+        <div class="video-chat-meta">
+          <span>${isAi ? 'AI' : '用户'} #${escHtml(payload.seq ?? event.id)}</span>
+          <span>${formatSeconds(t)}</span>
+          ${payload.strategy ? `<span class="tag strat">${escHtml(payload.strategy)}</span>` : ''}
+          ${payload.expression_label ? `<span class="tag expr">${escHtml(payload.expression_label)}</span>` : ''}
+        </div>
+        <div class="video-chat-content">${escHtml(payload.text || '')}</div>
+      </article>
+    `).join('');
     list.scrollTop = list.scrollHeight;
   }
 
   function syncRows() {
     const frameRows = (latestSt?.frames || []).map((frame, index) => {
-      const t = frameVideoTime(frame);
+      const t = frameTime(frame);
       return {
         key: `frame-${index}`,
         t,
@@ -400,25 +337,23 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
         },
       };
     });
-
-    const eventRows = (latestDebugEvents || []).map((event) => {
-      const t = debugEventTime(event, latestExp?.session || {});
+    const markerRows = (latestTimeline?.events || []).map((event) => {
+      const payload = event.payload || {};
       return {
         key: `event-${event.id}`,
-        t,
-        type: event.kind || 'log',
+        t: eventTime(event),
+        type: event.type || 'marker',
         au1: '-',
         au4: '-',
         au7: '-',
         au12: '-',
-        face: event.face_detected === undefined ? '-' : (event.face_detected ? 'yes' : 'no'),
-        reliable: event.reliable === undefined ? '-' : (event.reliable ? 'yes' : 'no'),
-        message: event.message || '',
+        face: '-',
+        reliable: '-',
+        message: payloadText(payload) || event.type || '',
         detail: event,
       };
     });
-
-    return frameRows.concat(eventRows)
+    return frameRows.concat(markerRows)
       .filter((row) => Number.isFinite(row.t) && row.t <= currentTime)
       .sort((a, b) => a.t - b.t || String(a.key).localeCompare(String(b.key)))
       .slice(-SYNC_WINDOW);
@@ -444,9 +379,6 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
   function renderSyncRow(row) {
     const expanded = expandedSyncKeys.has(row.key);
     const detailJson = escHtml(JSON.stringify(row.detail, null, 2));
-    const jsonLink = String(row.key).startsWith('event-') && row.detail?.id !== undefined
-      ? `<a class="debug-json-link" href="/api/admin/debug-event/${encodeURIComponent(row.detail.id)}/json?part=event" target="_blank" rel="noopener noreferrer">完整日志事件</a>`
-      : '';
     return `
       <tr class="${Math.abs(row.t - currentTime) <= 1 ? 'synced' : ''}">
         <td>${formatSeconds(row.t)}</td>
@@ -460,7 +392,7 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
         <td>${escHtml(row.message)}</td>
         <td><button class="debug-expand" data-action="video-sync-detail" data-sync-key="${escAttr(row.key)}">${expanded ? '收起' : '展开'}</button></td>
       </tr>
-      ${expanded ? `<tr class="debug-detail-row video-sync-detail-row"><td colspan="10"><div class="debug-detail-body"><pre>${detailJson}</pre>${jsonLink}</div></td></tr>` : ''}
+      ${expanded ? `<tr class="debug-detail-row video-sync-detail-row"><td colspan="10"><div class="debug-detail-body"><pre>${detailJson}</pre></div></td></tr>` : ''}
     `;
   }
 
@@ -483,7 +415,7 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     overlay.classList.remove('hidden');
     modal.innerHTML = `
       <h3>删除实验视频</h3>
-      <p>确定删除 Session #${sid} 的视频吗？这会删除所有已上传的视频分段和合并后的视频文件，但不会删除会话数据。</p>
+      <p>确定删除 Session #${sid} 的视频吗？这会删除所有已上传的视频分段和最终视频文件，但不会删除会话数据。</p>
       <div class="modal-actions">
         <button data-action="close-modal">取消</button>
         <button class="danger" data-action="do-delete-video" data-session-id="${sid}">确认删除</button>

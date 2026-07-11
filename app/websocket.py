@@ -14,6 +14,7 @@ from .database import ChatLog, ExpressionFrame, Participant, Session
 from .expression import AUFrame
 from .experiment_slots import get_experiment_slot_status, release_experiment_slot, touch_experiment_slot
 from .session_activity import mark_disconnected, touch_session
+from .session_events import add_session_event, add_session_event_once
 from .strategy import Strategy, UserTurn
 from .websocket_utils import (
     TASK_TIME_LIMIT_SECONDS,
@@ -118,6 +119,16 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
             await safe_send({"type": "slot_status", **status})
             return False
 
+        def record_session_event(event_type: str, payload: dict | None = None, once: bool = False) -> None:
+            if not current_session_id:
+                return
+            with db_session_factory() as db_session:
+                session = db_session.query(Session).get(current_session_id)
+                if not session:
+                    return
+                writer = add_session_event_once if once else add_session_event
+                writer(db_session, session, event_type, payload or {}, commit=True)
+
         try:
             while True:
                 try:
@@ -154,6 +165,7 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                         if not await ensure_active_experiment_slot():
                             continue
                         touch_experiment_slot(current_session_id, "baseline")
+                        record_session_event("baseline_started", {"participant_id": participant_id}, once=True)
                         baseline_count = 0
                         expression_engine.clear_baseline_buffer(participant_id)
                         await safe_send({
@@ -237,6 +249,11 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                                 db_session.commit()
 
                         baseline_count = 0
+                        record_session_event(
+                            "baseline_completed",
+                            {"frame_count": baseline.frame_count, "artifact_count": baseline.artifact_count},
+                            once=True,
+                        )
                         await safe_send({
                             "type": "baseline_calibrated",
                             "ok": True,
@@ -251,6 +268,7 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                             continue
                         touch_session(participant_id, current_session_id)
                         touch_experiment_slot(current_session_id, "task")
+                        record_session_event("task_started", {"participant_id": participant_id}, once=True)
                         await safe_send({"type": "task_started_ack"})
 
                     elif msg_type == "expression_frame":
@@ -413,6 +431,7 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
 
                         if current_session_id:
                             with db_session_factory() as db_session:
+                                session = db_session.query(Session).get(current_session_id)
                                 db_session.add(ChatLog(
                                     session_id=current_session_id,
                                     seq=turn_counter * 2 - 1,
@@ -421,6 +440,17 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                                     timestamp=utc_timestamp(),
                                     expression_label=expression_engine.get_expression_label(participant_id),
                                 ))
+                                add_session_event(
+                                    db_session,
+                                    session,
+                                    "chat_user",
+                                    {
+                                        "seq": turn_counter * 2 - 1,
+                                        "turn": turn_counter,
+                                        "text": user_text,
+                                        "expression_label": expression_engine.get_expression_label(participant_id),
+                                    },
+                                )
                                 db_session.commit()
 
                         ai_started = time.perf_counter()
@@ -486,6 +516,7 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
 
                         if current_session_id:
                             with db_session_factory() as db_session:
+                                session = db_session.query(Session).get(current_session_id)
                                 db_session.add(ChatLog(
                                     session_id=current_session_id,
                                     seq=turn_counter * 2,
@@ -494,6 +525,18 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                                     timestamp=utc_timestamp(),
                                     strategy_applied=strategy_name,
                                 ))
+                                add_session_event(
+                                    db_session,
+                                    session,
+                                    "chat_ai",
+                                    {
+                                        "seq": turn_counter * 2,
+                                        "turn": turn_counter,
+                                        "strategy": strategy_name,
+                                        "elapsed_ms": ai_elapsed_ms,
+                                        "text": ai_response_text,
+                                    },
+                                )
                                 db_session.commit()
 
                         chat_history.append(ChatMessage(role="user", content=user_text))
