@@ -173,7 +173,8 @@ let aiWaitDeadlineAt = 0;
 let aiWaitTimeoutTimer = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
-let intentionalWsClose = false;
+let connectPromise = null;
+const intentionalWsClosures = new WeakSet();
 let lastExpressionSentAt = 0;
 let expressionFramePending = false;
 let expressionFramePendingAt = 0;
@@ -556,40 +557,65 @@ document.querySelectorAll('.likert-line').forEach(row=>{
 
 // ── WebSocket ──
 function connectWS(){
-  return new Promise((resolve, reject) => {
-    if(ws&&ws.readyState===WebSocket.OPEN){resolve();return;}
-    let settled=false;
-    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${wsProtocol}//${location.host}/ws/${participantId}`);
-    ws.onopen = () => {
+  if(ws&&ws.readyState===WebSocket.OPEN)return Promise.resolve();
+  if(connectPromise)return connectPromise;
+  let resolveConnection;
+  let rejectConnection;
+  const promise=new Promise((resolve,reject)=>{
+    resolveConnection=resolve;
+    rejectConnection=reject;
+  });
+  connectPromise=promise;
+  let settled=false;
+  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(`${wsProtocol}//${location.host}/ws/${participantId}`);
+  ws=socket;
+  const clearConnectPromise=()=>{
+    if(connectPromise===promise)connectPromise=null;
+  };
+  socket.onopen = () => {
+      if(ws!==socket){
+        intentionalWsClosures.add(socket);
+        try{socket.close(1000,'superseded')}catch(e){}
+        if(!settled){settled=true;clearConnectPromise();rejectConnection(new Error('WebSocket connection superseded'));}
+        return;
+      }
       console.log('[WS] Connected');
-      intentionalWsClose=false;
       expressionFramePending=false;
       expressionFramePendingAt=0;
       baselineFramePending=false;
       baselineFramePendingAt=0;
       reconnectAttempts=0;
       clearToasts('connection');
-      if(currentSessionId)ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
+      if(currentSessionId)socket.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
       if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
       settled=true;
-      resolve();
+      clearConnectPromise();
+      resolveConnection();
     };
-    ws.onerror = (err) => {
+    socket.onerror = (err) => {
       console.error('[WS] Connection error:', err);
       if(!settled){
         settled=true;
-        reject(new Error('WebSocket connection failed'));
+        clearConnectPromise();
+        rejectConnection(new Error('WebSocket connection failed'));
       }
     };
-    ws.onclose = (e) => {
+    socket.onclose = (e) => {
       console.log('[WS] Closed:', e.code, e.reason);
+      const isCurrent=ws===socket;
+      const intentional=intentionalWsClosures.has(socket)||e.reason==='task complete';
+      if(isCurrent)ws=null;
+      if(!settled){
+        settled=true;
+        clearConnectPromise();
+        rejectConnection(new Error(`WebSocket closed before connecting: ${e.code}`));
+      }
+      if(!isCurrent)return;
       expressionFramePending=false;
       expressionFramePendingAt=0;
       baselineFramePending=false;
       baselineFramePendingAt=0;
-      const intentional= intentionalWsClose || e.reason==='task complete';
-      intentionalWsClose=false;
       if(intentional){
         clearToasts('connection');
         return;
@@ -602,7 +628,8 @@ function connectWS(){
       }
       if(e.code!==1000)scheduleReconnect();
     };
-    ws.onmessage = e => {
+    socket.onmessage = e => {
+      if(ws!==socket)return;
       const msg = JSON.parse(e.data);
       if(msg.type==='baseline_ack'){
         baselineFramePending=false;
@@ -684,17 +711,18 @@ function connectWS(){
         }
       }
     };
-    // Timeout after 5 seconds
+    // Timeout after 15 seconds
     setTimeout(() => {
-      if(ws.readyState !== WebSocket.OPEN) {
-        try{ws.close();}catch(e){}
+      if(socket.readyState !== WebSocket.OPEN) {
+        try{socket.close();}catch(e){}
         if(!settled){
           settled=true;
-          reject(new Error('WebSocket connection timeout'));
+          clearConnectPromise();
+          rejectConnection(new Error('WebSocket connection timeout'));
         }
       }
     }, 15000);
-  });
+  return promise;
 }
 
 function scheduleReconnect(){
@@ -1009,11 +1037,14 @@ function handleAiWaitTimeout(){
   writeProgress({aiWaiting:false,aiWaitStartedAt:0,aiWaitDeadlineAt:0});
 }
 function closeWS(){
-  if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING)){
-    intentionalWsClose=true;
-    try{ws.close(1000,'task complete')}catch(e){}
-  }
+  const socket=ws;
   ws=null;
+  connectPromise=null;
+  if(socket&&(socket.readyState===WebSocket.OPEN||socket.readyState===WebSocket.CONNECTING)){
+    intentionalWsClosures.add(socket);
+    try{socket.close(1000,'task complete')}catch(e){}
+  }
+  clearToasts('connection');
 }
 window.addEventListener('pagehide',()=>{
   stopVideoRecording();

@@ -66,7 +66,13 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
     async def websocket_endpoint(websocket: WebSocket, participant_id: str):
         """Main WebSocket for participant communication."""
         await websocket.accept()
+        previous_websocket = active_connections.get(participant_id)
         active_connections[participant_id] = websocket
+        if previous_websocket and previous_websocket is not websocket:
+            try:
+                await previous_websocket.close(code=4001, reason="superseded")
+            except RuntimeError:
+                pass
 
         chat_history: list[ChatMessage] = []
         turn_counter: int = 0
@@ -578,6 +584,7 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                 flush_expression_frames()
             except Exception:
                 pass
-            active_connections.pop(participant_id, None)
-            mark_disconnected(participant_id)
+            if active_connections.get(participant_id) is websocket:
+                active_connections.pop(participant_id, None)
+                mark_disconnected(participant_id)
     return router
