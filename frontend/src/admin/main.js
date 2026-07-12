@@ -1,7 +1,15 @@
 import './style.css';
 import { $, escapeHtml as escHtml } from '../shared/dom.js';
 import { createDebugConsole } from './debugConsole.js';
-import { renderBaseline, renderChat, renderExpression, renderOverview, renderSurvey } from './sessionViews.js';
+import {
+  applyStrategyFrameFilters,
+  renderBaseline,
+  renderChat,
+  renderExpression,
+  renderOverview,
+  renderSurvey,
+  toggleStrategyDetail,
+} from './sessionViews.js';
 import { createSessionActions } from './sessionActions.js';
 import { createVideoConsole } from './videoConsole.js';
 
@@ -251,13 +259,18 @@ async function selectSession(sid) {
 async function loadSession(sid, silent = false) {
   if (!silent && $('detail')) $('detail').innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
 
-  const [exportR, statsR] = await Promise.all([
+  const strategyRequest = activeTab === 'baseline'
+    ? adminFetch(`/api/admin/sessions/${sid}/strategy-frames`)
+    : Promise.resolve(null);
+  const [exportR, statsR, strategyR] = await Promise.all([
     adminFetch(`/api/admin/sessions/${sid}/export`),
     adminFetch(`/api/admin/expression/${sid}/stats`),
+    strategyRequest,
   ]);
   const exp = await exportR.json();
   const st = await statsR.json();
-  sessionCache[sid] = { exp, st };
+  const strategyReport = strategyR ? await strategyR.json() : sessionCache[sid]?.strategyReport;
+  sessionCache[sid] = { exp, st, strategyReport };
 
   setActiveTab(activeTab);
   renderActiveTab();
@@ -271,16 +284,25 @@ $('tabs')?.addEventListener('click', async (e) => {
     await loadSession(activeSid);
     return;
   }
+  if (activeTab === 'baseline' && activeSid && !sessionCache[activeSid]?.strategyReport) {
+    await loadSession(activeSid);
+    return;
+  }
   renderActiveTab();
 });
 
 function setActiveTab(tab) {
   $('tabs')?.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-  $('detail')?.classList.toggle('video-content', tab === 'video');
+  const detail = $('detail');
+  if (!detail) return;
+  [...detail.classList].filter((name) => name.startsWith('tab-')).forEach((name) => detail.classList.remove(name));
+  detail.classList.add(`tab-${tab}`);
+  detail.classList.toggle('video-content', tab === 'video');
 }
 
 function renderActiveTab() {
-  const { exp, st } = sessionCache[activeSid] || {};
+  setActiveTab(activeTab);
+  const { exp, st, strategyReport } = sessionCache[activeSid] || {};
   if (activeTab === 'debug') {
     videoConsole.stopTimers();
     debugConsole.render();
@@ -295,7 +317,7 @@ function renderActiveTab() {
   if (activeTab === 'overview') renderOverview(exp, st);
   if (activeTab === 'chat') renderChat(exp);
   if (activeTab === 'expression') renderExpression(exp, st);
-  if (activeTab === 'baseline') renderBaseline(exp);
+  if (activeTab === 'baseline') renderBaseline(exp, strategyReport);
   if (activeTab === 'survey') renderSurvey(exp);
   if (activeTab === 'video') videoConsole.render(exp, st);
 }
@@ -337,6 +359,7 @@ function handleAdminClick(e) {
   }
   if (action === 'test-ai') return debugConsole.testAIStatus(el.dataset.provider);
   if (action === 'debug-detail') return debugConsole.toggleDetail(e, Number(el.dataset.eventId));
+  if (action === 'strategy-detail') return toggleStrategyDetail(Number(el.dataset.eventId), el);
   if (action === 'export-session') return sessionActions.exportSession(Number(el.dataset.sessionId));
   if (action === 'export-session-csv') return sessionActions.exportSessionCSV(Number(el.dataset.sessionId));
   if (action === 'export-expression-csv') return sessionActions.exportExpressionCSV(Number(el.dataset.sessionId));
@@ -355,6 +378,10 @@ function handleAdminInput(e) {
 }
 
 function handleAdminChange(e) {
+  if (e.target.matches('[data-strategy-filter]')) {
+    applyStrategyFrameFilters();
+    return;
+  }
   if (e.target.id === 'debug-kind') {
     debugConsole.stopFollow();
     debugConsole.reload();

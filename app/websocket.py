@@ -345,6 +345,7 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                                 "kind": "expression",
                                 "participant_id": participant_id,
                                 "session_id": current_session_id,
+                                "frame_number": total_frames,
                                 "bytes": debug_log._frame_bytes(frame_b64),
                                 "elapsed_ms": elapsed_ms,
                                 "queued_ms": au_frame.queued_ms if au_frame else 0.0,

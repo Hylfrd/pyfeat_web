@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -27,6 +28,16 @@ DEBUG_LINE_CHUNK_BYTES = 64 * 1024
 DEBUG_MAX_SCAN_LINES = 5000
 debug_events = deque(maxlen=300)
 debug_lock = threading.Lock()
+
+STRATEGY_TRIGGER_KEYS = (
+    "_au4_present",
+    "_au4_rising",
+    "_input_shrinking",
+    "_sustained_present",
+    "_idle_with_au1",
+    "_au4_slope",
+    "_au4_dropping",
+)
 
 def _frame_bytes(image_base64: str) -> int:
     value = image_base64.split(",", 1)[-1]
@@ -353,6 +364,62 @@ def _debug_event_by_id(event_id: int) -> dict:
         raise HTTPException(404, "Debug event not found")
     event.setdefault("id", event_id)
     return event
+
+def _strategy_frame_report(session_id: int) -> dict:
+    """Build trigger statistics from experiment-stage expression debug events."""
+    session_key = str(session_id)
+    counts = {key: 0 for key in STRATEGY_TRIGGER_KEYS}
+    frames = []
+    total_frames = 0
+
+    if DEBUG_LOG_PATH.exists():
+        events = (event for _, event in _iter_debug_log_reverse())
+    else:
+        events = reversed(debug_events)
+
+    for event in events:
+        if event.get("kind") != "expression":
+            continue
+        if str(event.get("session_id", "")) != session_key:
+            continue
+
+        total_frames += 1
+        api_response = event.get("api_response")
+        if not isinstance(api_response, dict):
+            api_response = {}
+        triggers = {
+            key: api_response.get(key) is True
+            for key in STRATEGY_TRIGGER_KEYS
+        }
+        for key, triggered in triggers.items():
+            if triggered:
+                counts[key] += 1
+
+        if not event.get("image"):
+            continue
+        frame_number = event.get("frame_number")
+        if frame_number is None:
+            match = re.search(r"\bexpression frame\s+(\d+)\b", str(event.get("message", "")))
+            frame_number = int(match.group(1)) if match else None
+        frames.append({
+            "id": event.get("id"),
+            "ts": event.get("ts", ""),
+            "epoch": event.get("epoch"),
+            "frame_number": frame_number,
+            "triggers": triggers,
+            "image": event.get("image"),
+            "bytes": event.get("bytes", 0),
+            "elapsed_ms": event.get("elapsed_ms"),
+            "message": event.get("message", ""),
+        })
+
+    return {
+        "session_id": session_id,
+        "total_frames": total_frames,
+        "photo_frames": len(frames),
+        "counts": counts,
+        "frames": frames,
+    }
 
 def _debug_tail(limit: int = 300) -> list[dict]:
     if not DEBUG_LOG_PATH.exists():

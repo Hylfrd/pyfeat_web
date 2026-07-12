@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import calendar
 import json
@@ -732,6 +733,14 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
     @router.get("/api/admin/debug-event/{event_id}")
     async def admin_debug_event(event_id: int, _: None = Depends(require_admin)):
         return debug_log._debug_event_by_id(event_id)
+
+    @router.get("/api/admin/sessions/{session_id}/strategy-frames")
+    async def admin_strategy_frames(session_id: int, _: None = Depends(require_admin)):
+        """Return strategy trigger frequencies and experiment-stage photo logs."""
+        with db_session_factory() as db_session:
+            if not db_session.query(Session.id).filter(Session.id == session_id).first():
+                raise HTTPException(404, "Session not found")
+        return await asyncio.to_thread(debug_log._strategy_frame_report, session_id)
 
     @router.get("/api/admin/debug-event/{event_id}/json")
     async def admin_debug_event_json(

@@ -13,6 +13,18 @@ function writeDetail(html){
   if(detail)detail.innerHTML=html;
 }
 
+const STRATEGY_TRIGGERS = [
+  ['_au4_present', 'AU4 当轮出现', '当前轮中 AU4 达到双阈值的帧占比满足条件'],
+  ['_au4_rising', 'AU4 近期上升', '60 秒窗口内 AU4 从低位上升并持续达到阈值'],
+  ['_input_shrinking', '连续输入缩短', '最近两轮用户输入长度连续缩短'],
+  ['_sustained_present', 'AU4 连续三轮出现', '连续三轮均满足 AU4 出现条件'],
+  ['_idle_with_au1', '空闲伴随 AU1', '输入空闲超过 15 秒且 AU1 达到阈值'],
+  ['_au4_slope', 'AU4 上升斜率', '最近可靠帧的 AU4 呈上升趋势并达到峰值阈值'],
+  ['_au4_dropping', 'AU4 回落', 'AU4 从升高状态回落到接近个人基线'],
+];
+const strategyFilterState=new Map();
+const strategyExpandedState=new Map();
+
 export function renderOverview(exp,st){
   const s=exp.session;
   const p=exp.participant||{};
@@ -255,7 +267,7 @@ export function renderExpression(exp,st){
 
   // AU table (first 200 rows for performance)
   const show=frames.slice(0,200);
-  html+=`<div class="detail-section"><h3>帧数据表 (显示前 ${show.length} 帧, 共 ${frames.length})</h3>
+  html+=`<div class="detail-section expression-table-section"><h3>帧数据表 (显示前 ${show.length} 帧, 共 ${frames.length})</h3>
     <div class="frame-table-wrap">
     <table class="frame-table">
       <thead><tr><th>时间(s)</th><th>AU1</th><th>AU4</th><th>AU7</th><th>AU12</th><th>Yaw°</th><th>Pitch°</th><th>排队(ms)</th><th>原因</th><th>面部</th><th>可靠</th></tr></thead>
@@ -283,7 +295,88 @@ export function renderExpression(exp,st){
 }
 
 // ── Baseline ──
-export function renderBaseline(exp){
+function renderStrategyFrameRows(report,selected,expanded){
+  const frames=report?.frames||[];
+  if(!frames.length){
+    return '<tr><td colspan="10" class="strategy-empty-cell">没有可用的实验阶段照片日志</td></tr>';
+  }
+  return frames.map((frame)=>{
+    const activeKeys=STRATEGY_TRIGGERS.filter(([key])=>frame.triggers?.[key]).map(([key])=>key);
+    const eventId=Number(frame.id??0);
+    const visible=selected.size>0&&activeKeys.some(key=>selected.has(key));
+    const isExpanded=visible&&expanded.has(String(eventId));
+    const image=frame.image||'';
+    const eventUrl=`/api/admin/debug-event/${encodeURIComponent(eventId)}/json?part=event`;
+    const apiUrl=`/api/admin/debug-event/${encodeURIComponent(eventId)}/json?part=api`;
+    const kb=frame.bytes?Math.round(frame.bytes/1024*10)/10:0;
+    const checks=STRATEGY_TRIGGERS.map(([key])=>`<td class="strategy-check">${frame.triggers?.[key]?'<span aria-label="已触发">✓</span>':''}</td>`).join('');
+    return `
+      <tr class="strategy-frame-row" data-strategy-row data-strategies="${escAttr(activeKeys.join(','))}" ${visible?'':'hidden'}>
+        <td>${escHtml(frame.ts||'-')}</td>
+        <td>${frame.frame_number??'-'}</td>
+        ${checks}
+        <td><button class="debug-expand" data-action="strategy-detail" data-event-id="${eventId}">${isExpanded?'收起':'展开'}</button></td>
+      </tr>
+      <tr id="strategy-detail-${eventId}" class="debug-detail-row strategy-detail-row" data-strategy-detail data-strategies="${escAttr(activeKeys.join(','))}" data-expanded="${isExpanded?'true':'false'}" ${isExpanded?'':'hidden'}>
+        <td colspan="10"><div class="debug-detail-body">
+          <div class="debug-face">
+            <img src="${escAttr(image)}" alt="实验阶段捕获帧">
+            <div>
+              <div class="debug-detail-summary">第 ${frame.frame_number??'-'} 帧 · ${kb} KB · ${frame.elapsed_ms??'-'} ms<br>${escHtml(frame.message||'')}</div>
+              <a href="${escAttr(image)}" download="strategy-session-${report.session_id}-frame-${frame.frame_number??eventId}.jpg">下载图片</a>
+            </div>
+          </div>
+          <div class="debug-json-actions">
+            <a class="debug-json-link" href="${escAttr(apiUrl)}" target="_blank" rel="noopener noreferrer">查看 PyFeat JSON</a>
+            <a class="debug-json-link" href="${escAttr(eventUrl)}" target="_blank" rel="noopener noreferrer">查看完整日志事件</a>
+          </div>
+        </div></td>
+      </tr>`;
+  }).join('');
+}
+
+export function applyStrategyFrameFilters(){
+  const root=$('strategy-log-section');
+  if(!root)return;
+  const sessionId=root.dataset.sessionId||'';
+  const selected=new Set([...document.querySelectorAll('[data-strategy-filter]:checked')].map(input=>input.value));
+  strategyFilterState.set(sessionId,selected);
+  const expanded=strategyExpandedState.get(sessionId)||new Set();
+  let visible=0;
+  document.querySelectorAll('[data-strategy-row]').forEach((row)=>{
+    const active=new Set((row.dataset.strategies||'').split(',').filter(Boolean));
+    const show=selected.size>0&&[...selected].some(key=>active.has(key));
+    row.hidden=!show;
+    if(show)visible++;
+    const eventId=row.querySelector('[data-event-id]')?.dataset.eventId;
+    const detail=eventId?document.getElementById(`strategy-detail-${eventId}`):null;
+    const isExpanded=expanded.has(String(eventId));
+    if(detail){
+      detail.dataset.expanded=isExpanded?'true':'false';
+      detail.hidden=!show||!isExpanded;
+    }
+    const button=row.querySelector('[data-action="strategy-detail"]');
+    if(button)button.textContent=show&&isExpanded?'收起':'展开';
+  });
+  const count=$('strategy-filter-count');
+  if(count)count.textContent=selected.size?`显示 ${visible} 张命中照片`:'请选择至少一种策略以显示照片';
+}
+
+export function toggleStrategyDetail(eventId,button){
+  const detail=document.getElementById(`strategy-detail-${eventId}`);
+  if(!detail)return;
+  const sessionId=$('strategy-log-section')?.dataset.sessionId||'';
+  const expanded=strategyExpandedState.get(sessionId)||new Set();
+  const key=String(eventId);
+  if(expanded.has(key))expanded.delete(key);
+  else expanded.add(key);
+  strategyExpandedState.set(sessionId,expanded);
+  detail.dataset.expanded=expanded.has(key)?'true':'false';
+  detail.hidden=!expanded.has(key);
+  if(button)button.textContent=detail.hidden?'展开':'收起';
+}
+
+export function renderBaseline(exp,report){
   const p=exp.participant;
   let html=`<div class="detail-section"><h3>参与者基线数据</h3>`;
   if(!p){
@@ -308,7 +401,44 @@ export function renderBaseline(exp){
       </div>
     </div>`;
   }
-  // Also show the session's expression stats summary
+  html+='</div>';
+
+  if(!report){
+    html+='<div class="detail-section"><h3>策略触发统计</h3><div class="loading strategy-loading">正在读取实验阶段策略日志...</div></div>';
+    writeDetail(html);
+    return;
+  }
+
+  const total=report.total_frames||0;
+  const sessionKey=String(report.session_id??exp.session.id);
+  const selected=strategyFilterState.get(sessionKey)||new Set();
+  const expanded=strategyExpandedState.get(sessionKey)||new Set();
+  const statCards=STRATEGY_TRIGGERS.map(([key,label,description])=>{
+    const count=report.counts?.[key]||0;
+    const percent=total?(count/total*100).toFixed(1):'0.0';
+    return `<div class="strategy-stat" title="${escAttr(description)}">
+      <div class="strategy-stat-name">${escHtml(label)}</div>
+      <div class="strategy-stat-rate">${percent}%</div>
+      <div class="strategy-stat-count">${count} / ${total} 帧</div>
+    </div>`;
+  }).join('');
+  const filters=STRATEGY_TRIGGERS.map(([key,label])=>`<label title="勾选后显示命中此策略的照片"><input type="checkbox" value="${escAttr(key)}" data-strategy-filter ${selected.has(key)?'checked':''}>${escHtml(label)}</label>`).join('');
+  const visibleCount=(report.frames||[]).filter(frame=>selected.size>0&&[...selected].some(key=>frame.triggers?.[key])).length;
+
+  html+=`<div class="detail-section strategy-stats-section">
+    <div class="section-heading"><h3>策略触发统计</h3><span class="muted">统计范围：实验阶段 ${total} 个捕获帧</span></div>
+    <div class="strategy-stat-grid">${statCards}</div>
+  </div>
+  <div id="strategy-log-section" class="detail-section strategy-log-section" data-session-id="${escAttr(sessionKey)}">
+    <div class="section-heading"><h3>策略照片日志</h3><span id="strategy-filter-count" class="muted">${selected.size?`显示 ${visibleCount} 张命中照片`:'请选择至少一种策略以显示照片'}</span></div>
+    <div class="strategy-filter-row filter-row" aria-label="策略筛选">${filters}</div>
+    <div class="strategy-table-wrap">
+      <table class="frame-table strategy-frame-table">
+        <thead><tr><th>时间</th><th>第几帧</th>${STRATEGY_TRIGGERS.map(([,label,description])=>`<th title="${escAttr(description)}">${escHtml(label)}</th>`).join('')}<th>详细</th></tr></thead>
+        <tbody>${renderStrategyFrameRows(report,selected,expanded)}</tbody>
+      </table>
+    </div>
+  </div>`;
   writeDetail(html);
 }
 
