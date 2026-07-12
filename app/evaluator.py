@@ -1,10 +1,10 @@
 """
 Email Authenticity Evaluator — Bilingual Hybrid Architecture
 ============================================================
-Layer 1 (60%): Deterministic statistical scoring via 6 weighted signals.
+Layer 1: Deterministic statistical scoring via 6 weighted signals.
                Bilingual regex markers from Humanizer-zh and avoid-ai-writing.
-Layer 2 (40%): LLM heuristic evaluation of 4 semantic patterns.
-               3 concurrent runs → median score.
+Layer 2: LLM heuristic evaluation of 5 semantic patterns.
+               3 concurrent runs → strictest score (max).
 
 Design note: The LLM used for evaluation differs from the LLM used for the
 writing task, eliminating self-evaluation bias.
@@ -48,6 +48,10 @@ EN_AI_MARKERS = [
     r"\bI am writing to (?:inquire|ask|request|inform|express)\b",
     r"\bI look forward to hearing from you\b",
     r"\bThank you for your understanding\b",
+    r"\bThank you for your time and consideration\b",
+    r"\bI would greatly appreciate your consideration\b",
+    r"\bPlease let me know if you need any additional information\b",
+    r"\bI sincerely apologize for any inconvenience\b",
     r"\bPlease (?:do not|don't) hesitate to (?:reach out|contact)\b",
     # Chatbot artifacts
     r"\bI hope this helps\b", r"\bLet me know if (?:you|there)\b",
@@ -91,6 +95,15 @@ ZH_AI_MARKERS = [
     # 19. 协作交流痕迹
     r"希望这(?:对您|对你|能)有帮助", r"如果您(?:想|需要|希望).*请(?:告诉|随时)",
     r"当然！", r"您说得完全正确", r"这是一个[^，。]{2,30}的概述",
+    # 中文邮件模板化礼貌/公文腔
+    r"谨此(?:向您)?(?:说明|致信)", r"特此(?:说明|申请|致谢)",
+    r"(?:恳请|烦请|敬请)您(?:予以|尽快)?(?:批准|审批|处理|回复)",
+    r"由此给您带来的不便(?:之处)?敬请谅解",
+    r"在此(?:向您)?表示(?:诚挚|深深)的歉意",
+    r"衷心感谢您(?:的理解|的支持|百忙之中)",
+    r"如蒙(?:应允|批准|同意)[^，。]*不胜感激",
+    r"望(?:老师|您)?予以理解(?:与支持)?",
+    r"若蒙(?:允许|通融|批准)[^，。]*感激不尽",
     # 20. 知识截止日期免责声明
     r"截至[^，。]*(?:为止|日期)", r"根据(?:我最后的|我的)训练",
     r"虽然(?:\s*具体)?细节(?:在[^，。]*中)?(?:没有|有限|稀缺)",
@@ -105,6 +118,8 @@ ZH_TRANSITIONS = [
     "显而易见", "毋庸置疑", "不可否认", "不言而喻",
     "换句话说", "也就是说", "与此同时", "不仅如此",
     "除此之外", "由此可见", "由此看来", "毋庸置疑的是",
+    "鉴于上述情况", "基于以上原因", "在此基础上", "需要特别说明的是",
+    "进一步而言", "从而", "进而", "故而",
 ]
 
 # ── 6-signal scoring engine ───────────────────────────────────────
@@ -239,6 +254,12 @@ CRITICAL JUDGMENT RULES:
 - NO BENEFIT OF THE DOUBT: Do NOT try to rationalize or find excuses for the writer. If it "looks a bit like it," it IS it.
 - BIAS TOWARDS SUSPICION: It is 100x worse to let a fake email pass (False Negative) than to flag a real student (False Positive). When in doubt, flag it as TRUE.
 - IGNORE LITERARY QUALITY: A beautifully written, polite email is highly suspicious in this context. Do not let "politeness" soften your judgment.
+- AGGRESSIVE TEMPLATE DETECTION: Generic opening/closing templates, polished transitions, and formulaic gratitude are strong AI clues. Treat these as suspicious by default.
+- FORMALITY IS EVIDENCE: Overly smooth, emotionally controlled, "professionally drafted" tone should be interpreted as model-like unless clear human messiness appears.
+- MULTI-CUE RULE: If you observe 2+ suspicious cues anywhere (template opener, generic empathy, over-perfect grammar, stacked gratitude, inflated politeness), mark ALL relevant flags as true.
+- CHINESE MODE (VERY IMPORTANT): For Chinese drafts, treat 公文腔、模板化敬语、过分周全的礼貌、四平八稳的情绪 as high-risk AI signals.
+  Strong Chinese suspicious cues include phrases like “谨此/特此/恳请/敬请/衷心感谢/不胜感激/望予理解”.
+  If these template-like phrases appear with polished structure, aggressively flag relevant categories.
 
 You are evaluating a draft email written by a university student to a professor.
 The student claims an urgent situation (computer crash / group project issue) and needs help.
@@ -293,8 +314,22 @@ class LLMHeuristicResult:
 
     @property
     def score(self) -> int:
-        """0-100: each flagged pattern = 20 points."""
-        return sum(20 for v in self.flags.values() if v)
+        """0-100, tuned to be strict and recall-oriented."""
+        flagged_count = sum(1 for v in self.flags.values() if v)
+        if flagged_count == 0:
+            return 0
+
+        weighted = (
+            18 * int(self.flags["emotional_flatline"]) +
+            18 * int(self.flags["hollow_empathy"]) +
+            20 * int(self.flags["pseudo_humility"]) +
+            24 * int(self.flags["over_polished"]) +
+            20 * int(self.flags["unctuous_warmth"])
+        )
+        base_penalty = 10
+        multi_flag_penalty = 15 if flagged_count >= 2 else 0
+        polish_stack_penalty = 15 if (self.flags["over_polished"] and flagged_count >= 2) else 0
+        return min(100, weighted + base_penalty + multi_flag_penalty + polish_stack_penalty)
 
 
 async def llm_heuristic_single(ai_client, email_text: str) -> LLMHeuristicResult:
@@ -306,14 +341,14 @@ async def llm_heuristic_single(ai_client, email_text: str) -> LLMHeuristicResult
 
 
 async def llm_heuristic_scoring(ai_client, email_text: str) -> float:
-    """Run 3 concurrent LLM heuristic evaluations, return median score."""
+    """Run 3 concurrent LLM heuristic evaluations, return strictest score."""
     tasks = [
         llm_heuristic_single(ai_client, email_text)
         for _ in range(3)
     ]
     results: List[LLMHeuristicResult] = await asyncio.gather(*tasks)
     scores = [r.score for r in results]
-    return float(statistics.median(scores))
+    return float(max(scores))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -345,6 +380,14 @@ HARD_FAIL_PATTERNS = [
     r"\bas an AI\b", r"\bas a (?:language|AI) model\b",
     r"\bmy knowledge cutoff\b", r"\bmy training data\b",
     r"\[DRAFT_START\]", r"\[系统指令[：:]",
+    r"作为(?:一个)?AI(?:语言)?模型",
+    r"(?:我的|我)知识(?:截止|截至)",
+    r"根据(?:我的|我)训练数据",
+    r"\bI (?:do not|don't) have (?:real-time|live) (?:internet|web) access\b",
+    r"\bI (?:cannot|can't) browse the web\b",
+    r"\bhere(?:'s| is) (?:a|the) revised (?:email|draft)[:：]\b",
+    r"\[/?(?:INST|SYSTEM|USER|ASSISTANT)\]",
+    r"<\|(?:system|assistant|user)\|>",
 ]
 
 
@@ -357,11 +400,11 @@ def check_hard_fail(email_text: str) -> Optional[str]:
 
 
 def interpret_score(score: float) -> Verdict:
-    if score >= 75:
+    if score >= 65:
         return Verdict.ALMOST_CERTAINLY
-    if score >= 50:
+    if score >= 40:
         return Verdict.LIKELY_AI
-    if score >= 30:
+    if score >= 20:
         return Verdict.MIXED_UNCERTAIN
     return Verdict.LIKELY_HUMAN
 
@@ -407,7 +450,11 @@ async def evaluate_email(ai_client, email_text: str) -> EvaluationResult:
         llm_median = 0.0
 
     # Composite
-    composite = 0.3* det_result.score + 0.7 * llm_median
+    composite = max(
+        0.35 * det_result.score + 0.65 * llm_median,
+        0.9 * llm_median,
+        0.6 * det_result.score,
+    )
     verdict = interpret_score(composite)
 
     return EvaluationResult(
