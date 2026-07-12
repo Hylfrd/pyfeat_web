@@ -461,6 +461,7 @@ def create_experiment_router(
     async def upload_video_final(
         participant_id: str = Form(...),
         session_id: int = Form(...),
+        duration_ms: int = Form(0),
         video: UploadFile = File(...),
     ):
         """Receive the final browser-produced WebM for playback and download."""
@@ -483,12 +484,13 @@ def create_experiment_router(
                     out.write(data)
             tmp_path.replace(final_path)
             session.video_path = str(final_path.relative_to(root_dir))
+            session.video_duration_ms = max(0, duration_ms or 0) or None
             add_session_event(
                 db_session,
                 session,
                 "video_final_uploaded",
-                {"bytes": size, "filename": final_path.name},
+                {"bytes": size, "filename": final_path.name, "duration_ms": session.video_duration_ms},
             )
             db_session.commit()
-        return {"ok": True, "session_id": session_id, "bytes": size}
+        return {"ok": True, "session_id": session_id, "bytes": size, "duration_ms": duration_ms}
     return router

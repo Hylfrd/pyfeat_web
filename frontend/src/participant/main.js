@@ -161,6 +161,7 @@ let timerInterval, expressionInterval, expressionWatchdogInterval, baselineInter
 let aiSyncTimer = null;
 let mediaRecorder, webcamStream, chunkIndex = 0;
 let recordedVideoChunks = [];
+let videoRecordingStartedAt = 0;
 let finalVideoUploadStarted = false;
 let finalVideoUploadPromise = null;
 let finalVideoStopResolver = null;
@@ -783,9 +784,11 @@ function uploadFinalVideo(){
   }
   finalVideoUploadStarted=true;
   const blob=new Blob(recordedVideoChunks,{type:'video/webm'});
+  const durationMs=videoRecordingStartedAt?Math.max(0,Date.now()-videoRecordingStartedAt):0;
   const f=new FormData();
   f.append('participant_id',participantId);
   f.append('session_id',currentSessionId);
+  f.append('duration_ms',String(durationMs));
   f.append('video',blob,`session_${currentSessionId}_${participantId}.webm`);
   finalVideoUploadPromise=fetch('/api/video-final',{method:'POST',body:f}).catch(()=>{});
   return finalVideoUploadPromise;
@@ -798,6 +801,7 @@ function createSessionMediaRecorder(stream){
   finalVideoUploadPromise=null;
   finalVideoStopResolver=null;
   chunkIndex=0;
+  videoRecordingStartedAt=Date.now();
   recorder.ondataavailable=e=>{
     if(e.data.size>0){
       recordedVideoChunks.push(e.data);

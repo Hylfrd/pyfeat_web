@@ -56,6 +56,15 @@ def _format_bytes(value: int) -> str:
     return f"{size:.{digits}f} {units[unit]}"
 
 
+def _format_duration_ms(value: int | None) -> str:
+    if not value:
+        return "-"
+    total = max(0, int(round(value / 1000)))
+    minutes = total // 60
+    seconds = total % 60
+    return f"{minutes}:{seconds:02d}"
+
+
 def _utc_iso_epoch(value: str | None) -> float | None:
     if not value:
         return None
@@ -98,17 +107,6 @@ def _ensure_combined_video(session: Session) -> tuple[Path | None, list[Path]]:
                 shutil.copyfileobj(src, out)
     tmp_path.replace(output)
     return output, chunks
-
-
-def _estimated_video_duration_s(session: Session, chunks: list[Path]) -> int:
-    if session.end_time and session.start_time:
-        start = _utc_iso_epoch(session.start_time)
-        end = _utc_iso_epoch(session.end_time)
-        if start is not None and end is not None and end > start:
-            return max(1, int(round(end - start)))
-    if session.duration_ms:
-        return max(1, int(round(session.duration_ms / 1000)))
-    return max(0, len(chunks) * 10)
 
 
 def _file_range_iter(path: Path, start: int, end: int, chunk_size: int = 1024 * 1024):
@@ -321,6 +319,8 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 "chunk_count": len(chunks),
                 "size_bytes": size,
                 "size_human": _format_bytes(size),
+                "duration_ms": session.video_duration_ms,
+                "duration_human": _format_duration_ms(session.video_duration_ms),
                 "updated_at": updated_at,
                 "url": f"/api/admin/sessions/{session.id}/video/file",
                 "download_url": f"/api/admin/sessions/{session.id}/video/file?download=1",
@@ -383,6 +383,7 @@ def create_admin_router(db_session_factory, expression_engine) -> APIRouter:
                 raise HTTPException(404, "Session not found")
             deleted = _delete_video_files(session)
             session.video_path = None
+            session.video_duration_ms = None
             db_session.commit()
             return {"ok": True, "session_id": session_id, "deleted_files": deleted}
 

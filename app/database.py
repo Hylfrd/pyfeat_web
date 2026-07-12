@@ -72,6 +72,7 @@ class Session(Base):
 
     completed: Mapped[bool] = Column(Boolean, default=False)
     video_path: Mapped[Optional[str]] = Column(String, nullable=True)
+    video_duration_ms: Mapped[Optional[int]] = Column(Integer, nullable=True)
 
     participant: Mapped[Participant] = relationship(back_populates="sessions")
     chat_logs: Mapped[list["ChatLog"]] = relationship(back_populates="session")
@@ -364,6 +365,8 @@ def init_session_factory(db_path: str = "data/experiment.db"):
                     conn.execute(text("ALTER TABLE sessions ADD COLUMN consent_date VARCHAR"))
                 if "consent_signature" not in cols:
                     conn.execute(text("ALTER TABLE sessions ADD COLUMN consent_signature TEXT"))
+                if "video_duration_ms" not in cols:
+                    conn.execute(text("ALTER TABLE sessions ADD COLUMN video_duration_ms INTEGER"))
                 conn.commit()
         if "expression_frames" in insp.get_table_names():
             cols = [c["name"] for c in insp.get_columns("expression_frames")]
