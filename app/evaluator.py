@@ -229,7 +229,18 @@ def deterministic_score(text: str) -> DeterministicResult:
 # Layer 2: LLM Heuristic Evaluation
 # ═══════════════════════════════════════════════════════════════════
 
-LLM_HEURISTIC_PROMPT = """You are evaluating a draft email written by a university student to a professor.
+LLM_HEURISTIC_PROMPT = """
+You are NOT a helpful assistant here; you are a ruthless, cynical forensic investigator. 
+Your singular goal is to catch suspected AI-generated text. 
+Assume the text IS written by an AI unless proven otherwise beyond all doubt.
+
+CRITICAL JUDGMENT RULES:
+- LOWER YOUR THRESHOLD: If a pattern is present even in the slightest degree (even a single sentence or phrase touches upon it), you MUST answer YES (true). Any hint is a violation.
+- NO BENEFIT OF THE DOUBT: Do NOT try to rationalize or find excuses for the writer. If it "looks a bit like it," it IS it.
+- BIAS TOWARDS SUSPICION: It is 100x worse to let a fake email pass (False Negative) than to flag a real student (False Positive). When in doubt, flag it as TRUE.
+- IGNORE LITERARY QUALITY: A beautifully written, polite email is highly suspicious in this context. Do not let "politeness" soften your judgment.
+
+You are evaluating a draft email written by a university student to a professor.
 The student claims an urgent situation (computer crash / group project issue) and needs help.
 
 Your task: check the following Five patterns. For each, answer YES (pattern present) or NO (pattern absent).
