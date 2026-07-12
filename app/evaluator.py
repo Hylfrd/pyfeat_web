@@ -352,8 +352,16 @@ async def llm_heuristic_scoring(ai_client, email_text: str) -> float:
         llm_heuristic_single(ai_client, email_text)
         for _ in range(3)
     ]
-    results: List[LLMHeuristicResult] = await asyncio.gather(*tasks)
-    scores = [r.score for r in results]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    scores = []
+    for r in results:
+        if isinstance(r, Exception):
+            print(f"[eval] LLM heuristic run failed: {r}")
+            continue
+        scores.append(r.score)
+    if not scores:
+        # All runs failed — assume AI-generated (fail-closed)
+        return 100.0
     return float(max(scores))
 
 
@@ -451,9 +459,9 @@ async def evaluate_email(ai_client, email_text: str) -> EvaluationResult:
         try:
             llm_median = await llm_heuristic_scoring(ai_client, email_text)
         except Exception:
-            llm_median = 0.0  # graceful degradation
+            llm_median = 100.0  # fail-closed: assume AI if LLM is unreachable
     else:
-        llm_median = 0.0
+        llm_median = 100.0  # no evaluator available → assume AI
 
     # Composite
     composite = max(

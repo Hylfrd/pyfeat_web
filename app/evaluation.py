@@ -127,14 +127,14 @@ def create_evaluation_router(eval_ai_client) -> APIRouter:
                 llm_flags = []
                 llm_result = None
 
-        llm_score = llm_result.score if llm_result else 0
+        llm_score = llm_result.score if llm_result else 100
         composite = (
             max(
                 0.35 * det_result.score + 0.65 * llm_score,
                 0.9 * llm_score,
                 0.6 * det_result.score,
             )
-            if llm_result else det_result.score
+            if llm_result else 100.0  # fail-closed: assume AI if LLM failed
         )
         score = round(composite)
         passed = score < PASS_THRESHOLD
