@@ -19,7 +19,7 @@ from .evaluator import (
 def create_evaluation_router(eval_ai_client) -> APIRouter:
     router = APIRouter()
 
-    PASS_THRESHOLD = int(os.getenv("PASS_THRESHOLD", "20"))
+    PASS_THRESHOLD = int(os.getenv("PASS_THRESHOLD", "10"))
 
     @router.post("/api/evaluate-draft")
     async def evaluate_draft(draft_text: str = Form(...)):

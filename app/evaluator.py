@@ -203,6 +203,9 @@ def deterministic_score(text: str) -> DeterministicResult:
     # ── Signal 2: Formulaic markers (bilingual) ──
     markers = ZH_AI_MARKERS if lang == "zh" else EN_AI_MARKERS
     marker_hits = sum(1 for p in markers if re.search(p, normalized, re.I | re.S))
+    if marker_hits >= 1:
+        # Hard gate: even ONE AI-typical pattern match → kill immediately.
+        return DeterministicResult(score=100, signals=[], word_count=word_count)
     s2 = Signal("formulaic_markers", _clamp01(marker_hits / 5), 0.22,
                 f"Matched {marker_hits} AI-typical phrase patterns ({lang}).")
 
@@ -297,6 +300,12 @@ Your task: check the following Five patterns. For each, answer YES (pattern pres
 
 
 If the email feels over-engineered, insincere, or deviates in ANY way from how a normal student would naturally write, you MUST immediately flag BOTH OVER-POLISHED PERFECTION and UNCTUOUS WARMTH as TRUE. Strictly apply the principle of 'guilty until proven innocent'.
+
+CRITICAL SCORE FLOOR RULE: It is EXTREMELY rare for any text to exhibit zero AI patterns whatsoever. 
+Before you answer NO (false) to ALL five patterns, you must be absolutely, 100% certain that the text is unmistakably human — messy, informal, emotionally raw, and completely free of any template-like structure.
+If you have even the SLIGHTEST doubt about any pattern, you MUST flag it as TRUE.
+Answering NO to all five is an extraordinary claim that requires extraordinary evidence. Do NOT do this casually.
+In practice, you should flag at least ONE pattern for nearly every text you evaluate.
 
 Be Critical. Stay critical and concise, digging any potential AI-generated patterns. Do not be lenient.
 Raise the flag if you see ANY of the above patterns, even if the email is otherwise well-written.
