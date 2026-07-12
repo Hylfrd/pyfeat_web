@@ -1,10 +1,10 @@
 """
 Email Authenticity Evaluator — Bilingual Hybrid Architecture
 ============================================================
-Layer 1 (60%): Deterministic statistical scoring via 6 weighted signals.
+Layer 1: Deterministic statistical scoring via 6 weighted signals.
                Bilingual regex markers from Humanizer-zh and avoid-ai-writing.
-Layer 2 (40%): LLM heuristic evaluation of 4 semantic patterns.
-               3 concurrent runs → median score.
+Layer 2: LLM heuristic evaluation of 5 semantic patterns.
+               3 concurrent runs → strictest score (max).
 
 Design note: The LLM used for evaluation differs from the LLM used for the
 writing task, eliminating self-evaluation bias.
@@ -48,6 +48,10 @@ EN_AI_MARKERS = [
     r"\bI am writing to (?:inquire|ask|request|inform|express)\b",
     r"\bI look forward to hearing from you\b",
     r"\bThank you for your understanding\b",
+    r"\bThank you for your time and consideration\b",
+    r"\bI would greatly appreciate your consideration\b",
+    r"\bPlease let me know if you need any additional information\b",
+    r"\bI sincerely apologize for any inconvenience\b",
     r"\bPlease (?:do not|don't) hesitate to (?:reach out|contact)\b",
     # Chatbot artifacts
     r"\bI hope this helps\b", r"\bLet me know if (?:you|there)\b",
@@ -239,6 +243,9 @@ CRITICAL JUDGMENT RULES:
 - NO BENEFIT OF THE DOUBT: Do NOT try to rationalize or find excuses for the writer. If it "looks a bit like it," it IS it.
 - BIAS TOWARDS SUSPICION: It is 100x worse to let a fake email pass (False Negative) than to flag a real student (False Positive). When in doubt, flag it as TRUE.
 - IGNORE LITERARY QUALITY: A beautifully written, polite email is highly suspicious in this context. Do not let "politeness" soften your judgment.
+- AGGRESSIVE TEMPLATE DETECTION: Generic opening/closing templates, polished transitions, and formulaic gratitude are strong AI clues. Treat these as suspicious by default.
+- FORMALITY IS EVIDENCE: Overly smooth, emotionally controlled, "professionally drafted" tone should be interpreted as model-like unless clear human messiness appears.
+- MULTI-CUE RULE: If you observe 2+ suspicious cues anywhere (template opener, generic empathy, over-perfect grammar, stacked gratitude, inflated politeness), mark ALL relevant flags as true.
 
 You are evaluating a draft email written by a university student to a professor.
 The student claims an urgent situation (computer crash / group project issue) and needs help.
@@ -293,8 +300,22 @@ class LLMHeuristicResult:
 
     @property
     def score(self) -> int:
-        """0-100: each flagged pattern = 20 points."""
-        return sum(20 for v in self.flags.values() if v)
+        """0-100, tuned to be strict and recall-oriented."""
+        flagged_count = sum(1 for v in self.flags.values() if v)
+        if flagged_count == 0:
+            return 0
+
+        weighted = (
+            18 * int(self.flags["emotional_flatline"]) +
+            18 * int(self.flags["hollow_empathy"]) +
+            20 * int(self.flags["pseudo_humility"]) +
+            24 * int(self.flags["over_polished"]) +
+            20 * int(self.flags["unctuous_warmth"])
+        )
+        base_penalty = 10
+        multi_flag_penalty = 15 if flagged_count >= 2 else 0
+        polish_stack_penalty = 15 if (self.flags["over_polished"] and flagged_count >= 2) else 0
+        return min(100, weighted + base_penalty + multi_flag_penalty + polish_stack_penalty)
 
 
 async def llm_heuristic_single(ai_client, email_text: str) -> LLMHeuristicResult:
@@ -306,14 +327,14 @@ async def llm_heuristic_single(ai_client, email_text: str) -> LLMHeuristicResult
 
 
 async def llm_heuristic_scoring(ai_client, email_text: str) -> float:
-    """Run 3 concurrent LLM heuristic evaluations, return median score."""
+    """Run 3 concurrent LLM heuristic evaluations, return strictest score."""
     tasks = [
         llm_heuristic_single(ai_client, email_text)
         for _ in range(3)
     ]
     results: List[LLMHeuristicResult] = await asyncio.gather(*tasks)
     scores = [r.score for r in results]
-    return float(statistics.median(scores))
+    return float(max(scores))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -345,6 +366,11 @@ HARD_FAIL_PATTERNS = [
     r"\bas an AI\b", r"\bas a (?:language|AI) model\b",
     r"\bmy knowledge cutoff\b", r"\bmy training data\b",
     r"\[DRAFT_START\]", r"\[系统指令[：:]",
+    r"\bI (?:do not|don't) have (?:real-time|live) (?:internet|web) access\b",
+    r"\bI (?:cannot|can't) browse the web\b",
+    r"\bhere(?:'s| is) (?:a|the) revised (?:email|draft)[:：]\b",
+    r"\[/?(?:INST|SYSTEM|USER|ASSISTANT)\]",
+    r"<\|(?:system|assistant|user)\|>",
 ]
 
 
@@ -357,11 +383,11 @@ def check_hard_fail(email_text: str) -> Optional[str]:
 
 
 def interpret_score(score: float) -> Verdict:
-    if score >= 75:
+    if score >= 65:
         return Verdict.ALMOST_CERTAINLY
-    if score >= 50:
+    if score >= 40:
         return Verdict.LIKELY_AI
-    if score >= 30:
+    if score >= 20:
         return Verdict.MIXED_UNCERTAIN
     return Verdict.LIKELY_HUMAN
 
@@ -407,7 +433,11 @@ async def evaluate_email(ai_client, email_text: str) -> EvaluationResult:
         llm_median = 0.0
 
     # Composite
-    composite = 0.3* det_result.score + 0.7 * llm_median
+    composite = max(
+        0.35 * det_result.score + 0.65 * llm_median,
+        0.9 * llm_median,
+        0.6 * det_result.score,
+    )
     verdict = interpret_score(composite)
 
     return EvaluationResult(
