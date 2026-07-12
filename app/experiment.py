@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .database import (
     ChatLog, ExpressionFrame, Participant, PostTaskSurvey, PreTaskSurvey, Questionnaire, Session,
+    SessionEvent,
 )
 from .evaluation import run_posthoc_evaluation
 from .experiment_slots import (
@@ -154,7 +155,18 @@ def create_experiment_router(
                 {"participant_id": participant_id},
                 commit=True,
             )
-        return request_experiment_slot(participant_id, session_id)
+            task_started = (
+                db_session.query(SessionEvent)
+                .filter(
+                    SessionEvent.session_id == session_id,
+                    SessionEvent.event_type == "task_started",
+                )
+                .order_by(SessionEvent.id)
+                .first()
+            )
+            phase = "task" if task_started else "baseline"
+            task_started_at = parse_utc_timestamp(task_started.timestamp) if task_started else None
+        return request_experiment_slot(participant_id, session_id, phase, task_started_at)
 
     @router.get("/api/session/slot/status/{session_id}")
     async def session_slot_status(

@@ -32,6 +32,8 @@ let tabChannel=null;
 try{tabChannel=new BroadcastChannel(TAB_CHANNEL_NAME)}catch(e){tabChannel=null}
 let currentStage='setup-view';
 let chatTranscript=[];
+let slotPhase='baseline';
+let restoredDraftText='';
 let draftActionCounter=0;
 const draftActionText=new Map();
 document.documentElement.dataset.stage=currentStage;
@@ -100,7 +102,7 @@ function writeProgress(extra={}){
     participantId,
     currentSessionId:currentSessionId||previous.currentSessionId,
     currentCondition:currentCondition||previous.currentCondition,
-    currentStage,turnCounter,revisionCounter,taskStartTime,
+    currentStage,slotPhase,turnCounter,revisionCounter,taskStartTime,
     taskElapsedMs:taskStartTime?Math.max(0,Date.now()-taskStartTime):(previous.taskElapsedMs||0),
     aiWaiting:isAiWaiting,
     aiWaitStartedAt:isAiWaiting?(aiWaitStartedAt||previous.aiWaitStartedAt||Date.now()):0,
@@ -1013,14 +1015,8 @@ function closeWS(){
   }
   ws=null;
 }
-function releaseCurrentSlotOnLeave(){
-  if(['queue-view','baseline-view','task-view'].includes(currentStage)){
-    releaseSessionSlot(currentSessionRef(),true);
-  }
-}
 window.addEventListener('pagehide',()=>{
   stopVideoRecording();
-  releaseCurrentSlotOnLeave();
 });
 function stopSessionStatusCheck(){
   if(sessionStatusTimer){clearInterval(sessionStatusTimer);sessionStatusTimer=null}
@@ -1120,6 +1116,8 @@ async function resumeProgress(saved){
   if(currentSessionId)startSessionStatusCheck();
   currentCondition=saved.currentCondition;
   currentStage=saved.currentStage||'setup-view';
+  slotPhase=saved.slotPhase||(currentStage==='task-view'?'task':'baseline');
+  restoredDraftText=saved.draftText||'';
   if(currentStage==='break-view')currentStage='complete-view';
   if(currentStage==='post-survey-view')currentStage='questionnaire-view';
   turnCounter=saved.turnCounter||0;
@@ -1292,6 +1290,7 @@ async function fetchQueueStatus(){
   return await r.json();
 }
 async function startQueuePolling(initial=null){
+  if(currentStage==='task-view'||initial?.phase==='task')slotPhase='task';
   if(initial)renderQueueStatus(initial);
   setStage('queue-view');
   stopQueuePolling();
@@ -1299,10 +1298,12 @@ async function startQueuePolling(initial=null){
     try{
       const data=await fetchQueueStatus();
       if(!data)return;
+      if(data.phase==='task')slotPhase='task';
       renderQueueStatus(data);
       if(data.state==='active'){
         stopQueuePolling();
-        await startBaseline();
+        if(data.phase==='task'||slotPhase==='task')await resumeTaskSlot();
+        else await startBaseline();
       }
     }catch(err){
       $('queue-note').textContent='等待信息暂时无法刷新，系统会继续重试。';
@@ -1322,7 +1323,8 @@ async function requestExperimentSlot(){
   }
   const data=await r.json();
   if(data.state==='active'){
-    await startBaseline();
+    if(data.phase==='task'||slotPhase==='task')await resumeTaskSlot();
+    else await startBaseline();
   }else{
     await startQueuePolling(data);
   }
@@ -1345,6 +1347,7 @@ function showBaselineFaceToast(){
 async function startBaseline(){
   if(!await checkModelReady())return;
   stopQueuePolling();
+  slotPhase='baseline';
   setStage('baseline-view');
   if(baselineRecoveryTimer){clearTimeout(baselineRecoveryTimer);baselineRecoveryTimer=null}
   try{
@@ -1405,6 +1408,34 @@ async function finishBaseline(){
 }
 
 // ── Task ──
+async function resumeTaskSlot(){
+  slotPhase='task';
+  renderTaskMeta();
+  if(restoredDraftText&&!$('draft-text').textContent)$('draft-text').textContent=restoredDraftText;
+  $('draft-panel').classList.remove('hidden');
+  renderRestoredChat();
+  $('turn-num').textContent=turnCounter;
+  $('rev-num').textContent=revisionCounter;
+  setStage('task-view');
+  try{
+    await connectWS();
+  }catch(err){
+    console.error('Task websocket resume failed:',err);
+    scheduleReconnect();
+    return;
+  }
+  if(ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
+    ws.send(JSON.stringify({type:'task_started'}));
+  }
+  lastExpressionSentAt=Date.now();
+  captureState='';
+  clearInterval(timerInterval);
+  timerInterval=setInterval(updateTimer,1000);
+  startExpressionCapture();
+  writeProgress();
+}
+
 async function startTask(){
   if(!currentSessionId){
     toast('实验会话丢失，请重新开始并完成知情同意。',6000);
@@ -1422,6 +1453,7 @@ async function startTask(){
   $('condition-badge').style.color=currentCondition==='affect-aware'?'#4f46e5':'#64748b';
   $('task-prompt').innerHTML=TASK_PROMPT_HTML;
 
+  slotPhase='task';
   setStage('task-view');
   clearTimeoutSubmitRetry();
   turnCounter=0;revisionCounter=0;taskStartTime=Date.now();

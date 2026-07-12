@@ -39,7 +39,6 @@ def _remaining_s(slot: ExperimentSlot, now: float) -> int:
 def _promote_waiting(now: float) -> None:
     while len(_active) < MAX_ACTIVE_EXPERIMENTS and _queue:
         slot = _queue.pop(0)
-        slot.phase = "baseline"
         slot.active_at = now
         slot.last_seen = now
         _active[slot.session_id] = slot
@@ -140,7 +139,12 @@ def _debug_payload(now: float) -> dict:
     }
 
 
-def request_experiment_slot(participant_id: str, session_id: int) -> dict:
+def request_experiment_slot(
+    participant_id: str,
+    session_id: int,
+    phase: str = "baseline",
+    task_started_at: float | None = None,
+) -> dict:
     now = _now()
     _prune(now)
 
@@ -157,16 +161,16 @@ def request_experiment_slot(participant_id: str, session_id: int) -> dict:
     slot = ExperimentSlot(
         participant_id=participant_id,
         session_id=session_id,
-        phase="baseline",
+        phase="task" if phase == "task" else "baseline",
         requested_at=now,
         last_seen=now,
+        task_started_at=task_started_at if phase == "task" else None,
     )
     if len(_active) < MAX_ACTIVE_EXPERIMENTS:
         slot.active_at = now
         _active[session_id] = slot
         return _active_payload(slot, now)
 
-    slot.phase = "queued"
     _queue.append(slot)
     return _queued_payload(slot, now)
 

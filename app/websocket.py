@@ -12,7 +12,7 @@ from . import debug_log
 from .ai_client import ChatMessage
 from .database import ChatLog, ExpressionFrame, Participant, Session
 from .expression import AUFrame
-from .experiment_slots import get_experiment_slot_status, release_experiment_slot, touch_experiment_slot
+from .experiment_slots import get_experiment_slot_status, touch_experiment_slot
 from .session_activity import mark_disconnected, touch_session
 from .session_events import add_session_event, add_session_event_once
 from .strategy import Strategy, UserTurn
@@ -578,7 +578,6 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
                 flush_expression_frames()
             except Exception:
                 pass
-            release_experiment_slot(current_session_id)
             active_connections.pop(participant_id, None)
             mark_disconnected(participant_id)
     return router
