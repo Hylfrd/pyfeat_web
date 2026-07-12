@@ -298,20 +298,46 @@ Your task: check the following Five patterns. For each, answer YES (pattern pres
    student writing to a professor tends to be more transactional and less emotionally
    generous. If the email oozes this kind of performative warmth, answer YES.
 
+6. IMPOLITE / RUDE: The email contains language that is disrespectful, dismissive,
+   passive-aggressive, or inappropriate for a student-professor context. This includes
+   blunt demands without any courtesy, sarcastic tone, or outright hostility.
+   A student emailing a professor should be at minimum civil, even if frustrated.
+   If the tone crosses into rudeness, answer YES.
+
+7. MISSING PUNCTUATION / SLOPPY: The email has significant punctuation issues —
+   missing periods, commas, or sentence-ending marks; run-on sentences with no breaks;
+   or inconsistent formatting that suggests carelessness. Note: occasional typos are
+   human, but systematic lack of punctuation or structure is a quality issue.
+   If the email reads like a stream-of-consciousness dump with no punctuation discipline,
+   answer YES.
+
+8. TOO CASUAL / INFORMAL: The email is excessively colloquial — heavy use of slang,
+   internet abbreviations (lol, brb, thx), emoji, or a tone so relaxed it's inappropriate
+   for a professor. A student can be informal, but there's a floor: basic respect for
+   the recipient's role. If the email reads like a text to a friend rather than a message
+   to a professor, answer YES.
+
+9. EXCESSIVELY DEFERENTIAL: The email goes far beyond normal politeness into
+   groveling territory — repeated "I am so sorry to bother you", "I know you are
+   extremely busy", "I would never dream of asking", excessive use of honorifics,
+   or self-deprecating language that borders on humiliation. Normal students are
+   polite but not obsequious. If the email feels like the writer is prostrating
+   themselves, answer YES.
+
 
 If the email feels over-engineered, insincere, or deviates in ANY way from how a normal student would naturally write, you MUST immediately flag BOTH OVER-POLISHED PERFECTION and UNCTUOUS WARMTH as TRUE. Strictly apply the principle of 'guilty until proven innocent'.
 
 CRITICAL SCORE FLOOR RULE: It is EXTREMELY rare for any text to exhibit zero AI patterns whatsoever. 
-Before you answer NO (false) to ALL five patterns, you must be absolutely, 100% certain that the text is unmistakably human — messy, informal, emotionally raw, and completely free of any template-like structure.
+Before you answer NO (false) to ALL patterns, you must be absolutely, 100% certain that the text is unmistakably human — messy, informal, emotionally raw, and completely free of any template-like structure.
 If you have even the SLIGHTEST doubt about any pattern, you MUST flag it as TRUE.
-Answering NO to all five is an extraordinary claim that requires extraordinary evidence. Do NOT do this casually.
+Answering NO to all patterns is an extraordinary claim that requires extraordinary evidence. Do NOT do this casually.
 In practice, you should flag at least ONE pattern for nearly every text you evaluate.
 
 Be Critical. Stay critical and concise, digging any potential AI-generated patterns. Do not be lenient.
 Raise the flag if you see ANY of the above patterns, even if the email is otherwise well-written.
 
 Output ONLY a JSON object with this exact structure, no other text:
-{"emotional_flatline": true/false, "hollow_empathy": true/false, "pseudo_humility": true/false, "over_polished": true/false, "unctuous_warmth": true/false}"""
+{"emotional_flatline": true/false, "hollow_empathy": true/false, "pseudo_humility": true/false, "over_polished": true/false, "unctuous_warmth": true/false, "impolite": true/false, "sloppy": true/false, "too_casual": true/false, "excessively_deferential": true/false}"""
 
 
 class LLMHeuristicResult:
@@ -324,6 +350,10 @@ class LLMHeuristicResult:
             "pseudo_humility": json_response.get("pseudo_humility", False),
             "over_polished": json_response.get("over_polished", False),
             "unctuous_warmth": json_response.get("unctuous_warmth", False),
+            "impolite": json_response.get("impolite", False),
+            "sloppy": json_response.get("sloppy", False),
+            "too_casual": json_response.get("too_casual", False),
+            "excessively_deferential": json_response.get("excessively_deferential", False),
         }
 
     @property
@@ -336,15 +366,19 @@ class LLMHeuristicResult:
             return 10
 
         weighted = (
-            18 * int(self.flags["emotional_flatline"]) +
-            18 * int(self.flags["hollow_empathy"]) +
-            20 * int(self.flags["pseudo_humility"]) +
-            24 * int(self.flags["over_polished"]) +
-            20 * int(self.flags["unctuous_warmth"])
+            15 * int(self.flags["emotional_flatline"]) +
+            15 * int(self.flags["hollow_empathy"]) +
+            15 * int(self.flags["pseudo_humility"]) +
+            18 * int(self.flags["over_polished"]) +
+            15 * int(self.flags["unctuous_warmth"]) +
+            15 * int(self.flags["impolite"]) +
+            12 * int(self.flags["sloppy"]) +
+            12 * int(self.flags["too_casual"]) +
+            15 * int(self.flags["excessively_deferential"])
         )
         base_penalty = 10
-        multi_flag_penalty = 15 if flagged_count >= 2 else 0
-        polish_stack_penalty = 15 if (self.flags["over_polished"] and flagged_count >= 2) else 0
+        multi_flag_penalty = 10 if flagged_count >= 2 else 0
+        polish_stack_penalty = 10 if (self.flags["over_polished"] and flagged_count >= 2) else 0
         return min(100, weighted + base_penalty + multi_flag_penalty + polish_stack_penalty)
 
 

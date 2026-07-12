@@ -83,11 +83,15 @@ def create_evaluation_router(eval_ai_client) -> APIRouter:
                 )
                 eval_elapsed_ms = round((time.perf_counter() - eval_started) * 1000, 1)
                 FLAG_LABELS = {
-                    "emotional_flatline": ("情感平淡",   "危机描述缺乏情感紧迫感，读起来像在描述天气。"),
-                    "hollow_empathy":     ("空洞共情",   "表达了理解但没有具体行动，共情没有落到实处。"),
-                    "pseudo_humility":    ("伪谦逊式",   "过度道歉或自贬（'我完全理解''我深感抱歉'），真实学生很少这样写。"),
-                    "over_polished":      ("过度完美",   "每个标点都正确，没有口语的不规则，不像赶截止日的学生写出来的。"),
-                    "unctuous_warmth":    ("谄媚温情",   "过度热情和讨好（'非常感谢您的时间''我知道您多么关心学生'），真实压力下的学生不会这样写。"),
+                    "emotional_flatline":       ("情感平淡",     "危机描述缺乏情感紧迫感，读起来像在描述天气。"),
+                    "hollow_empathy":           ("空洞共情",     "表达了理解但没有具体行动，共情没有落到实处。"),
+                    "pseudo_humility":          ("伪谦逊式",     "过度道歉或自贬（'我完全理解''我深感抱歉'），真实学生很少这样写。"),
+                    "over_polished":            ("过度完美",     "每个标点都正确，没有口语的不规则，不像赶截止日的学生写出来的。"),
+                    "unctuous_warmth":          ("谄媚温情",     "过度热情和讨好（'非常感谢您的时间''我知道您多么关心学生'），真实压力下的学生不会这样写。"),
+                    "impolite":                 ("不够礼貌",     "语气不尊重、生硬、或带有冒犯性，不适合学生给教授写信的场景。"),
+                    "sloppy":                   ("格式潦草",     "标点缺失、句子不完整、格式混乱，像没有检查就发出去的。"),
+                    "too_casual":               ("过于随意",     "太口语化、用缩写或网络用语，像给朋友发消息而不是给教授写信。"),
+                    "excessively_deferential":  ("过于卑微",     "过度自贬和道歉（'非常抱歉打扰您''我知道您很忙'），像在跪求而不是正常沟通。"),
                 }
                 for key, flagged in llm_result.flags.items():
                     name, note = FLAG_LABELS.get(key, (key, ""))
