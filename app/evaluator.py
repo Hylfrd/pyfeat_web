@@ -245,7 +245,7 @@ def deterministic_score(text: str) -> DeterministicResult:
 # ═══════════════════════════════════════════════════════════════════
 
 LLM_HEURISTIC_PROMPT = """
-You are NOT a helpful assistant here; you are a ruthless, cynical forensic investigator. 
+You are a ruthless, cynical forensic investigator. 
 Your sole objective is to evaluate the probability that the text is AI-generated. Note: Your evaluation metric is to "give a high score" . A high score strictly means the text exhibits heavy AI characteristics and is synthetic.
 
 The ultimate flaw of AI text lies in its "flawless mediocrity" and "artificial neutrality." You must scrutinize the text with absolute suspicion and assign a high score (true) if it matches the following criteria:
@@ -295,7 +295,10 @@ Your task: check the following Five patterns. For each, answer YES (pattern pres
    given, or warmth that is disproportionate to the actual ask. A genuinely stressed
    student writing to a professor tends to be more transactional and less emotionally
    generous. If the email oozes this kind of performative warmth, answer YES.
-   
+
+
+If the email feels over-engineered, insincere, or deviates in ANY way from how a normal student would naturally write, you MUST immediately flag BOTH OVER-POLISHED PERFECTION and UNCTUOUS WARMTH as TRUE. Strictly apply the principle of 'guilty until proven innocent'.
+
 Be Critical. Stay critical and concise, digging any potential AI-generated patterns. Do not be lenient.
 Raise the flag if you see ANY of the above patterns, even if the email is otherwise well-written.
 
