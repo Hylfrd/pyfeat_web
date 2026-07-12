@@ -1,6 +1,7 @@
 import { $, escapeAttr as escAttr, escapeHtml as escHtml } from '../shared/dom.js';
 
 const VIDEO_POLL_MS = 2500;
+const DEBUG_LIMIT = 200;
 
 function formatSeconds(value) {
   const total = Math.max(0, Math.floor(Number(value) || 0));
@@ -17,42 +18,10 @@ function frameTime(frame) {
   return Number(frame?.video_t ?? frame?.t ?? 0);
 }
 
-function frameReliable(frame) {
-  return !!(frame?.ok ?? frame?.reliable);
-}
-
-function frameFace(frame) {
-  return !!(frame?.face ?? frame?.face_detected);
-}
-
-function payloadText(payload = {}) {
-  return payload.message || payload.text || payload.filename || payload.value || '';
-}
-
-function eventLabel(type) {
-  const labels = {
-    session_started: 'Session 开始',
-    pre_survey_submitted: '实验前问卷提交',
-    pre_survey_finished: '实验前问卷完成',
-    baseline_started: '基准测试开始',
-    baseline_completed: '基准测试完成',
-    task_started: '实验开始',
-    task_completed: '实验完成',
-    questionnaire_submitted: '任务后问卷提交',
-    post_survey_submitted: '实验后问卷提交',
-    video_final_uploaded: '视频上传完成',
-    chat_user: '用户消息',
-    chat_ai: 'AI 回复',
-  };
-  return labels[type] || type || '日志';
-}
-
-function preserveScroll(id, renderFn) {
-  const el = $(id);
-  const top = el?.scrollTop || 0;
-  renderFn();
-  const next = $(id);
-  if (next) next.scrollTop = top;
+function parseUtcEpoch(value) {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms / 1000 : null;
 }
 
 function renderInfoCard(label, value) {
@@ -67,8 +36,10 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
   let latestExp = null;
   let latestSt = null;
   let latestTimeline = null;
+  let debugEvents = [];
   let viewToken = 0;
-  const expandedKeys = new Set();
+  const expandedDebugIds = new Set();
+  const debugDetailCache = new Map();
 
   function stopTimers() {
     if (pollTimer) clearInterval(pollTimer);
@@ -126,7 +97,9 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     if (activeSid !== sid) {
       videoInfo = null;
       latestTimeline = null;
-      expandedKeys.clear();
+      debugEvents = [];
+      expandedDebugIds.clear();
+      debugDetailCache.clear();
     }
     activeSid = sid;
     latestExp = exp;
@@ -143,23 +116,30 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     const sid = activeSid;
     loading = true;
     try {
-      const [infoR, exportR, statsR, timelineR] = await Promise.all([
+      const expForFilter = latestExp?.session || {};
+      const participant = expForFilter.participant_id || videoInfo?.participant_id || '';
+      const debugParams = new URLSearchParams({ limit: String(DEBUG_LIMIT), session_id: String(sid) });
+      if (participant) debugParams.set('participant_id', participant);
+      const [infoR, exportR, statsR, timelineR, debugR] = await Promise.all([
         adminFetch(`/api/admin/sessions/${sid}/video/info`),
         adminFetch(`/api/admin/sessions/${sid}/export`),
         adminFetch(`/api/admin/expression/${sid}/stats`),
         adminFetch(`/api/admin/sessions/${sid}/timeline`),
+        adminFetch(`/api/admin/debug?${debugParams.toString()}`),
       ]);
-      const [info, exp, st, timeline] = await Promise.all([
+      const [info, exp, st, timeline, debugPage] = await Promise.all([
         infoR.json(),
         exportR.json(),
         statsR.json(),
         timelineR.json(),
+        debugR.json(),
       ]);
       if (token !== viewToken || sid !== activeSid || !isActive()) return;
       videoInfo = info;
       latestExp = exp;
       latestSt = st;
       latestTimeline = timeline;
+      debugEvents = debugPage.events || [];
       getSessionCache()[sid] = { exp, st };
       ensureShell(sid);
       updateViews();
@@ -175,6 +155,14 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     updateOverview();
     preserveScroll('video-chat-list', updateChat);
     preserveScroll('video-frame-table', updateLogRows);
+  }
+
+  function preserveScroll(id, renderFn) {
+    const el = $(id);
+    const top = el?.scrollTop || 0;
+    renderFn();
+    const next = $(id);
+    if (next) next.scrollTop = top;
   }
 
   function updateOverview() {
@@ -239,67 +227,40 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     `).join('');
   }
 
-  function logRows() {
-    const frameRows = (latestSt?.frames || []).map((frame, index) => {
-      const t = frameTime(frame);
-      return {
-        key: `frame-${index}`,
-        t,
-        type: 'AU',
-        au1: frame.au1,
-        au4: frame.au4,
-        au7: frame.au7,
-        au12: frame.au12,
-        face: frameFace(frame) ? 'yes' : 'no',
-        reliable: frameReliable(frame) ? 'yes' : 'no',
-        message: frame.drop_reason || 'expression frame',
-        detail: {
-          kind: 'AU',
-          video_time: formatSeconds(t),
-          time_s: t,
-          au1: frame.au1,
-          au4: frame.au4,
-          au7: frame.au7,
-          au12: frame.au12,
-          yaw: frame.yaw,
-          pitch: frame.pitch,
-          queued_ms: frame.queued_ms || 0,
-          drop_reason: frame.drop_reason || '',
-          face: frameFace(frame),
-          reliable: frameReliable(frame),
-        },
-      };
-    });
-    const markerRows = (latestTimeline?.events || []).map((event) => {
-      const payload = event.payload || {};
-      const t = eventTime(event);
-      return {
-        key: `event-${event.id}`,
-        t,
-        type: eventLabel(event.type),
-        au1: '-',
-        au4: '-',
-        au7: '-',
-        au12: '-',
-        face: '-',
-        reliable: '-',
-        message: payloadText(payload) || eventLabel(event.type),
-        detail: { ...event, video_time: formatSeconds(t) },
-      };
-    });
-    return frameRows.concat(markerRows)
-      .filter((row) => Number.isFinite(row.t))
-      .sort((a, b) => a.t - b.t || String(a.key).localeCompare(String(b.key)));
+  function sessionStartEpoch() {
+    return parseUtcEpoch(latestTimeline?.start_time || latestExp?.session?.start_time);
+  }
+
+  function debugVideoTime(event) {
+    const start = sessionStartEpoch();
+    const epoch = Number(event?.epoch);
+    if (Number.isFinite(start) && Number.isFinite(epoch)) return Math.max(0, epoch - start);
+    return 0;
+  }
+
+  function nearestFrameForEvent(event) {
+    if (!['expression', 'baseline'].includes(event?.kind)) return null;
+    const t = debugVideoTime(event);
+    let best = null;
+    let bestDelta = Infinity;
+    for (const frame of latestSt?.frames || []) {
+      const delta = Math.abs(frameTime(frame) - t);
+      if (delta < bestDelta) {
+        best = frame;
+        bestDelta = delta;
+      }
+    }
+    return bestDelta <= 1.5 ? best : null;
   }
 
   function updateLogRows() {
-    const rows = logRows();
+    const rows = debugEvents;
     const table = $('video-frame-table');
     const count = $('video-log-count');
     if (count) count.textContent = `${rows.length} 条`;
     if (!table) return;
     if (!rows.length) {
-      table.innerHTML = '<div class="video-empty-line">暂无日志或 AU 数据</div>';
+      table.innerHTML = '<div class="video-empty-line">暂无日志记录</div>';
       return;
     }
     table.innerHTML = `
@@ -315,46 +276,82 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     `;
   }
 
-  function renderLogRow(row) {
-    const expanded = expandedKeys.has(row.key);
+  function renderLogRow(e) {
+    const id = String(e.id ?? '');
+    const expanded = expandedDebugIds.has(id);
+    const detail = debugDetailCache.get(id);
+    const t = debugVideoTime(e);
+    const frame = nearestFrameForEvent(e);
     return `
       <tr>
-        <td><span class="video-time-pill">视频 ${formatSeconds(row.t)}</span></td>
-        <td>${escHtml(row.type)}</td>
-        <td>${escHtml(row.au1)}</td>
-        <td>${escHtml(row.au4)}</td>
-        <td>${escHtml(row.au7)}</td>
-        <td>${escHtml(row.au12)}</td>
-        <td>${escHtml(row.face)}</td>
-        <td>${escHtml(row.reliable)}</td>
-        <td>${escHtml(row.message)}</td>
-        <td><button class="debug-expand" data-action="video-sync-detail" data-sync-key="${escAttr(row.key)}">${expanded ? '收起' : '展开'}</button></td>
+        <td><span class="video-time-pill">视频 ${formatSeconds(t)}</span></td>
+        <td>${escHtml(e.kind || '')}</td>
+        <td>${escHtml(valueOrDash(frame?.au1))}</td>
+        <td>${escHtml(valueOrDash(frame?.au4))}</td>
+        <td>${escHtml(valueOrDash(frame?.au7))}</td>
+        <td>${escHtml(valueOrDash(frame?.au12))}</td>
+        <td>${e.face_detected ? 'yes' : 'no'}</td>
+        <td>${e.reliable ? 'yes' : 'no'}</td>
+        <td>${escHtml(e.message || '')}</td>
+        <td><button class="debug-expand" data-action="video-sync-detail" data-sync-key="${escAttr(id)}">${expanded ? '收起' : '展开'}</button></td>
       </tr>
-      ${expanded ? `<tr class="debug-detail-row video-sync-detail-row"><td colspan="10"><div class="debug-detail-body">${renderLogDetail(row)}</div></td></tr>` : ''}
+      ${expanded ? `<tr class="debug-detail-row video-sync-detail-row"><td colspan="10"><div class="debug-detail-body">${detail || '加载详情中...'}</div></td></tr>` : ''}
     `;
   }
 
-  function renderLogDetail(row) {
-    const detailJson = escHtml(JSON.stringify(row.detail, null, 2));
+  function valueOrDash(value) {
+    return value === null || value === undefined || value === '' ? '-' : value;
+  }
+
+  async function toggleDetail(key) {
+    if (!key) return;
+    if (expandedDebugIds.has(key)) {
+      expandedDebugIds.delete(key);
+      updateLogRows();
+      return;
+    }
+    expandedDebugIds.add(key);
+    updateLogRows();
+    if (!debugDetailCache.has(key)) await loadDebugDetail(key);
+  }
+
+  async function loadDebugDetail(eventId) {
+    try {
+      const r = await adminFetch(`/api/admin/debug-event/${encodeURIComponent(eventId)}`);
+      const event = await r.json();
+      debugDetailCache.set(String(eventId), renderDebugDetail(event));
+    } catch (err) {
+      debugDetailCache.set(String(eventId), '详情加载失败');
+    }
+    updateLogRows();
+  }
+
+  function renderDebugDetail(e) {
+    const kb = e.bytes ? Math.round(e.bytes / 1024 * 10) / 10 : '';
+    const eventId = encodeURIComponent(e.id ?? '');
+    const hasApi = e.api_response !== undefined;
+    const apiUrl = `/api/admin/debug-event/${eventId}/json?part=api`;
+    const eventUrl = `/api/admin/debug-event/${eventId}/json?part=event`;
+    const image = e.image ? `
+      <div class="debug-face">
+        <img src="${escAttr(e.image)}" alt="captured frame">
+        <div>
+          <div style="color:#94a3b8;line-height:1.6">
+            Captured frame sent to PyFeat.<br>
+            Payload: ${kb || 0} KB · Time: ${e.elapsed_ms ?? ''} ms
+          </div>
+          <a href="${escAttr(e.image)}" download="debug-${escAttr(e.participant_id || 'unknown')}-${escAttr(e.session_id ?? 'none')}-${escAttr(e.ts || e.id)}.jpg">下载图片</a>
+        </div>
+      </div>` : '<div style="color:#64748b;margin-top:8px">这个事件没有图片。</div>';
     return `
-      <div style="color:#64748b;margin-top:8px">这个事件没有图片。</div>
+      ${image}
       <div class="debug-detail-summary">
-        类型: ${escHtml(row.type || '-')} · 视频标记: ${formatSeconds(row.t)} · ${escHtml(row.message || '')}
+        类型: ${escHtml(e.kind || '-')} · 参与者: ${escHtml(e.participant_id || '-')} · Session: ${escHtml(e.session_id ?? '-')} · ${escHtml(e.message || '')}
       </div>
       <div class="debug-json-actions">
-        <details class="debug-details" open>
-          <summary>查看完整日志事件</summary>
-          <pre>${detailJson}</pre>
-        </details>
-      </div>
-    `;
-  }
-
-  function toggleDetail(key) {
-    if (!key) return;
-    if (expandedKeys.has(key)) expandedKeys.delete(key);
-    else expandedKeys.add(key);
-    preserveScroll('video-frame-table', updateLogRows);
+        ${hasApi ? `<a class="debug-json-link" href="${escAttr(apiUrl)}" target="_blank" rel="noopener noreferrer">查看 PyFeat JSON</a>` : ''}
+        <a class="debug-json-link" href="${escAttr(eventUrl)}" target="_blank" rel="noopener noreferrer">查看完整日志事件</a>
+      </div>`;
   }
 
   function confirmDeleteVideo(sid) {

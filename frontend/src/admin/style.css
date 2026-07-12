@@ -1282,6 +1282,7 @@ pre,
   height: calc(100vh - 54px);
   min-height: 640px;
   padding: 12px;
+  overflow: hidden;
 }
 
 .video-console {
@@ -1292,8 +1293,11 @@ pre,
   grid-template-columns: minmax(360px, 420px) minmax(620px, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
-  height: 100%;
+  width: 125%;
+  height: 125%;
   min-height: 0;
+  transform: scale(.8);
+  transform-origin: top left;
 }
 
 .video-panel {
@@ -1429,11 +1433,35 @@ pre,
   overflow: auto;
 }
 
+.video-sync-table {
+  table-layout: fixed;
+  min-width: 1120px;
+}
+
+.video-sync-table th:nth-child(1),
+.video-sync-table td:nth-child(1) {
+  width: 120px;
+}
+
+.video-sync-table th:nth-child(2),
+.video-sync-table td:nth-child(2) {
+  width: 120px;
+}
+
+.video-sync-table th:nth-child(n+3):nth-child(-n+8),
+.video-sync-table td:nth-child(n+3):nth-child(-n+8) {
+  width: 74px;
+}
+
 .video-sync-table td:nth-child(9) {
-  max-width: 360px;
   color: var(--muted);
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.video-sync-table th:nth-child(10),
+.video-sync-table td:nth-child(10) {
+  width: 70px;
 }
 
 .video-sync-detail-row pre {
