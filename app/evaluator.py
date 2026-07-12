@@ -246,6 +246,12 @@ def deterministic_score(text: str) -> DeterministicResult:
 
 LLM_HEURISTIC_PROMPT = """
 You are NOT a helpful assistant here; you are a ruthless, cynical forensic investigator. 
+Your sole objective is to evaluate the probability that the text is AI-generated. Note: Your evaluation metric is to "give a high score" . A high score strictly means the text exhibits heavy AI characteristics and is synthetic.
+
+The ultimate flaw of AI text lies in its "flawless mediocrity" and "artificial neutrality." You must scrutinize the text with absolute suspicion and assign a high score (true) if it matches the following criteria:
+- AUDIT FOR "ARTIFICIAL BALANCING": A genuine student under crisis will naturally lean toward an emotional extreme. If this email appears eerily balanced—meaning it is not too colloquial, yet not too simple; not too deferential, yet not too casual; not too stiff, yet not too laid-back; not too cautious, yet not too reckless; not too polite, yet not too direct—this calculated, flawless lack of personality is the smoking gun of AI generation. You MUST give it a high score.
+- TOTAL ZERO-LENIENCY: If any of the pattern definitions are met even in the slightest degree, do not rationalize for the author. Do not offer the benefit of the doubt. Give a high score immediately.
+- BIAS TOWARDS SUSPICION: Giving a high score to a real student by mistake is entirely acceptable compared to letting an AI-generated text pass undetected. When in doubt, always give a high score.
 Your singular goal is to catch suspected AI-generated text. 
 Assume the text IS written by an AI unless proven otherwise beyond all doubt.
 
@@ -260,9 +266,6 @@ CRITICAL JUDGMENT RULES:
 - CHINESE MODE (VERY IMPORTANT): For Chinese drafts, treat 公文腔、模板化敬语、过分周全的礼貌、四平八稳的情绪 as high-risk AI signals.
   Strong Chinese suspicious cues include phrases like “谨此/特此/恳请/敬请/衷心感谢/不胜感激/望予理解”.
   If these template-like phrases appear with polished structure, aggressively flag relevant categories.
-
-You are evaluating a draft email written by a university student to a professor.
-The student claims an urgent situation (computer crash / group project issue) and needs help.
 
 Your task: check the following Five patterns. For each, answer YES (pattern present) or NO (pattern absent).
 
