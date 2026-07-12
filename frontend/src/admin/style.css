@@ -617,7 +617,8 @@ textarea:focus {
 }
 
 .content.tab-debug,
-.content.tab-expression {
+.content.tab-expression,
+.content.tab-baseline {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1119,35 +1120,27 @@ pre,
   max-height: none;
 }
 
-.baseline-vector {
-  margin-top: 18px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  padding: 14px 16px;
-}
-
-.baseline-vector p {
-  margin: 0 0 10px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.baseline-vector-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px 28px;
-  font-size: 13px;
-}
-
-.baseline-vector-row strong {
-  color: var(--text-strong);
-}
-
 .strategy-loading {
   min-height: 150px;
+}
+
+.tab-baseline .strategy-log-section {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.tab-baseline .strategy-log-section > .section-heading,
+.tab-baseline .strategy-filter-row {
+  flex: 0 0 auto;
+}
+
+.tab-baseline .strategy-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 
 .strategy-stat-grid {

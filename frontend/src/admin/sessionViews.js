@@ -14,16 +14,27 @@ function writeDetail(html){
 }
 
 const STRATEGY_TRIGGERS = [
-  ['_au4_present', 'AU4 当轮出现', '当前轮中 AU4 达到双阈值的帧占比满足条件'],
-  ['_au4_rising', 'AU4 近期上升', '60 秒窗口内 AU4 从低位上升并持续达到阈值'],
-  ['_input_shrinking', '连续输入缩短', '最近两轮用户输入长度连续缩短'],
-  ['_sustained_present', 'AU4 连续三轮出现', '连续三轮均满足 AU4 出现条件'],
-  ['_idle_with_au1', '空闲伴随 AU1', '输入空闲超过 15 秒且 AU1 达到阈值'],
-  ['_au4_slope', 'AU4 上升斜率', '最近可靠帧的 AU4 呈上升趋势并达到峰值阈值'],
-  ['_au4_dropping', 'AU4 回落', 'AU4 从升高状态回落到接近个人基线'],
+  ['_au4_present', 'AU4 当轮出现'],
+  ['_au4_rising', 'AU4 近期上升'],
+  ['_input_shrinking', '连续输入缩短'],
+  ['_sustained_present', 'AU4 连续三轮出现'],
+  ['_idle_with_au1', '空闲伴随 AU1'],
+  ['_au4_slope', 'AU4 上升斜率'],
+  ['_au4_dropping', 'AU4 回落'],
 ];
+const STRATEGY_UNMATCHED_FILTER='__unmatched__';
 const strategyFilterState=new Map();
 const strategyExpandedState=new Map();
+
+function defaultStrategyFilters(){
+  return new Set([...STRATEGY_TRIGGERS.map(([key])=>key),STRATEGY_UNMATCHED_FILTER]);
+}
+
+function strategyFrameMatches(frame,selected){
+  const activeKeys=STRATEGY_TRIGGERS.filter(([key])=>frame.triggers?.[key]).map(([key])=>key);
+  if(activeKeys.some(key=>selected.has(key)))return true;
+  return activeKeys.length===0&&selected.has(STRATEGY_UNMATCHED_FILTER);
+}
 
 export function renderOverview(exp,st){
   const s=exp.session;
@@ -303,7 +314,7 @@ function renderStrategyFrameRows(report,selected,expanded){
   return frames.map((frame)=>{
     const activeKeys=STRATEGY_TRIGGERS.filter(([key])=>frame.triggers?.[key]).map(([key])=>key);
     const eventId=Number(frame.id??0);
-    const visible=selected.size>0&&activeKeys.some(key=>selected.has(key));
+    const visible=strategyFrameMatches(frame,selected);
     const isExpanded=visible&&expanded.has(String(eventId));
     const image=frame.image||'';
     const eventUrl=`/api/admin/debug-event/${encodeURIComponent(eventId)}/json?part=event`;
@@ -335,17 +346,24 @@ function renderStrategyFrameRows(report,selected,expanded){
   }).join('');
 }
 
-export function applyStrategyFrameFilters(){
+export function applyStrategyFrameFilters(changedInput){
   const root=$('strategy-log-section');
   if(!root)return;
   const sessionId=root.dataset.sessionId||'';
-  const selected=new Set([...document.querySelectorAll('[data-strategy-filter]:checked')].map(input=>input.value));
+  const all=$('strategy-filter-all');
+  const items=[...document.querySelectorAll('[data-strategy-filter]')];
+  if(changedInput===all){
+    items.forEach(input=>{input.checked=all.checked});
+  }else if(all){
+    all.checked=items.every(input=>input.checked);
+  }
+  const selected=new Set(items.filter(input=>input.checked).map(input=>input.value));
   strategyFilterState.set(sessionId,selected);
   const expanded=strategyExpandedState.get(sessionId)||new Set();
   let visible=0;
   document.querySelectorAll('[data-strategy-row]').forEach((row)=>{
     const active=new Set((row.dataset.strategies||'').split(',').filter(Boolean));
-    const show=selected.size>0&&[...selected].some(key=>active.has(key));
+    const show=[...selected].some(key=>active.has(key))||(active.size===0&&selected.has(STRATEGY_UNMATCHED_FILTER));
     row.hidden=!show;
     if(show)visible++;
     const eventId=row.querySelector('[data-event-id]')?.dataset.eventId;
@@ -359,7 +377,7 @@ export function applyStrategyFrameFilters(){
     if(button)button.textContent=show&&isExpanded?'收起':'展开';
   });
   const count=$('strategy-filter-count');
-  if(count)count.textContent=selected.size?`显示 ${visible} 张命中照片`:'请选择至少一种策略以显示照片';
+  if(count)count.textContent=selected.size?`显示 ${visible} 张照片`:'请选择至少一种筛选项以显示照片';
 }
 
 export function toggleStrategyDetail(eventId,button){
@@ -390,15 +408,6 @@ export function renderBaseline(exp,report){
       <div class="info-card"><div class="lbl">基线 AU7</div><div class="val mono">${p.baseline_au7?.toFixed(3)||'-'}</div></div>
       <div class="info-card"><div class="lbl">基线 AU12</div><div class="val mono">${p.baseline_au12?.toFixed(3)||'-'}</div></div>
       <div class="info-card"><div class="lbl">基线帧数</div><div class="val mono">${p.baseline_frame_count||0}</div></div>
-    </div>
-    <div class="baseline-vector">
-      <p>基线 AU 向量 (用于偏差计算)</p>
-      <div class="baseline-vector-row">
-        <div><span class="au-name au1">AU1</span> <strong>${p.baseline_au1?.toFixed(3)||'-'}</strong></div>
-        <div><span class="au-name au4">AU4</span> <strong>${p.baseline_au4?.toFixed(3)||'-'}</strong></div>
-        <div><span class="au-name au7">AU7</span> <strong>${p.baseline_au7?.toFixed(3)||'-'}</strong></div>
-        <div><span class="au-name au12">AU12</span> <strong>${p.baseline_au12?.toFixed(3)||'-'}</strong></div>
-      </div>
     </div>`;
   }
   html+='</div>';
@@ -411,30 +420,32 @@ export function renderBaseline(exp,report){
 
   const total=report.total_frames||0;
   const sessionKey=String(report.session_id??exp.session.id);
-  const selected=strategyFilterState.get(sessionKey)||new Set();
+  const selected=strategyFilterState.get(sessionKey)||defaultStrategyFilters();
   const expanded=strategyExpandedState.get(sessionKey)||new Set();
-  const statCards=STRATEGY_TRIGGERS.map(([key,label,description])=>{
+  const statCards=STRATEGY_TRIGGERS.map(([key,label])=>{
     const count=report.counts?.[key]||0;
     const percent=total?(count/total*100).toFixed(1):'0.0';
-    return `<div class="strategy-stat" title="${escAttr(description)}">
+    return `<div class="strategy-stat" title="${escAttr(key)}">
       <div class="strategy-stat-name">${escHtml(label)}</div>
       <div class="strategy-stat-rate">${percent}%</div>
       <div class="strategy-stat-count">${count} / ${total} 帧</div>
     </div>`;
   }).join('');
-  const filters=STRATEGY_TRIGGERS.map(([key,label])=>`<label title="勾选后显示命中此策略的照片"><input type="checkbox" value="${escAttr(key)}" data-strategy-filter ${selected.has(key)?'checked':''}>${escHtml(label)}</label>`).join('');
-  const visibleCount=(report.frames||[]).filter(frame=>selected.size>0&&[...selected].some(key=>frame.triggers?.[key])).length;
+  const allFiltersSelected=selected.size===STRATEGY_TRIGGERS.length+1;
+  const strategyFilters=STRATEGY_TRIGGERS.map(([key,label])=>`<label title="${escAttr(key)}"><input type="checkbox" value="${escAttr(key)}" data-strategy-filter ${selected.has(key)?'checked':''}>${escHtml(label)}</label>`).join('');
+  const filters=`<label><input id="strategy-filter-all" type="checkbox" data-strategy-filter-all ${allFiltersSelected?'checked':''}>全选</label>${strategyFilters}<label title="七项策略均未触发"><input type="checkbox" value="${STRATEGY_UNMATCHED_FILTER}" data-strategy-filter ${selected.has(STRATEGY_UNMATCHED_FILTER)?'checked':''}>未命中</label>`;
+  const visibleCount=(report.frames||[]).filter(frame=>strategyFrameMatches(frame,selected)).length;
 
   html+=`<div class="detail-section strategy-stats-section">
-    <div class="section-heading"><h3>策略触发统计</h3><span class="muted">统计范围：实验阶段 ${total} 个捕获帧</span></div>
+    <div class="section-heading"><h3>策略触发统计</h3><span class="muted">总实验帧数：${total}</span></div>
     <div class="strategy-stat-grid">${statCards}</div>
   </div>
   <div id="strategy-log-section" class="detail-section strategy-log-section" data-session-id="${escAttr(sessionKey)}">
-    <div class="section-heading"><h3>策略照片日志</h3><span id="strategy-filter-count" class="muted">${selected.size?`显示 ${visibleCount} 张命中照片`:'请选择至少一种策略以显示照片'}</span></div>
+    <div class="section-heading"><h3>策略照片日志</h3><span id="strategy-filter-count" class="muted">${selected.size?`显示 ${visibleCount} 张照片`:'请选择至少一种筛选项以显示照片'}</span></div>
     <div class="strategy-filter-row filter-row" aria-label="策略筛选">${filters}</div>
     <div class="strategy-table-wrap">
       <table class="frame-table strategy-frame-table">
-        <thead><tr><th>时间</th><th>第几帧</th>${STRATEGY_TRIGGERS.map(([,label,description])=>`<th title="${escAttr(description)}">${escHtml(label)}</th>`).join('')}<th>详细</th></tr></thead>
+        <thead><tr><th>时间</th><th>第几帧</th>${STRATEGY_TRIGGERS.map(([key,label])=>`<th title="${escAttr(key)}">${escHtml(label)}</th>`).join('')}<th>详细</th></tr></thead>
         <tbody>${renderStrategyFrameRows(report,selected,expanded)}</tbody>
       </table>
     </div>

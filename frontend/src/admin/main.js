@@ -378,8 +378,8 @@ function handleAdminInput(e) {
 }
 
 function handleAdminChange(e) {
-  if (e.target.matches('[data-strategy-filter]')) {
-    applyStrategyFrameFilters();
+  if (e.target.matches('[data-strategy-filter], [data-strategy-filter-all]')) {
+    applyStrategyFrameFilters(e.target);
     return;
   }
   if (e.target.id === 'debug-kind') {
