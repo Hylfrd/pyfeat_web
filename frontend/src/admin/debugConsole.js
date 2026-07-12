@@ -98,7 +98,7 @@ export function createDebugConsole({adminFetch, toast}){
         <button data-action="check-health">检查模型状态</button>
         <button data-action="choose-debug-image">上传图片至 PyFeat</button>
         <button data-action="test-ai" data-provider="deepseek">测试 DeepSeek 状态</button>
-        <button data-action="test-ai" data-provider="kimi">测试 Kimi 状态</button>
+        <button data-action="test-ai" data-provider="evaluator">测试 DeepSeek 评估状态</button>
         <input id="debug-upload" type="file" accept="image/*" hidden>
       </div>
       <pre id="debug-result" class="debug-result"></pre>

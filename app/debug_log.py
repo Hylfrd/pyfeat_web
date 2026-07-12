@@ -94,10 +94,9 @@ async def _ai_status(provider: str) -> dict:
         body = {
             "model": model,
             "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
-            "reasoning_effort": "high",
-            "thinking": {"type": "enabled"},
+            "thinking": {"type": "disabled"},
         }
-    elif provider == "kimi":
+    elif provider == "evaluator":
         api_key = EVALUATOR_API_KEY
         base_url = EVALUATOR_BASE_URL.rstrip("/")
         model = EVALUATOR_MODEL

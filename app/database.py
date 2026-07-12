@@ -9,7 +9,7 @@ Missing-data policy (§10.1):
   - Admin manual override can exclude or re-include a session
   - Questionnaires: >2 missing items (out of 10) → response excluded
 
-The LLM for evaluation (Gemini) differs from the writing-task LLM (DeepSeek V4 Flash).
+The LLM evaluator uses DeepSeek V4 Flash with thinking disabled.
 """
 
 from datetime import datetime
@@ -216,7 +216,7 @@ class Evaluation(Base):
     run_number: Mapped[int] = Column(Integer, nullable=False)  # 1/2/3 for self-consistency
     layer: Mapped[str] = Column(String, nullable=False)  # "deterministic" / "llm_heuristic"
     score: Mapped[float] = Column(Float, nullable=False)
-    evaluator_model: Mapped[str] = Column(String, nullable=False)  # e.g. "kimi-k2.6"
+    evaluator_model: Mapped[str] = Column(String, nullable=False)  # e.g. "deepseek-v4-flash"
     details_json: Mapped[Optional[str]] = Column(Text, nullable=True)
     timestamp: Mapped[str] = Column(String, default=lambda: datetime.utcnow().isoformat())
 

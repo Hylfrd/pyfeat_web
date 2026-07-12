@@ -6,8 +6,8 @@ Layer 1: Deterministic statistical scoring via 6 weighted signals.
 Layer 2: LLM heuristic evaluation of 5 semantic patterns.
                3 concurrent runs → strictest score (max).
 
-Design note: The LLM used for evaluation differs from the LLM used for the
-writing task, eliminating self-evaluation bias.
+Design note: Evaluation currently uses the same non-reasoning DeepSeek Flash
+model as the writing task.
 
 Integrates: ai-detector-skill, Humanizer-zh, avoid-ai-writing
 """

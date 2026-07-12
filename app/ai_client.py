@@ -2,7 +2,7 @@
 AI Client — LLM API Abstraction
 ================================
 Wraps the writing-task LLM with strategy-specific prompt templates.
-Evaluator LLM is separate from the writing model.
+The evaluator uses the same non-reasoning DeepSeek Flash model.
 
 Both conditions share the same base system prompt.
 The affect-aware condition appends strategy-specific fragments.
@@ -37,9 +37,9 @@ _load_env_file()
 WRITING_MODEL = "deepseek-v4-flash"
 WRITING_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 WRITING_BASE_URL = "https://api.deepseek.com"
-EVALUATOR_MODEL = "kimi-k2.6"
-EVALUATOR_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
-EVALUATOR_BASE_URL = "https://api.moonshot.cn/v1"
+EVALUATOR_MODEL = WRITING_MODEL
+EVALUATOR_API_KEY = WRITING_API_KEY
+EVALUATOR_BASE_URL = WRITING_BASE_URL
 
 
 # ── Base system prompt (shared by both conditions) ─────────────────
@@ -209,7 +209,7 @@ Use cautious wording: "it looks like", "you may be", "I have a feeling" -- never
     ) -> str:
         """
         Send a single-turn evaluation prompt (used by evaluator.py Layer 2).
-        Uses the evaluator-specific model, NOT the writing model.
+        Uses the same non-reasoning DeepSeek Flash model as the writing task.
         """
         messages = [{"role": "user", "content": prompt}]
 
