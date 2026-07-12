@@ -608,7 +608,9 @@ textarea:focus {
 }
 
 .content {
-  max-width: 1280px;
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
   padding: 26px 32px 44px;
 }
 
@@ -922,7 +924,8 @@ pre,
 }
 
 .ch-content {
-  max-width: 860px;
+  width: min(1120px, 78%);
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-soft);
@@ -1078,7 +1081,7 @@ pre,
 }
 
 .frame-table-wrap {
-  max-height: 500px;
+  max-height: calc(100vh / var(--admin-scale) - 260px);
   overflow: auto;
 }
 
@@ -1173,7 +1176,7 @@ pre,
 }
 
 .debug-table-wrap {
-  max-height: 560px;
+  max-height: calc(100vh / var(--admin-scale) - 330px);
   overflow-y: auto;
   overflow-x: hidden;
 }
