@@ -63,6 +63,7 @@ def create_evaluation_router(eval_ai_client) -> APIRouter:
             })
 
         llm_flags = []
+        llm_result = None
         if not eval_ai_client:
             debug_log._push_debug({
                 "kind": "eval",
@@ -124,9 +125,17 @@ def create_evaluation_router(eval_ai_client) -> APIRouter:
                     "message": f"draft evaluation LLM error: {type(eval_err).__name__}",
                 })
                 llm_flags = []
+                llm_result = None
 
-        llm_score = sum(20 for f in llm_flags if f["flagged"]) if llm_flags else 0
-        composite = 0.3 * det_result.score + 0.7 * llm_score if llm_flags else det_result.score
+        llm_score = llm_result.score if llm_result else 0
+        composite = (
+            max(
+                0.35 * det_result.score + 0.65 * llm_score,
+                0.9 * llm_score,
+                0.6 * det_result.score,
+            )
+            if llm_result else det_result.score
+        )
         score = round(composite)
         passed = score < PASS_THRESHOLD
 
