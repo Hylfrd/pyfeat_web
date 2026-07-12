@@ -188,10 +188,9 @@ def deterministic_score(text: str) -> DeterministicResult:
     lang = _detect_language(normalized)
 
     if word_count < 20:
-        # Too short for meaningful analysis.
-        # Note: Chinese CJK chars are individual tokens, so 20 chars ≈ 10–15 semantic words.
-        # Below 20 tokens (both languages) = near-empty, skip analysis.
-        return DeterministicResult(score=0, signals=[], word_count=word_count)
+        # Too short for meaningful analysis — but brevity itself is suspicious
+        # for an email (real students usually write more). Assign a baseline score.
+        return DeterministicResult(score=20, signals=[], word_count=word_count)
 
     # ── Signal 1: Burstiness (sentence-length variation) ──
     sent_lens = [max(1, len(_words(s))) for s in sentences] or [word_count]
@@ -323,7 +322,9 @@ class LLMHeuristicResult:
         """0-100, tuned to be strict and recall-oriented."""
         flagged_count = sum(1 for v in self.flags.values() if v)
         if flagged_count == 0:
-            return 0
+            # No flags raised doesn't mean "definitely human" —
+            # give a small baseline so composite doesn't collapse to 0.
+            return 10
 
         weighted = (
             18 * int(self.flags["emotional_flatline"]) +
