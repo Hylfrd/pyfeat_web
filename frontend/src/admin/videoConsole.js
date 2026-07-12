@@ -29,10 +29,6 @@ function payloadText(payload = {}) {
   return payload.message || payload.text || payload.filename || payload.value || '';
 }
 
-function shortJson(value) {
-  return JSON.stringify(value, null, 2);
-}
-
 function eventLabel(type) {
   const labels = {
     session_started: 'Session 开始',
@@ -51,23 +47,16 @@ function eventLabel(type) {
   return labels[type] || type || '日志';
 }
 
-function stageLabel(exp, timeline) {
-  const session = exp?.session || {};
-  const events = timeline?.events || [];
-  if (events.some((event) => event.type === 'post_survey_submitted')) return '实验后问卷';
-  if (events.some((event) => event.type === 'task_started' || event.type === 'chat_user' || event.type === 'chat_ai')) {
-    return session.completed ? '实验后问卷' : '实验中';
-  }
-  if (events.some((event) => event.type === 'baseline_started' || event.type === 'baseline_completed')) return '基准测试';
-  return '实验前问卷';
-}
-
 function preserveScroll(id, renderFn) {
   const el = $(id);
   const top = el?.scrollTop || 0;
   renderFn();
   const next = $(id);
   if (next) next.scrollTop = top;
+}
+
+function renderInfoCard(label, value) {
+  return `<div class="info-card"><span class="lbl">${escHtml(label)}</span><span class="val">${escHtml(value)}</span></div>`;
 }
 
 export function createVideoConsole({ adminFetch, toast, getSessionCache, isActive = () => true }) {
@@ -99,18 +88,12 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     detail.dataset.videoSid = String(sid);
     detail.innerHTML = `
       <div class="video-console">
-        <section class="video-panel video-overview-panel">
-          <div class="video-panel-title">
-            <h3>视频索引</h3>
+        <section class="video-overview-panel">
+          <div class="section-heading">
+            <h3>视频信息</h3>
+            <div id="video-actions" class="action-bar compact"></div>
           </div>
-          <div id="video-overview" class="video-overview-grid"></div>
-        </section>
-
-        <section class="video-panel video-meta-panel">
-          <div class="video-panel-title">
-            <h3>杂项</h3>
-          </div>
-          <div id="video-meta" class="video-meta-grid"></div>
+          <div id="video-overview" class="info-grid"></div>
         </section>
 
         <section class="video-panel video-chat-panel">
@@ -190,7 +173,6 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
   function updateViews() {
     if (!active() || !latestExp) return;
     updateOverview();
-    updateMeta();
     preserveScroll('video-chat-list', updateChat);
     preserveScroll('video-frame-table', updateLogRows);
   }
@@ -200,37 +182,25 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
     const participant = videoInfo?.participant_id || session.participant_id || '-';
     const size = videoInfo?.size_human || '0 B';
     const duration = videoInfo?.duration_human || '-';
-    const download = videoInfo?.available
-      ? `<a class="video-link-button primary" href="${escAttr(videoInfo.download_url)}">下载视频</a>`
-      : '<button disabled>下载视频</button>';
     const overview = $('video-overview');
-    if (!overview) return;
-    overview.innerHTML = `
-      <div class="video-info-card"><span>实验者编号</span><strong>${escHtml(participant)}</strong></div>
-      <div class="video-info-card"><span>视频大小</span><strong>${escHtml(size)}</strong></div>
-      <div class="video-info-card"><span>视频时长</span><strong>${escHtml(duration)}</strong></div>
-      <div class="video-action-row">
+    const actions = $('video-actions');
+    if (overview) {
+      overview.innerHTML = [
+        renderInfoCard('Session ID', `#${session.id ?? '-'}`),
+        renderInfoCard('实验者编号', participant),
+        renderInfoCard('视频大小', size),
+        renderInfoCard('视频时长', duration),
+      ].join('');
+    }
+    if (actions) {
+      const download = videoInfo?.available
+        ? `<a class="video-link-button primary" href="${escAttr(videoInfo.download_url)}">下载视频</a>`
+        : '<button disabled>下载视频</button>';
+      actions.innerHTML = `
         ${download}
         <button class="danger" data-action="confirm-delete-video" data-session-id="${session.id}">删除视频</button>
-      </div>
-    `;
-  }
-
-  function updateMeta() {
-    const session = latestExp?.session || {};
-    const markerCount = latestTimeline?.events?.length || 0;
-    const meta = $('video-meta');
-    if (!meta) return;
-    meta.innerHTML = `
-      <div class="video-info-card"><span>Session ID</span><strong>#${escHtml(session.id ?? '-')}</strong></div>
-      <div class="video-info-card"><span>条件</span><strong>${escHtml(session.condition_label || session.condition || '-')}</strong></div>
-      <div class="video-info-card"><span>阶段</span><strong>${escHtml(stageLabel(latestExp, latestTimeline))}</strong></div>
-      <div class="video-info-card"><span>完成状态</span><strong>${session.completed ? '已完成' : '未完成'}</strong></div>
-      <div class="video-info-card"><span>对话轮次</span><strong>${escHtml(session.total_turns ?? 0)} 轮</strong></div>
-      <div class="video-info-card"><span>修改次数</span><strong>${escHtml(session.total_revisions ?? 0)} 次</strong></div>
-      <div class="video-info-card"><span>视频分段</span><strong>${escHtml(videoInfo?.chunk_count ?? 0)} 段</strong></div>
-      <div class="video-info-card"><span>视频标记</span><strong>${markerCount} 个</strong></div>
-    `;
+      `;
+    }
   }
 
   function chatEvents() {
@@ -284,6 +254,7 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
         reliable: frameReliable(frame) ? 'yes' : 'no',
         message: frame.drop_reason || 'expression frame',
         detail: {
+          kind: 'AU',
           video_time: formatSeconds(t),
           time_s: t,
           au1: frame.au1,
@@ -346,7 +317,6 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
 
   function renderLogRow(row) {
     const expanded = expandedKeys.has(row.key);
-    const detailJson = escHtml(shortJson(row.detail));
     return `
       <tr>
         <td><span class="video-time-pill">视频 ${formatSeconds(row.t)}</span></td>
@@ -360,7 +330,23 @@ export function createVideoConsole({ adminFetch, toast, getSessionCache, isActiv
         <td>${escHtml(row.message)}</td>
         <td><button class="debug-expand" data-action="video-sync-detail" data-sync-key="${escAttr(row.key)}">${expanded ? '收起' : '展开'}</button></td>
       </tr>
-      ${expanded ? `<tr class="debug-detail-row video-sync-detail-row"><td colspan="10"><div class="debug-detail-body"><pre>${detailJson}</pre></div></td></tr>` : ''}
+      ${expanded ? `<tr class="debug-detail-row video-sync-detail-row"><td colspan="10"><div class="debug-detail-body">${renderLogDetail(row)}</div></td></tr>` : ''}
+    `;
+  }
+
+  function renderLogDetail(row) {
+    const detailJson = escHtml(JSON.stringify(row.detail, null, 2));
+    return `
+      <div style="color:#64748b;margin-top:8px">这个事件没有图片。</div>
+      <div class="debug-detail-summary">
+        类型: ${escHtml(row.type || '-')} · 视频标记: ${formatSeconds(row.t)} · ${escHtml(row.message || '')}
+      </div>
+      <div class="debug-json-actions">
+        <details class="debug-details" open>
+          <summary>查看完整日志事件</summary>
+          <pre>${detailJson}</pre>
+        </details>
+      </div>
     `;
   }
 
