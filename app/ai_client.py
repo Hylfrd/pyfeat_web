@@ -34,7 +34,7 @@ def _load_env_file() -> None:
 
 _load_env_file()
 
-WRITING_MODEL = "deepseek-v4-pro"
+WRITING_MODEL = "deepseek-v4-flash"
 WRITING_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 WRITING_BASE_URL = "https://api.deepseek.com"
 EVALUATOR_MODEL = "kimi-k2.6"
