@@ -71,8 +71,10 @@ def create_websocket_router(db_session_factory, expression_engine, pyfeat_schedu
         if previous_websocket and previous_websocket is not websocket:
             try:
                 await previous_websocket.close(code=4001, reason="superseded")
-            except RuntimeError:
+            except (RuntimeError, WebSocketDisconnect):
                 pass
+        if active_connections.get(participant_id) is not websocket:
+            return
 
         chat_history: list[ChatMessage] = []
         turn_counter: int = 0

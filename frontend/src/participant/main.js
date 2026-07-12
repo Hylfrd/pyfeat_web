@@ -1289,9 +1289,10 @@ function renderQueueStatus(data={}){
   const wait=Number(data.estimated_wait_s)||0;
   const pct=wait>0?Math.max(4,Math.min(96,100-(wait/900*100))):100;
   $('queue-bar').style.width=`${pct}%`;
-  $('queue-note').textContent=data.state==='queued'
-    ? '请耐心等待，轮到您时会自动开始基线校准。'
-    : '正在为您准备基线校准。';
+  const resumingTask=data.phase==='task'||slotPhase==='task';
+  $('queue-note').textContent=resumingTask
+    ? (data.state==='queued'?'任务连接正在排队恢复，轮到您时会继续当前任务。':'正在恢复当前写作任务。')
+    : (data.state==='queued'?'请耐心等待，轮到您时会自动开始基线校准。':'正在为您准备基线校准。');
 }
 function stopQueuePolling(){
   if(queuePollTimer){clearInterval(queuePollTimer);queuePollTimer=null}
@@ -1456,7 +1457,6 @@ async function resumeTaskSlot(){
     return;
   }
   if(ws.readyState===WebSocket.OPEN){
-    ws.send(JSON.stringify({type:'session_init',session_id:currentSessionId}));
     ws.send(JSON.stringify({type:'task_started'}));
   }
   lastExpressionSentAt=Date.now();
