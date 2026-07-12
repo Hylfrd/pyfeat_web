@@ -1,5 +1,6 @@
 :root {
   color-scheme: light;
+  --admin-scale: .8;
   --bg: #f6f6f7;
   --surface: #ffffff;
   --surface-soft: #f6f6f7;
@@ -103,8 +104,11 @@ button {
 .app-shell {
   display: grid;
   grid-template-rows: 54px minmax(0, 1fr);
-  height: 100vh;
+  width: calc(100% / var(--admin-scale));
+  height: calc(100vh / var(--admin-scale));
   min-height: 0;
+  transform: scale(var(--admin-scale));
+  transform-origin: top left;
 }
 
 .app-banner {
@@ -1170,7 +1174,57 @@ pre,
 
 .debug-table-wrap {
   max-height: 560px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.debug-table-wrap > .frame-table {
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.debug-table-wrap > .frame-table th,
+.debug-table-wrap > .frame-table td {
+  padding: 7px 8px;
+}
+
+.debug-table-wrap > .frame-table th:nth-child(1),
+.debug-table-wrap > .frame-table td:nth-child(1) {
+  width: 82px;
+}
+
+.debug-table-wrap > .frame-table th:nth-child(2),
+.debug-table-wrap > .frame-table td:nth-child(2) {
+  width: 92px;
+}
+
+.debug-table-wrap > .frame-table th:nth-child(3),
+.debug-table-wrap > .frame-table td:nth-child(3) {
+  width: 80px;
+}
+
+.debug-table-wrap > .frame-table th:nth-child(4),
+.debug-table-wrap > .frame-table td:nth-child(4),
+.debug-table-wrap > .frame-table th:nth-child(5),
+.debug-table-wrap > .frame-table td:nth-child(5),
+.debug-table-wrap > .frame-table th:nth-child(6),
+.debug-table-wrap > .frame-table td:nth-child(6),
+.debug-table-wrap > .frame-table th:nth-child(7),
+.debug-table-wrap > .frame-table td:nth-child(7),
+.debug-table-wrap > .frame-table th:nth-child(8),
+.debug-table-wrap > .frame-table td:nth-child(8) {
+  width: 64px;
+}
+
+.debug-table-wrap > .frame-table td:nth-child(9) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.debug-table-wrap > .frame-table th:nth-child(10),
+.debug-table-wrap > .frame-table td:nth-child(10) {
+  width: 44px;
 }
 
 .debug-expand {
@@ -1279,8 +1333,8 @@ pre,
 
 .content.video-content {
   max-width: none;
-  height: calc(100vh - 54px);
-  min-height: 640px;
+  height: 100%;
+  min-height: 0;
   padding: 12px;
   overflow: hidden;
 }
@@ -1293,11 +1347,8 @@ pre,
   grid-template-columns: minmax(360px, 420px) minmax(620px, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
-  width: 125%;
-  height: 125%;
+  height: 100%;
   min-height: 0;
-  transform: scale(.8);
-  transform-origin: top left;
 }
 
 .video-panel {
@@ -1430,38 +1481,47 @@ pre,
 
 .video-frame-table-wrap {
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .video-sync-table {
+  width: 100%;
+  min-width: 0;
   table-layout: fixed;
-  min-width: 1120px;
+  font-size: 12px;
+}
+
+.video-sync-table th,
+.video-sync-table td {
+  padding: 7px 8px;
 }
 
 .video-sync-table th:nth-child(1),
 .video-sync-table td:nth-child(1) {
-  width: 120px;
+  width: 96px;
 }
 
 .video-sync-table th:nth-child(2),
 .video-sync-table td:nth-child(2) {
-  width: 120px;
+  width: 92px;
 }
 
 .video-sync-table th:nth-child(n+3):nth-child(-n+8),
 .video-sync-table td:nth-child(n+3):nth-child(-n+8) {
-  width: 74px;
+  width: 56px;
 }
 
 .video-sync-table td:nth-child(9) {
   color: var(--muted);
   white-space: normal;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .video-sync-table th:nth-child(10),
 .video-sync-table td:nth-child(10) {
-  width: 70px;
+  width: 44px;
 }
 
 .video-sync-detail-row pre {
