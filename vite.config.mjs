@@ -8,7 +8,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         admin: "frontend/src/admin/main.js",
-        photo: "frontend/src/photo/main.js",
         participant: "frontend/src/participant/main.js",
       },
       output: {

@@ -44,17 +44,3 @@ async def admin_page():
     asset_version = int(max(path.stat().st_mtime for path in admin_assets))
     html = admin_html.read_text(encoding="utf-8").replace("__ASSET_VERSION__", str(asset_version))
     return HTMLResponse(html, headers=NO_STORE_HEADERS)
-
-
-@router.get("/photo")
-async def photo_page():
-    """Serve the temporary phone-to-computer video relay page."""
-    photo_html = STATIC_DIR / "photo.html"
-    photo_assets = [
-        photo_html,
-        DIST_DIR / "photo.css",
-        DIST_DIR / "photo.js",
-    ]
-    asset_version = int(max(path.stat().st_mtime for path in photo_assets))
-    html = photo_html.read_text(encoding="utf-8").replace("__ASSET_VERSION__", str(asset_version))
-    return HTMLResponse(html, headers=NO_STORE_HEADERS)
