@@ -19,6 +19,7 @@ from .admin import create_admin_router
 from .evaluation import create_evaluation_router
 from .experiment import create_experiment_router
 from .pages import router as pages_router
+from .photo import create_photo_router
 from .pyfeat_scheduler import PyFeatScheduler
 from .websocket import create_websocket_router
 
@@ -45,6 +46,7 @@ if EVALUATOR_API_KEY:
 
 app.include_router(create_admin_router(db_session_factory, expression_engine))
 app.include_router(create_evaluation_router(eval_ai_client))
+app.include_router(create_photo_router())
 
 selectors: dict[str, StrategySelector] = {}
 app.include_router(create_experiment_router(ROOT_DIR, db_session_factory, expression_engine, selectors, eval_ai_client))
