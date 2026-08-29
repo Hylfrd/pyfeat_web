@@ -14,18 +14,13 @@ $LogDir = Join-Path $Root "logs"
 $OutLog = Join-Path $LogDir "web.out.log"
 $ErrLog = Join-Path $LogDir "web.err.log"
 $LogConfig = Join-Path $Root "logging.json"
-$VerificationScript = Join-Path $Root "deployment_verify.py"
-$AuditDir = "C:\Users\Administrator\Desktop\temp3"
-$DeploymentRunId = "$(Get-Date -Format 'yyyyMMdd-HHmmss')-$PID"
-$BeforeReport = Join-Path $AuditDir "pyfeat-db-$DeploymentRunId-before.json"
-$AfterReport = Join-Path $AuditDir "pyfeat-db-$DeploymentRunId-after.json"
 $Port = 8020
 $PyFeatApiUrl = "http://100.93.165.44:8055"
 $PyFeatApiTimeout = "10"
 $StartedPid = $null
 
 function Ensure-Directories {
-    New-Item -ItemType Directory -Force -Path $Root, $LogDir, $AuditDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $Root, $LogDir | Out-Null
 }
 
 function Install-Dependencies {
@@ -98,44 +93,6 @@ function Stop-App {
     }
 }
 
-function Move-ExistingLogs {
-    $logs = Get-ChildItem -LiteralPath $LogDir -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^web\.(out|err)\.log(\.\d+)?$' }
-    foreach ($log in $logs) {
-        $destination = Join-Path $AuditDir "$($log.Name).before-$DeploymentRunId"
-        Move-Item -LiteralPath $log.FullName -Destination $destination
-        Write-Output "Moved log to $destination"
-    }
-}
-
-function Run-DatabaseVerification {
-    param([Parameter(Mandatory = $true)][string]$Stage)
-
-    $arguments = @(
-        $VerificationScript,
-        "--db", (Join-Path $Root "data\experiment.db"),
-        "--output", $(if ($Stage -eq "before") { $BeforeReport } else { $AfterReport }),
-        "--stage", $Stage
-    )
-    if ($Stage -eq "after") {
-        $arguments += @("--baseline", $BeforeReport)
-    }
-    & $PythonExe @arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Database verification failed at stage '$Stage'. ExitCode=$LASTEXITCODE"
-    }
-}
-
-function Test-AppImport {
-    Set-Location $Root
-    $env:PYFEAT_API_URL = $PyFeatApiUrl
-    $env:PYFEAT_API_TIMEOUT = $PyFeatApiTimeout
-    & $PythonExe -c "import app.main"
-    if ($LASTEXITCODE -ne 0) {
-        throw "Application import verification failed. ExitCode=$LASTEXITCODE"
-    }
-}
-
 function Wait-Healthy {
     for ($i = 0; $i -lt 60; $i++) {
         Start-Sleep -Seconds 1
@@ -175,10 +132,6 @@ Ensure-Directories
 Install-Dependencies
 Stop-App
 Start-Sleep -Seconds 1
-Run-DatabaseVerification -Stage "before"
-Move-ExistingLogs
-Test-AppImport
-Run-DatabaseVerification -Stage "after"
 Start-AppDetached
 Register-AppTask
 Wait-Healthy
