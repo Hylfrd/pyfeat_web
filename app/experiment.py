@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from .database import (
@@ -265,17 +266,30 @@ def create_experiment_router(
         q8: int = Form(...), q9: int = Form(...), q10: int = Form(...),
     ):
         """Submit post-task questionnaire."""
+        values = {
+            "q1_understood": q1, "q2_same_page": q2, "q3_aware": q3, "q4_connected": q4,
+            "q5_rewarding": q5, "q6_interested": q6, "q7_worthwhile": q7,
+            "q8_frustrated": q8, "q9_confusing": q9, "q10_taxing": q10,
+        }
         with db_session_factory() as db_session:
-            q = Questionnaire(
-                session_id=session_id,
-                q1_understood=q1, q2_same_page=q2, q3_aware=q3, q4_connected=q4,
-                q5_rewarding=q5, q6_interested=q6, q7_worthwhile=q7,
-                q8_frustrated=q8, q9_confusing=q9, q10_taxing=q10,
+            session = db_session.get(Session, session_id)
+            if not session:
+                raise HTTPException(400, "Session not found.")
+            statement = (
+                sqlite_insert(Questionnaire)
+                .values(session_id=session_id, **values)
+                .on_conflict_do_update(
+                    index_elements=[Questionnaire.session_id],
+                    set_=values,
+                )
             )
-            db_session.merge(q)
-            session = db_session.query(Session).get(session_id)
-            add_session_event_once(db_session, session, "questionnaire_submitted")
-            db_session.commit()
+            try:
+                db_session.execute(statement)
+                add_session_event_once(db_session, session, "questionnaire_submitted")
+                db_session.commit()
+            except Exception as exc:
+                db_session.rollback()
+                raise HTTPException(400, f"Failed to save questionnaire: {exc}")
         return {"ok": True}
 
     @router.get("/api/session/sync/{session_id}")

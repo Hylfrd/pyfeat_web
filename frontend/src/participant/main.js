@@ -187,6 +187,7 @@ let queuePollTimer = null;
 let debugStatusTimer = null;
 let timeoutSubmitRetryTimer = null;
 let setupSubmitting = false;
+let questionnaireSubmitting = false;
 
 let consentSignatureSaved = false;
 let consentSignatureDrawing = false;
@@ -1817,6 +1818,7 @@ function requireLikert(id){
 
 $('q-form').addEventListener('submit',async e=>{
   e.preventDefault();
+  if(questionnaireSubmitting)return;
 
   const qFields=Array.from({length:10},(_,i)=>[`q${i+1}`,`likert-q${i+1}`]);
   const postFields=[
@@ -1848,12 +1850,17 @@ $('q-form').addEventListener('submit',async e=>{
   postData.append('m4',document.querySelector('[name="post-m4"]')?.value||'');
   postData.append('m5',document.querySelector('[name="post-m5"]')?.value||'');
 
+  questionnaireSubmitting=true;
+  const submitButton=e.submitter||$('q-form').querySelector('[type="submit"]');
+  if(submitButton)submitButton.disabled=true;
   try{
     const questionnaireR=await fetch('/api/questionnaire',{method:'POST',body:questionnaireData});
     if(!questionnaireR.ok){const d=await questionnaireR.json();throw new Error(d.detail||questionnaireR.statusText)}
     const postR=await fetch('/api/post-survey',{method:'POST',body:postData});
     if(!postR.ok){const d=await postR.json();throw new Error(d.detail||postR.statusText)}
   }catch(err){
+    questionnaireSubmitting=false;
+    if(submitButton)submitButton.disabled=false;
     toast('保存问卷失败，请重试。' + (err.message ? ` ${err.message}` : ''),5000);
     return;
   }

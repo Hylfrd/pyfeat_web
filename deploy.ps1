@@ -13,13 +13,19 @@ $PythonExe = Join-Path $Venv "Scripts\python.exe"
 $LogDir = Join-Path $Root "logs"
 $OutLog = Join-Path $LogDir "web.out.log"
 $ErrLog = Join-Path $LogDir "web.err.log"
+$LogConfig = Join-Path $Root "logging.json"
+$VerificationScript = Join-Path $Root "deployment_verify.py"
+$AuditDir = "C:\Users\Administrator\Desktop\temp3"
+$DeploymentRunId = "$(Get-Date -Format 'yyyyMMdd-HHmmss')-$PID"
+$BeforeReport = Join-Path $AuditDir "pyfeat-db-$DeploymentRunId-before.json"
+$AfterReport = Join-Path $AuditDir "pyfeat-db-$DeploymentRunId-after.json"
 $Port = 8020
 $PyFeatApiUrl = "http://100.93.165.44:8055"
 $PyFeatApiTimeout = "10"
 $StartedPid = $null
 
 function Ensure-Directories {
-    New-Item -ItemType Directory -Force -Path $Root, $LogDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $Root, $LogDir, $AuditDir | Out-Null
 }
 
 function Install-Dependencies {
@@ -39,7 +45,7 @@ function Start-AppProcess {
     }
     $env:PYFEAT_API_URL = $PyFeatApiUrl
     $env:PYFEAT_API_TIMEOUT = $PyFeatApiTimeout
-    & $PythonExe -m uvicorn app.main:app --host 127.0.0.1 --port $Port --ws-ping-interval 20 --ws-ping-timeout 180 >> $OutLog 2>> $ErrLog
+    & $PythonExe -m uvicorn app.main:app --host 127.0.0.1 --port $Port --ws-ping-interval 20 --ws-ping-timeout 180 --log-config $LogConfig
 }
 
 function Start-AppDetached {
@@ -53,7 +59,7 @@ function Start-AppDetached {
         "cd /d $Root",
         "set PYFEAT_API_URL=$PyFeatApiUrl",
         "set PYFEAT_API_TIMEOUT=$PyFeatApiTimeout",
-        "$PythonExe -m uvicorn app.main:app --host 127.0.0.1 --port $Port --ws-ping-interval 20 --ws-ping-timeout 180 >> $OutLog 2>> $ErrLog"
+        "$PythonExe -m uvicorn app.main:app --host 127.0.0.1 --port $Port --ws-ping-interval 20 --ws-ping-timeout 180 --log-config $LogConfig"
     ) -join " && "
     $result = Invoke-CimMethod `
         -ClassName Win32_Process `
@@ -64,22 +70,6 @@ function Start-AppDetached {
     }
     $script:StartedPid = $result.ProcessId
     Write-Output "Started app process PID $($result.ProcessId)"
-}
-
-function Remove-LegacyScripts {
-    $legacy = @(
-        "deploy_restart.ps1",
-        "install_server_deps.bat",
-        "install_windows_task.ps1",
-        "run_server.cmd",
-        "start_server.bat"
-    )
-    foreach ($name in $legacy) {
-        $path = Join-Path $Root $name
-        if (Test-Path $path) {
-            Remove-Item -LiteralPath $path -Force
-        }
-    }
 }
 
 function Register-AppTask {
@@ -108,11 +98,41 @@ function Stop-App {
     }
 }
 
-function Reset-Logs {
-    foreach ($path in @($OutLog, $ErrLog)) {
-        if (Test-Path $path) {
-            Remove-Item $path -Force
-        }
+function Move-ExistingLogs {
+    $logs = Get-ChildItem -LiteralPath $LogDir -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^web\.(out|err)\.log(\.\d+)?$' }
+    foreach ($log in $logs) {
+        $destination = Join-Path $AuditDir "$($log.Name).before-$DeploymentRunId"
+        Move-Item -LiteralPath $log.FullName -Destination $destination
+        Write-Output "Moved log to $destination"
+    }
+}
+
+function Run-DatabaseVerification {
+    param([Parameter(Mandatory = $true)][string]$Stage)
+
+    $arguments = @(
+        $VerificationScript,
+        "--db", (Join-Path $Root "data\experiment.db"),
+        "--output", $(if ($Stage -eq "before") { $BeforeReport } else { $AfterReport }),
+        "--stage", $Stage
+    )
+    if ($Stage -eq "after") {
+        $arguments += @("--baseline", $BeforeReport)
+    }
+    & $PythonExe @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Database verification failed at stage '$Stage'. ExitCode=$LASTEXITCODE"
+    }
+}
+
+function Test-AppImport {
+    Set-Location $Root
+    $env:PYFEAT_API_URL = $PyFeatApiUrl
+    $env:PYFEAT_API_TIMEOUT = $PyFeatApiTimeout
+    & $PythonExe -c "import app.main"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Application import verification failed. ExitCode=$LASTEXITCODE"
     }
 }
 
@@ -152,11 +172,13 @@ if ($RunServer) {
 }
 
 Ensure-Directories
-Remove-LegacyScripts
 Install-Dependencies
 Stop-App
 Start-Sleep -Seconds 1
-Reset-Logs
+Run-DatabaseVerification -Stage "before"
+Move-ExistingLogs
+Test-AppImport
+Run-DatabaseVerification -Stage "after"
 Start-AppDetached
 Register-AppTask
 Wait-Healthy
