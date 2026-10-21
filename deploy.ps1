@@ -32,9 +32,9 @@ function Install-Dependencies {
     & $PythonExe --version
     Write-Output "Python dependencies before upgrade:"
     & $PythonExe -m pip list --format=freeze
-    & $PythonExe -m pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
+    & $PythonExe -m pip install --upgrade pip --index-url https://pypi.org/simple
     if ($LASTEXITCODE -ne 0) { throw "Failed to upgrade pip" }
-    & $PythonExe -m pip install --upgrade --require-hashes -r (Join-Path $Root "requirements.txt") -i https://mirrors.aliyun.com/pypi/simple/
+    & $PythonExe -m pip install --upgrade --require-hashes -r (Join-Path $Root "requirements.txt") --index-url https://pypi.org/simple
     if ($LASTEXITCODE -ne 0) { throw "Failed to install locked Python dependencies" }
     & $PythonExe -m pip check
     if ($LASTEXITCODE -ne 0) { throw "Python dependency compatibility check failed" }
@@ -49,6 +49,8 @@ function Show-WebRuntime {
     $caddyProcess = Get-Process -Name caddy -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($caddyProcess -and $caddyProcess.Path) {
         & $caddyProcess.Path version
+        & $caddyProcess.Path build-info
+        if ($LASTEXITCODE -ne 0) { throw "Failed to inspect running Caddy build information" }
         $phpModules = @(& $caddyProcess.Path list-modules | Select-String -Pattern "php")
         if ($LASTEXITCODE -ne 0) { throw "Failed to inspect running Caddy modules" }
         Write-Output "Caddy PHP modules: $($phpModules.Count)"
