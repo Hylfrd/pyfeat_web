@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: windows-production-deployment
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

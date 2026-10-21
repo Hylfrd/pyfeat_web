@@ -19,3 +19,11 @@ proxy or builds and audits Caddy 2.11.7 with Go 1.27.3 and `x/net` 0.60.0 from
 modules, validates the existing config, saves a private server backup, and
 checks configured sites after switching the Caddy service. A failed switch
 restores the previous binary. Config contents stay on the server.
+
+The `update-python` operation extracts the official Python 3.13.16 NuGet package
+and creates the app's environment under the private `C:\web\.runtime` directory.
+It checks package hashes and Python Software Foundation signatures, installs the
+Python dependency lock, and tests the app on a separate local port before
+switching the private runtime selector. The previous environment remains
+available for rollback. No installer, global PATH change, or launcher
+registration is used.

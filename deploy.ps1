@@ -9,6 +9,13 @@ $TaskName = "pyfeat-web"
 $PythonCommand = "py"
 $PythonVersion = "-3.13"
 $Venv = Join-Path $Root ".venv"
+$SelectedVenv = $null
+$RuntimeSelector = Join-Path $Root ".runtime\python-active.txt"
+if (Test-Path -LiteralPath $RuntimeSelector) {
+    $SelectedVenv = (Get-Content -LiteralPath $RuntimeSelector -Raw).Trim()
+    if ($SelectedVenv -notmatch "^venv-3\.13\.[0-9]+$") { throw "Invalid private Python runtime selector" }
+    $Venv = Join-Path (Join-Path $Root ".runtime") $SelectedVenv
+}
 $PythonExe = Join-Path $Venv "Scripts\python.exe"
 $LogDir = Join-Path $Root "logs"
 $OutLog = Join-Path $LogDir "web.out.log"
@@ -26,6 +33,7 @@ function Ensure-Directories {
 function Install-Dependencies {
     Set-Location $Root
     if (!(Test-Path $PythonExe)) {
+        if ($SelectedVenv) { throw "Selected private Python virtual environment is missing" }
         & $PythonCommand $PythonVersion -m venv $Venv
         if ($LASTEXITCODE -ne 0) { throw "Failed to create Python virtual environment" }
     }

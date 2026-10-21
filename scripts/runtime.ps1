@@ -91,7 +91,7 @@ $hosts = @($config.apps.http.servers.PSObject.Properties.Value | ForEach-Object 
 } | Where-Object { $_ -match "^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$" } | Sort-Object -Unique)
 if ("demo.hmcl-helper.cn" -notin $hosts) { throw "Expected PyFeat site is missing from Caddy config" }
 function Get-SiteStatus([string]$Site) {
-    $status = & curl.exe --silent --show-error --noproxy "*" --resolve "${Site}:443:127.0.0.1" --max-time 10 --output NUL --write-out "%{http_code}" "https://$Site/" 2> $null
+    $status = & curl.exe --silent --noproxy "*" --resolve "${Site}:443:127.0.0.1" --max-time 10 --output NUL --write-out "%{http_code}" "https://$Site/" 2> $null
     if ($LASTEXITCODE -ne 0) { return 0 }
     return [int]$status
 }
