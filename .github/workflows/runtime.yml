@@ -1,0 +1,47 @@
+name: Runtime maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Runtime operation
+        required: true
+        default: inspect
+        type: choice
+        options:
+          - inspect
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-runtime-maintenance
+  cancel-in-progress: false
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Upload runtime script
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: scripts/runtime.ps1
+          target: /c/web/
+          overwrite: true
+
+      - name: Inspect server runtime
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/web/scripts/runtime.ps1 -Operation inspect
