@@ -8,6 +8,9 @@ on:
     branches:
       - master
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,26 +18,49 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          check-latest: true
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       - name: Check Python
-        run: python -m compileall app
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          python -m pip install --require-hashes -r requirements.txt
+          python -m pip check
+          python -m pip_audit -r requirements.txt --disable-pip --require-hashes
+          python -m compileall -q app
 
       - name: Build frontend
         run: |
           npm ci
+          npm audit --registry=https://registry.npmjs.org
           npm run build
+
+      - name: Check application compatibility
+        run: |
+          python - <<'PY'
+          from fastapi.testclient import TestClient
+          from app.main import app
+          client = TestClient(app)
+          for path in ("/", "/admin", "/static/dist/participant.js", "/static/dist/admin.js"):
+              response = client.get(path)
+              assert response.status_code == 200 and response.content, path
+          assert client.get("/api/admin/auth").status_code == 401
+          assert client.post("/api/admin/login", data={"token": "invalid"}).status_code == 503
+          print("Pages, assets, admin auth and multipart form parsing passed")
+          PY
 
       - name: Check repository hygiene
         shell: bash
@@ -58,7 +84,7 @@ jobs:
 
       - name: Deploy files to server
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: appleboy/scp-action@v1
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
@@ -70,7 +96,7 @@ jobs:
 
       - name: Restart server app
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
