@@ -36,6 +36,7 @@ node_modules/
 dist/
 build/
 static/dist/
+runtime-payload/
 
 # OS and editor files
 .DS_Store
