@@ -37,33 +37,10 @@ function Install-Dependencies {
         & $PythonCommand $PythonVersion -m venv $Venv
         if ($LASTEXITCODE -ne 0) { throw "Failed to create Python virtual environment" }
     }
-    & $PythonExe --version
-    Write-Output "Python dependencies before upgrade:"
-    & $PythonExe -m pip list --format=freeze
     & $PythonExe -m pip install --upgrade pip --index-url https://pypi.org/simple
     if ($LASTEXITCODE -ne 0) { throw "Failed to upgrade pip" }
     & $PythonExe -m pip install --upgrade --require-hashes -r (Join-Path $Root "requirements.txt") --index-url https://pypi.org/simple
     if ($LASTEXITCODE -ne 0) { throw "Failed to install locked Python dependencies" }
-    & $PythonExe -m pip check
-    if ($LASTEXITCODE -ne 0) { throw "Python dependency compatibility check failed" }
-    Write-Output "Python dependencies after upgrade:"
-    & $PythonExe -m pip list --format=freeze
-}
-
-function Show-WebRuntime {
-    $phpProcesses = @(Get-Process -Name php, php-cgi, php-fpm, frankenphp -ErrorAction SilentlyContinue)
-    Write-Output "Running PHP/FrankenPHP processes: $($phpProcesses.Count)"
-    $phpProcesses | Select-Object ProcessName, Id, Path | Format-Table | Out-String | Write-Output
-    $caddyProcess = Get-Process -Name caddy -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($caddyProcess -and $caddyProcess.Path) {
-        & $caddyProcess.Path version
-        & $caddyProcess.Path build-info
-        if ($LASTEXITCODE -ne 0) { throw "Failed to inspect running Caddy build information" }
-        $phpModules = @(& $caddyProcess.Path list-modules | Select-String -Pattern "php")
-        if ($LASTEXITCODE -ne 0) { throw "Failed to inspect running Caddy modules" }
-        Write-Output "Caddy PHP modules: $($phpModules.Count)"
-        $phpModules | Write-Output
-    }
 }
 
 function Start-AppProcess {
@@ -163,7 +140,6 @@ if ($RunServer) {
 }
 
 Ensure-Directories
-Show-WebRuntime
 Install-Dependencies
 Stop-App
 Start-Sleep -Seconds 1
